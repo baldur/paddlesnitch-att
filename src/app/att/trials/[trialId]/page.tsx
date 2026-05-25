@@ -29,7 +29,7 @@ export default async function TrialPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
             ← HOME
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>
@@ -39,7 +39,7 @@ export default async function TrialPage({
           <AuthNav />
           {trial.status === 'open' && (
             <a
-              href={`/trials/${trialId}/upload`}
+              href={`/att/trials/${trialId}/upload`}
               className="text-xs bg-[#0369a1] text-white font-bold px-4 py-1.5 tracking-widest hover:bg-[#0284c7] transition-colors"
             >
               UPLOAD TRACE

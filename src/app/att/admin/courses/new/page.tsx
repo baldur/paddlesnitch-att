@@ -71,7 +71,7 @@ export default function NewCoursePage() {
 
     setSaving(true)
     try {
-      const res = await fetch('/api/courses', {
+      const res = await fetch('/att/api/courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,7 +88,7 @@ export default function NewCoursePage() {
         throw new Error(data.error ?? 'Failed to create course')
       }
       const course = await res.json()
-      router.push(`/admin/courses/${course.id}`)
+      router.push(`/att/admin/courses/${course.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
       setSaving(false)
@@ -101,7 +101,7 @@ export default function NewCoursePage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>

@@ -17,11 +17,11 @@ export default function TrialAdminPage({
   const [toggling, setToggling] = useState(false)
 
   const load = async () => {
-    const t = await fetch(`/api/trials/${trialId}`).then(r => r.json())
+    const t = await fetch(`/att/api/trials/${trialId}`).then(r => r.json())
     setTrial(t)
     const [c, lb] = await Promise.all([
-      fetch(`/api/courses/${t.courseId}`).then(r => r.json()),
-      fetch(`/api/trials/${trialId}/leaderboard`).then(r => r.json()),
+      fetch(`/att/api/courses/${t.courseId}`).then(r => r.json()),
+      fetch(`/att/api/trials/${trialId}/leaderboard`).then(r => r.json()),
     ])
     setCourse(c)
     setLeaderboard(lb)
@@ -33,7 +33,7 @@ export default function TrialAdminPage({
     if (!trial) return
     setToggling(true)
     const newStatus = trial.status === 'open' ? 'closed' : 'open'
-    const updated = await fetch(`/api/trials/${trialId}`, {
+    const updated = await fetch(`/att/api/trials/${trialId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
@@ -54,12 +54,12 @@ export default function TrialAdminPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
             ← HOME
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>
           <a
-            href={`/admin/courses/${course.id}`}
+            href={`/att/admin/courses/${course.id}`}
             className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors truncate"
           >
             {course.name.toUpperCase()}
@@ -117,7 +117,7 @@ export default function TrialAdminPage({
             </h2>
             {trial.status === 'open' && (
               <a
-                href={`/trials/${trialId}/upload`}
+                href={`/att/trials/${trialId}/upload`}
                 className="text-xs text-[#0369a1] hover:underline"
               >
                 + Upload entry
@@ -131,7 +131,7 @@ export default function TrialAdminPage({
               {trial.status === 'open' && (
                 <>
                   {' '}
-                  <a href={`/trials/${trialId}/upload`} className="text-[#0369a1] hover:underline">
+                  <a href={`/att/trials/${trialId}/upload`} className="text-[#0369a1] hover:underline">
                     Upload a trace
                   </a>{' '}
                   to get started.
@@ -169,8 +169,8 @@ export default function TrialAdminPage({
         <section className="border-t border-[#e2e8f0] pt-6">
           <p className="text-xs text-[#64748b]">
             Public leaderboard:{' '}
-            <a href={`/trials/${trialId}`} className="text-[#0369a1] hover:underline">
-              /trials/{trialId}
+            <a href={`/att/trials/${trialId}`} className="text-[#0369a1] hover:underline">
+              /att/trials/{trialId}
             </a>
           </p>
         </section>

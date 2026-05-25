@@ -19,7 +19,7 @@ export default function UploadPage({
   const [activityUrl, setActivityUrl] = useState('')
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    fetch('/att/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(setAuthUser)
       .catch(() => setAuthUser(null))
@@ -37,13 +37,13 @@ export default function UploadPage({
     formData.append('file', file)
 
     try {
-      const res = await fetch(`/api/trials/${trialId}/upload`, {
+      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
-      router.push(`/trials/${trialId}`)
+      router.push(`/att/trials/${trialId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
       setStatus('error')
@@ -58,14 +58,14 @@ export default function UploadPage({
     setError('')
 
     try {
-      const res = await fetch(`/api/trials/${trialId}/upload`, {
+      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: activityUrl.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
-      router.push(`/trials/${trialId}`)
+      router.push(`/att/trials/${trialId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
       setStatus('error')
@@ -79,7 +79,7 @@ export default function UploadPage({
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <a
-            href={`/trials/${trialId}`}
+            href={`/att/trials/${trialId}`}
             className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors"
           >
             ← LEADERBOARD
@@ -102,7 +102,7 @@ export default function UploadPage({
               You need an account to submit a trace and appear on the leaderboard.
             </p>
             <a
-              href={`/auth?next=/trials/${trialId}/upload`}
+              href={`/att/auth?next=/att/trials/${trialId}/upload`}
               className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
             >
               SIGN IN / SIGN UP

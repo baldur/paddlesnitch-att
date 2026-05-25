@@ -34,13 +34,12 @@ export async function POST(req: NextRequest) {
 
   const token = await createMagicToken(normalised)
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `http://localhost:3000`
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
-  const link = `${baseUrl}${basePath}/api/auth/magic-verify?token=${token}`
+  const link = `${baseUrl}/att/api/auth/magic-verify?token=${token}`
 
   await sendEmail(
     normalised,
-    'Your ATTS sign-in link',
-    `Click the link below to sign in to ATTS (expires in 15 minutes):\n\n${link}\n\nIf you did not request this, you can ignore this email.`
+    'Your ATT sign-in link',
+    `Click the link below to sign in to ATT (expires in 15 minutes):\n\n${link}\n\nIf you did not request this, you can ignore this email.`
   )
 
   // Always return 200 — don't reveal whether the email exists

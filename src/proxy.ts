@@ -4,18 +4,18 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Auth routes always public
-  if (pathname.startsWith('/auth') || pathname.startsWith('/api/auth')) {
+  if (pathname.startsWith('/att/auth') || pathname.startsWith('/att/api/auth')) {
     return NextResponse.next()
   }
 
   // Admin pages always require auth
   const requiresAuth =
-    pathname.startsWith('/admin') ||
-    (req.method !== 'GET' && !pathname.startsWith('/api/auth'))
+    pathname.startsWith('/att/admin') ||
+    (req.method !== 'GET' && pathname.startsWith('/att/api') && !pathname.startsWith('/att/api/auth'))
 
   if (requiresAuth && !req.cookies.get('tt_session')) {
     const url = req.nextUrl.clone()
-    url.pathname = '/auth'
+    url.pathname = '/att/auth'
     url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }

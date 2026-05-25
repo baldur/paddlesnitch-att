@@ -6,15 +6,15 @@ import { useRouter, useSearchParams } from 'next/navigation'
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [next, setNext] = useState('/')
+  const [next, setNext] = useState('/att')
 
   useEffect(() => {
-    setNext(searchParams.get('next') ?? '/')
+    setNext(searchParams.get('next') ?? '/att')
   }, [searchParams])
 
   // Redirect if already signed in
   useEffect(() => {
-    fetch('/api/auth/me').then(r => {
+    fetch('/att/api/auth/me').then(r => {
       if (r.ok) router.replace(next)
     })
   }, [next, router])
@@ -32,7 +32,7 @@ function AuthForm() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/att/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -55,7 +55,7 @@ function AuthForm() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/signup', {
+      const res = await fetch('/att/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, displayName, password }),
@@ -78,7 +78,7 @@ function AuthForm() {
     setError('')
     setLoading(true)
     try {
-      await fetch('/api/auth/magic-request', {
+      await fetch('/att/api/auth/magic-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -271,7 +271,7 @@ export default function AuthPage() {
   return (
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3">
-        <Link href="/">
+        <Link href="/att">
           <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
           <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS</span>
         </Link>

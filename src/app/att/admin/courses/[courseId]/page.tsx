@@ -23,10 +23,10 @@ export default function CourseAdminPage({
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch(`/api/courses/${courseId}`)
+    fetch(`/att/api/courses/${courseId}`)
       .then(r => r.json())
       .then(setCourse)
-    fetch(`/api/trials?courseId=${courseId}`)
+    fetch(`/att/api/trials?courseId=${courseId}`)
       .then(r => r.json())
       .then(setTrials)
   }, [courseId])
@@ -36,7 +36,7 @@ export default function CourseAdminPage({
     setError('')
     setCreating(true)
     try {
-      const res = await fetch('/api/trials', {
+      const res = await fetch('/att/api/trials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseId, name: trialName, date: trialDate }),
@@ -46,7 +46,7 @@ export default function CourseAdminPage({
         throw new Error(data.error ?? 'Failed to create trial')
       }
       const trial = await res.json()
-      router.push(`/admin/trials/${trial.id}`)
+      router.push(`/att/admin/trials/${trial.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
       setCreating(false)
@@ -71,7 +71,7 @@ export default function CourseAdminPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
             ← HOME
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>
@@ -107,7 +107,7 @@ export default function CourseAdminPage({
               {sortedTrials.map(t => (
                 <a
                   key={t.id}
-                  href={`/admin/trials/${t.id}`}
+                  href={`/att/admin/trials/${t.id}`}
                   className="border border-[#e2e8f0] px-4 py-3 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
                 >
                   <div>

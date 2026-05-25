@@ -9,22 +9,22 @@ export default function AuthNav() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    fetch('/att/api/auth/me')
       .then(r => (r.ok ? r.json() : null))
       .then(setUser)
       .catch(() => setUser(null))
   }, [])
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/')
+    await fetch('/att/api/auth/logout', { method: 'POST' })
+    router.push('/att')
   }
 
   if (user === undefined) return null // loading — don't flash incorrect state
 
   if (!user) {
     return (
-      <Link href="/auth" className="text-[#64748b] hover:text-[#0369a1] transition-colors">
+      <Link href="/att/auth" className="text-[#64748b] hover:text-[#0369a1] transition-colors">
         SIGN IN
       </Link>
     )
