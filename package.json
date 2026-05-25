@@ -1,5 +1,5 @@
 {
-  "name": "rrc-time-trials",
+  "name": "atts",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seed": "tsx scripts/seed.ts",
+    "rivers": "tsx scripts/download-rivers.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
@@ -20,6 +22,9 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-leaflet": "^5.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "unrs-resolver"]
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -35,6 +40,7 @@
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "tsx": "^4.19.3",
     "vitest": "^4.1.6"
   }
 }
