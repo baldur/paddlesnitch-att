@@ -11,7 +11,8 @@ export type StoredUser = {
 }
 
 function hashPassword(password: string): string {
-  return createHmac('sha256', 'tt-local-auth').update(password).digest('hex')
+  const key = process.env.PASSWORD_HASH_KEY ?? 'tt-local-auth'
+  return createHmac('sha256', key).update(password).digest('hex')
 }
 
 export async function createUser(
