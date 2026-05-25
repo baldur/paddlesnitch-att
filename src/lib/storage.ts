@@ -68,6 +68,21 @@ export async function listKeys(prefix: string): Promise<string[]> {
   return (res.Contents ?? []).map(o => o.Key!).filter(Boolean)
 }
 
+export async function deleteObject(key: string): Promise<void> {
+  if (IS_DEV) {
+    const filePath = path.join(LOCAL_ROOT, key)
+    try {
+      await fs.unlink(filePath)
+    } catch {
+      // ignore — already gone
+    }
+    return
+  }
+  const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3')
+  const s3 = new S3Client({})
+  await s3.send(new DeleteObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key }))
+}
+
 export async function getJson<T>(key: string): Promise<T | null> {
   const buf = await getObject(key)
   if (!buf) return null

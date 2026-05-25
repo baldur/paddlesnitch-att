@@ -30,8 +30,9 @@ export type CourseMetadata = {
   id: string
   name: string
   sport: 'kayak' | 'rowing' | 'both'
+  type: 'one_way' | 'loop'
   startLine: Line
-  finishLine: Line
+  finishLine?: Line
   distanceMetres: number
   adminUserId: string
   createdAt: string
@@ -43,6 +44,7 @@ export type TrialMetadata = {
   name: string
   date: string // ISO date
   status: 'open' | 'closed'
+  adminUserId: string
   createdAt: string
 }
 
