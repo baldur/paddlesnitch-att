@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib'
-import { AttsStack } from '../lib/atts-stack'
+import { AttStack } from '../lib/att-stack'
 
 const app = new cdk.App()
 
-new AttsStack(app, 'AttsStack', {
+new AttStack(app, 'AttStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION ?? 'eu-west-1',
