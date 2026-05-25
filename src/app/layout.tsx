@@ -9,20 +9,20 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'RRC Time Trials',
-  description: 'River time trials for kayak and rowing — GPS-verified splits',
+  title: 'ATTS — Automated Time Trials System',
+  description: 'GPS-verified river racing — splits, leaderboards, and biometric data for kayak and rowing',
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0a0a',
+  themeColor: '#ffffff',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={ibmPlexMono.className}>
-      <body className="min-h-screen flex flex-col">{children}</body>
+      <body className="min-h-screen flex flex-col bg-white text-[#0f172a]">{children}</body>
     </html>
   )
 }
