@@ -38,6 +38,9 @@ export class AttsStack extends cdk.Stack {
       environment: {
         DATA_BUCKET: dataBucket.bucketName,
         NODE_ENV: 'production',
+        NEXT_PUBLIC_BASE_URL: 'https://paddlesnitch.com',
+        NEXT_PUBLIC_BASE_PATH: '/att',
+        PASSWORD_HASH_KEY: process.env.PASSWORD_HASH_KEY ?? (() => { throw new Error('PASSWORD_HASH_KEY env var must be set before cdk deploy') })(),
       },
     })
 

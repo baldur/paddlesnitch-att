@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
 
   const token = await createMagicToken(normalised)
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? `http://localhost:3000`
-  const link = `${baseUrl}/api/auth/magic-verify?token=${token}`
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+  const link = `${baseUrl}${basePath}/api/auth/magic-verify?token=${token}`
 
   await sendEmail(
     normalised,

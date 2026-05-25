@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { formatTime } from '@/lib/geo'
 import type { LeaderboardEntry } from '@/lib/types'
 
@@ -33,9 +33,8 @@ export default function LeaderboardTable({ entries }: { entries: LeaderboardEntr
             const hasSplits = entry.splits.length > 0
             const isOpen = expanded === entry.entryId
             return (
-              <>
+              <React.Fragment key={entry.entryId}>
                 <tr
-                  key={entry.entryId}
                   onClick={() => hasSplits && setExpanded(isOpen ? null : entry.entryId)}
                   className={`border-b border-[#f1f5f9] transition-colors ${hasSplits ? 'cursor-pointer hover:bg-[#f8fafc]' : ''}`}
                 >
@@ -88,7 +87,7 @@ export default function LeaderboardTable({ entries }: { entries: LeaderboardEntr
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             )
           })}
         </tbody>
