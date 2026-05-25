@@ -1,6 +1,7 @@
-import { defineConfig } from 'next-sitemap'
+import type { OpenNextConfig } from '@opennextjs/aws/types/open-next'
 
-export default defineConfig({
-  siteUrl: process.env.SITE_URL || 'https://example.com',
-  generateRobotsTxt: true,
-})
+const config: OpenNextConfig = {
+  default: {},
+}
+
+export default config

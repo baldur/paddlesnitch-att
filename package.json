@@ -4,15 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node infra/index.ts",
-    "start": "node infra/index.ts",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "rivers": "tsx scripts/download-rivers.ts",
-    "infra:install": "cd infra && npm install",
-    "infra:validate": "cd infra && npx tsc --noEmit"
+    "build:open-next": "npx open-next build",
+    "deploy": "npm run build:open-next && cd infra && npm run deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
@@ -26,9 +26,14 @@
     "react-leaflet": "^5.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "unrs-resolver"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
   },
   "devDependencies": {
+    "@opennextjs/aws": "^4.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
@@ -41,8 +46,8 @@
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5",
     "tsx": "^4.19.3",
+    "typescript": "^5",
     "vitest": "^4.1.6"
   }
 }

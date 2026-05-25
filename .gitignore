@@ -46,3 +46,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.aider*
+# CDK infra build artifacts
+infra/dist/
+infra/node_modules/
+infra/package-lock.json
+.open-next/
+cdk.out/
