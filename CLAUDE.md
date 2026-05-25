@@ -1,4 +1,4 @@
-# ATTS — Automated Time Trials System
+# ATT — Automated Time Trials
 
 ## Working with Claude
 
@@ -70,7 +70,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## What This Is
 
-**ATTS — Automated Time Trials System.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
+**ATT — Automated Time Trials.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
 
 ---
 
@@ -127,8 +127,8 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | Next.js API routes | Same handlers used in local dev and prod |
 | Processing | Inline in the upload API route | No Lambda trigger in local dev |
-| IaC | AWS CDK (TypeScript) — planned | `infra/` not yet created |
-| CDN | CloudFront + S3 OAC — planned | Not yet created |
+| IaC | AWS CDK (TypeScript) | `infra/` — OpenNext v4, CloudFront + S3 |
+| CDN | CloudFront + S3 OAC | Stack defined; not yet deployed |
 
 ---
 
@@ -138,9 +138,10 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 Browser
   │
   └─── Next.js (port 3000)
-         ├── src/proxy.ts          ← gate: redirect to /auth if no tt_session cookie
-         ├── app/                  ← pages (server + client components)
-         └── app/api/              ← API route handlers
+         ├── src/proxy.ts              ← gate: redirect to /att/auth if no tt_session cookie
+         ├── app/page.tsx              ← landing page at /
+         ├── app/att/                  ← all ATT pages (server + client components)
+         └── app/att/api/              ← API route handlers (all under /att/api/)
                 ├── auth/signup    POST — create user, set session cookie
                 ├── auth/login     POST — verify password, set session cookie
                 ├── auth/logout    POST — delete session, clear cookie
@@ -213,12 +214,12 @@ Auth in production: swap `src/lib/auth.ts` to verify Cognito JWT from `Authoriza
 Passwords are hashed with HMAC-SHA256 (key: `tt-local-auth`). For production, Cognito handles credentials; the local system is only for dev.
 
 - **Session cookie:** `tt_session` — httpOnly, sameSite=lax, path=/, 30-day maxAge
-- **Proxy (`src/proxy.ts`):** Auth is required for `/admin/*` routes and all non-GET requests (except `/api/auth*`). GET requests to non-admin pages (leaderboard, upload form, home) are publicly accessible without a cookie. Unauthenticated requests that need auth redirect to `/auth?next={path}`.
+- **Proxy (`src/proxy.ts`):** Auth is required for `/att/admin/*` routes and all non-GET `/att/api/*` requests (except `/att/api/auth*`). GET requests to non-admin pages (leaderboard, upload form, home) are publicly accessible without a cookie. Unauthenticated requests that need auth redirect to `/att/auth?next={path}`.
 - **`getAuthUser()`:** reads cookie → looks up session → looks up user → returns `AuthUser | null`
-- **Signup:** `POST /api/auth/signup` — creates user + session, sets cookie
-- **Login:** `POST /api/auth/login` — verifies password, creates session, sets cookie
-- **Logout:** `POST /api/auth/logout` — deletes session from filesystem, clears cookie
-- **Magic link:** `POST /api/auth/magic-request` + `GET /api/auth/magic-verify?token=` — 15-min single-use token emailed to user; dev mode logs to console
+- **Signup:** `POST /att/api/auth/signup` — creates user + session, sets cookie
+- **Login:** `POST /att/api/auth/login` — verifies password, creates session, sets cookie
+- **Logout:** `POST /att/api/auth/logout` — deletes session from filesystem, clears cookie
+- **Magic link:** `POST /att/api/auth/magic-request` + `GET /att/api/auth/magic-verify?token=` — 15-min single-use token emailed to user; dev mode logs to console
 
 Public pages: home (open trials list), leaderboard, upload form (shows sign-in prompt if no session). Admin pages require login.
 
@@ -230,29 +231,31 @@ Public pages: home (open trials list), leaderboard, upload form (shows sign-in p
 src/
   proxy.ts                     ← Next.js 16 proxy (auth gate, replaces middleware)
   app/
-    layout.tsx                 ← Root layout (IBM Plex Mono font, dark background)
-    page.tsx                   ← Home — server component, lists open trials
-    globals.css                ← Tailwind + design tokens + scanline/glow utilities
-    auth/
-      page.tsx                 ← Sign in / sign up (tabbed, client component)
-    admin/
-      courses/
-        new/page.tsx           ← Create course (DrawingMap + form, client component)
-        [courseId]/page.tsx    ← Manage course + create trials; date field defaults to today (client component)
+    layout.tsx                 ← Root layout (IBM Plex Mono font, white background)
+    page.tsx                   ← Landing page at / — link to /att
+    globals.css                ← Tailwind + design tokens
+    att/
+      page.tsx                 ← ATT home — server component, lists open trials
+      auth/
+        page.tsx               ← Sign in / sign up (tabbed, client component)
+      admin/
+        courses/
+          new/page.tsx         ← Create course (DrawingMap + form, client component)
+          [courseId]/page.tsx  ← Manage course + create trials; date field defaults to today (client component)
+        trials/
+          [trialId]/page.tsx   ← Manage trial: open/close, view entries (client component)
       trials/
-        [trialId]/page.tsx     ← Manage trial: open/close, view entries (client component)
-    trials/
-      [trialId]/
-        page.tsx               ← Public leaderboard + course map (server component)
-        upload/page.tsx        ← Upload trace (client component); on success redirects to leaderboard; shows sign-in prompt if unauthenticated
-    api/
-      auth/{signup,login,logout,me,magic-request,magic-verify}/route.ts
-      courses/route.ts
-      courses/[courseId]/route.ts
-      trials/route.ts
-      trials/[trialId]/route.ts
-      trials/[trialId]/upload/route.ts
-      trials/[trialId]/leaderboard/route.ts
+        [trialId]/
+          page.tsx             ← Public leaderboard + course map (server component)
+          upload/page.tsx      ← Upload trace (client component); on success redirects to leaderboard; shows sign-in prompt if unauthenticated
+      api/
+        auth/{signup,login,logout,me,magic-request,magic-verify}/route.ts
+        courses/route.ts
+        courses/[courseId]/route.ts
+        trials/route.ts
+        trials/[trialId]/route.ts
+        trials/[trialId]/upload/route.ts
+        trials/[trialId]/leaderboard/route.ts
   lib/
     types.ts                   ← All shared types (CourseMetadata, TrialMetadata, etc.)
     geo.ts                     ← Haversine, line-segment intersection, processTrace, formatTime
@@ -347,7 +350,7 @@ NODE_ENV=development
 USE_LOCAL_STORAGE=true
 ```
 
-No Docker, no MinIO, no Cognito needed. Sign up via the `/auth` page on first run — all data lands in `.local-data/`.
+No Docker, no MinIO, no Cognito needed. Sign up via the `/att/auth` page on first run — all data lands in `.local-data/`.
 
 The `.local-data/` directory is gitignored. Delete it to reset all local state.
 
@@ -414,9 +417,10 @@ No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets �
 - Start/finish lines: exactly `[[lat, lng], [lat, lng]]`.
 - Course distance: auto-calculated (Haversine between midpoints of start and finish lines). Not stored as user input.
 - `next/dynamic` with `{ ssr: false }` must only appear inside `'use client'` components. Use `CourseMapClient.tsx` pattern.
+- **Route prefix `/att` is baked into the source** (`src/app/att/`) — no Next.js `basePath` config. All `href`, `fetch()`, and `router.push()` calls include `/att` explicitly.
 - YAGNI + KISS: don't build what isn't needed; simplest thing that works.
 - Never commit AWS credentials. IAM roles for Lambda; `aws sso` locally.
-- Target domain: `paddlesnitch.com`
+- Target domain: `paddlesnitch.com` — app at `paddlesnitch.com/att`, landing at `paddlesnitch.com/`
 
 ---
 
