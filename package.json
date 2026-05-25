@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node infra/index.ts",
+    "start": "node infra/index.ts",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
-    "rivers": "tsx scripts/download-rivers.ts"
+    "rivers": "tsx scripts/download-rivers.ts",
+    "infra:install": "cd infra && npm install",
+    "infra:validate": "cd infra && npx tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
