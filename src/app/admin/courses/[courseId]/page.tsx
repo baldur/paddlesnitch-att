@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -70,9 +71,9 @@ export default function CourseAdminPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <a href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
             ← HOME
-          </a>
+          </Link>
           <span className="text-[#64748b] shrink-0">/</span>
           <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
         </div>

@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -270,10 +271,10 @@ export default function AuthPage() {
   return (
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3">
-        <a href="/">
-          <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATTS</span>
-          <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS SYSTEM</span>
-        </a>
+        <Link href="/">
+          <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
+          <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">AUTOMATED TIME TRIALS</span>
+        </Link>
       </header>
       <div className="flex-1 flex items-start justify-center pt-16 px-4">
         <Suspense>

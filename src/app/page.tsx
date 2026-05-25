@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import AuthNav from '@/components/AuthNav'
 import type { TrialMetadata, CourseMetadata } from '@/lib/types'
@@ -32,9 +33,9 @@ export default async function Home() {
           <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">paddlesnitch.com</span>
         </div>
         <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <a href="/admin/courses/new" className="hover:text-[#0369a1] transition-colors">
+          <Link href="/admin/courses/new" className="hover:text-[#0369a1] transition-colors">
             + NEW COURSE
-          </a>
+          </Link>
           <AuthNav />
         </nav>
       </header>
@@ -56,9 +57,9 @@ export default async function Home() {
         {openTrials.length === 0 ? (
           <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
             No open trials yet.{' '}
-            <a href="/admin/courses/new" className="text-[#0369a1] hover:underline">
+            <Link href="/admin/courses/new" className="text-[#0369a1] hover:underline">
               Create a course
-            </a>{' '}
+            </Link>{' '}
             to get started.
           </div>
         ) : (

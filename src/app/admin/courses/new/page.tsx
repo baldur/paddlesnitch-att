@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -100,9 +101,9 @@ export default function NewCoursePage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <a href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
             ← HOME
-          </a>
+          </Link>
           <span className="text-[#64748b]">/</span>
           <span className="text-[#0f172a] text-sm">NEW COURSE</span>
         </div>
