@@ -1,22 +1,20 @@
 import type { AuthUser } from './types'
-import { headers } from 'next/headers'
+import { cookies } from 'next/headers'
+import { getSession, SESSION_COOKIE } from './sessions'
+import { findUserById } from './users'
 
-const DEV_USER: AuthUser = {
-  id: 'dev-user-001',
-  email: 'dev@local',
-  displayName: 'Dev User',
-}
-
-// Returns the authenticated user from the request, or null.
-// In dev (USE_DEV_AUTH=true): always returns DEV_USER.
-// In prod: validates Cognito JWT from Authorization header.
+// Returns the authenticated user from the session cookie, or null.
+// In prod: swap to Cognito JWT verification via Authorization header.
 export async function getAuthUser(): Promise<AuthUser | null> {
-  if (process.env.USE_DEV_AUTH === 'true') {
-    return DEV_USER
-  }
-  const hdrs = await headers()
-  const authHeader = hdrs.get('authorization')
-  if (!authHeader?.startsWith('Bearer ')) return null
-  // TODO: verify Cognito JWT (add cognito-jwt-verifier when deploying to AWS)
-  return null
+  const cookieStore = await cookies()
+  const token = cookieStore.get(SESSION_COOKIE)?.value
+  if (!token) return null
+
+  const session = await getSession(token)
+  if (!session) return null
+
+  const user = await findUserById(session.userId)
+  if (!user) return null
+
+  return { id: user.id, email: user.email, displayName: user.displayName }
 }
