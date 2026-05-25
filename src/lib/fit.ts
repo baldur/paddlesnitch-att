@@ -10,8 +10,9 @@ export async function parseFit(buffer: ArrayBuffer): Promise<TrackPoint[]> {
   const { default: FitParser } = await import('fit-file-parser')
   return new Promise((resolve, reject) => {
     const parser = new FitParser({ force: true, speedUnit: 'km/h' })
-    parser.parse(buffer, (err: Error | null, data: { records?: FitRecord[] }) => {
-      if (err) return reject(err)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parser.parse(buffer, (err: string | undefined, data: any) => {
+      if (err) return reject(new Error(err))
       const records: FitRecord[] = data?.records ?? []
       const points: TrackPoint[] = []
       for (const r of records) {

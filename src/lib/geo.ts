@@ -17,9 +17,13 @@ export function haversine(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h))
 }
 
-// Returns t ∈ [0,1] along segment a→b where it intersects segment c→d, or null.
+// Returns { t, rxs } where t ∈ [0,1] along segment a→b where it intersects segment c→d.
+// rxs is the cross product (used to determine crossing direction/sign).
+// Returns null if no intersection.
 // Uses parametric form + 2D cross product. Degrees treated as flat coords (valid for short segments).
-function segmentIntersectT(a: LatLng, b: LatLng, c: LatLng, d: LatLng): number | null {
+function segmentIntersect(
+  a: LatLng, b: LatLng, c: LatLng, d: LatLng
+): { t: number; rxs: number } | null {
   const rx = b[0] - a[0]
   const ry = b[1] - a[1]
   const sx = d[0] - c[0]
@@ -30,7 +34,7 @@ function segmentIntersectT(a: LatLng, b: LatLng, c: LatLng, d: LatLng): number |
   const qpy = c[1] - a[1]
   const t = (qpx * sy - qpy * sx) / rxs
   const u = (qpx * ry - qpy * rx) / rxs
-  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return t
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return { t, rxs }
   return null
 }
 
@@ -38,21 +42,51 @@ type Crossing = {
   timestamp: Date
   trackIndex: number // index of track[i] where crossing occurs between i and i+1
   t: number         // interpolation parameter along that segment
+  rxsSign: number   // sign of the cross product (+1 or -1)
 }
 
-function findFirstCrossing(track: TrackPoint[], line: Line, startFromIndex = 0): Crossing | null {
+function makeCrossing(track: TrackPoint[], i: number, t: number, rxs: number): Crossing {
+  const ms0 = track[i].timestamp.getTime()
+  const ms1 = track[i + 1].timestamp.getTime()
+  return { timestamp: new Date(ms0 + t * (ms1 - ms0)), trackIndex: i, t, rxsSign: Math.sign(rxs) }
+}
+
+// All crossings of `line` in `track` from `startFromIndex`, optionally filtered by direction sign.
+function findAllCrossings(
+  track: TrackPoint[],
+  line: Line,
+  startFromIndex = 0,
+  requiredSign?: number
+): Crossing[] {
+  const results: Crossing[] = []
   for (let i = startFromIndex; i < track.length - 1; i++) {
     const a: LatLng = [track[i].lat, track[i].lng]
     const b: LatLng = [track[i + 1].lat, track[i + 1].lng]
-    const t = segmentIntersectT(a, b, line[0], line[1])
-    if (t !== null) {
-      const ms0 = track[i].timestamp.getTime()
-      const ms1 = track[i + 1].timestamp.getTime()
-      return {
-        timestamp: new Date(ms0 + t * (ms1 - ms0)),
-        trackIndex: i,
-        t,
-      }
+    const intersect = segmentIntersect(a, b, line[0], line[1])
+    if (intersect !== null) {
+      const { t, rxs } = intersect
+      if (requiredSign !== undefined && Math.sign(rxs) !== requiredSign) continue
+      results.push(makeCrossing(track, i, t, rxs))
+    }
+  }
+  return results
+}
+
+// First crossing of `line` from `startFromIndex`, optionally filtered by direction sign.
+function findFirstCrossing(
+  track: TrackPoint[],
+  line: Line,
+  startFromIndex = 0,
+  requiredSign?: number
+): Crossing | null {
+  for (let i = startFromIndex; i < track.length - 1; i++) {
+    const a: LatLng = [track[i].lat, track[i].lng]
+    const b: LatLng = [track[i + 1].lat, track[i + 1].lng]
+    const intersect = segmentIntersect(a, b, line[0], line[1])
+    if (intersect !== null) {
+      const { t, rxs } = intersect
+      if (requiredSign !== undefined && Math.sign(rxs) !== requiredSign) continue
+      return makeCrossing(track, i, t, rxs)
     }
   }
   return null
@@ -109,37 +143,21 @@ function avgOf(values: (number | undefined)[]): number | undefined {
   return defined.reduce((a, b) => a + b, 0) / defined.length
 }
 
-export function processTrace(
+function buildResult(
   track: TrackPoint[],
-  startLine: Line,
-  finishLine: Line
+  startCrossing: Crossing,
+  finishCrossing: Crossing
 ): ProcessedResult | null {
-  if (track.length < 2) return null
-
-  const startCrossing = findFirstCrossing(track, startLine)
-  if (!startCrossing) return null
-
-  const finishCrossing = findFirstCrossing(track, finishLine, startCrossing.trackIndex + 1)
-  if (!finishCrossing) return null
-
   const startMs = startCrossing.timestamp.getTime()
   const finishMs = finishCrossing.timestamp.getTime()
   if (finishMs <= startMs) return null
 
   const splits = calculateSplits(track, startCrossing, finishCrossing)
-
-  // Collect metrics from track points between crossings
   const segment = track.slice(startCrossing.trackIndex, finishCrossing.trackIndex + 2)
   const avgHeartRate = avgOf(segment.map(p => p.hr))
   const avgCadence = avgOf(segment.map(p => p.cadence))
-
-  const hrSeries = segment
-    .filter(p => p.hr !== undefined)
-    .map(p => ({ timestamp: p.timestamp.toISOString(), bpm: p.hr! }))
-
-  const cadenceSeries = segment
-    .filter(p => p.cadence !== undefined)
-    .map(p => ({ timestamp: p.timestamp.toISOString(), spm: p.cadence! }))
+  const hrSeries = segment.filter(p => p.hr !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), bpm: p.hr! }))
+  const cadenceSeries = segment.filter(p => p.cadence !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), spm: p.cadence! }))
 
   return {
     startTimestamp: startCrossing.timestamp.toISOString(),
@@ -151,6 +169,40 @@ export function processTrace(
     hrSeries: hrSeries.length > 0 ? hrSeries : undefined,
     cadenceSeries: cadenceSeries.length > 0 ? cadenceSeries : undefined,
   }
+}
+
+// Try every start-line crossing and pair it with the nearest subsequent finish crossing.
+// Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
+// This handles full-session uploads where the user crosses the course lines incidentally
+// before or after their actual race effort.
+export function processTrace(
+  track: TrackPoint[],
+  startLine: Line,
+  finishLine?: Line
+): ProcessedResult | null {
+  if (track.length < 2) return null
+
+  const startCrossings = findAllCrossings(track, startLine)
+  if (startCrossings.length === 0) return null
+
+  let best: ProcessedResult | null = null
+
+  for (const startCrossing of startCrossings) {
+    const finishCrossing = finishLine
+      ? findFirstCrossing(track, finishLine, startCrossing.trackIndex + 1)
+      : findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, -startCrossing.rxsSign)
+
+    if (!finishCrossing) continue
+
+    const candidate = buildResult(track, startCrossing, finishCrossing)
+    if (!candidate) continue
+
+    if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) {
+      best = candidate
+    }
+  }
+
+  return best
 }
 
 export function formatTime(seconds: number): string {

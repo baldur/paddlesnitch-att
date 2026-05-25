@@ -1,6 +1,7 @@
 import type { TrackPoint } from './types'
 import { parseGpx } from './gpx'
 import { parseFit } from './fit'
+import { parseCsv } from './csv'
 
 export type ParseResult =
   | { ok: true; track: TrackPoint[] }
@@ -21,7 +22,12 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
     }
 
-    // Unknown format — store raw, skip processing
+    if (ext === 'csv') {
+      const text = new TextDecoder().decode(data)
+      const track = parseCsv(text)
+      return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
+    }
+
     return { ok: false, reason: 'unknown_format' }
   } catch {
     return { ok: false, reason: 'parse_error' }
