@@ -6,7 +6,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
-import * as ssm from 'aws-cdk-lib/aws-ssm'
 import { Construct } from 'constructs'
 
 export class AttStack extends cdk.Stack {
@@ -14,13 +13,11 @@ export class AttStack extends cdk.Stack {
     super(scope, id, props)
 
     // ---------------------------------------------------------------------------
-    // Secrets — PASSWORD_HASH_KEY must exist in SSM before first deploy:
+    // Secrets — must exist in SSM before first deploy:
     //   aws ssm put-parameter --name /att/password-hash-key \
-    //     --value "$(openssl rand -hex 32)" --type SecureString
+    //     --value "$(openssl rand -hex 32)" --type SecureString --region eu-west-1
     // ---------------------------------------------------------------------------
-    const passwordHashKey = ssm.StringParameter.valueForSecureStringParameter(
-      this, 'PasswordHashKey', '/att/password-hash-key'
-    )
+    const passwordHashKey = cdk.SecretValue.ssmSecure('/att/password-hash-key').toString()
 
     // ---------------------------------------------------------------------------
     // GitHub Actions OIDC — allows CI to deploy without stored AWS keys
@@ -40,8 +37,6 @@ export class AttStack extends cdk.Stack {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
       }),
-      // AdministratorAccess is broad but appropriate for a CDK deploy role on a
-      // single-account project. Scope down to specific actions when hardening.
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
       ],
@@ -52,7 +47,6 @@ export class AttStack extends cdk.Stack {
     // Storage
     // ---------------------------------------------------------------------------
 
-    // Private bucket for ATT data: users, sessions, traces, leaderboard JSON
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       bucketName: 'paddlesnitch-data-prod',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -60,7 +54,6 @@ export class AttStack extends cdk.Stack {
       versioned: false,
     })
 
-    // Private bucket for Next.js static assets — served via CloudFront OAC
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
       bucketName: 'paddlesnitch-assets-prod',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -69,16 +62,14 @@ export class AttStack extends cdk.Stack {
     })
 
     // ---------------------------------------------------------------------------
-    // Compute
+    // Compute — OpenNext v4 outputs to server-functions/default
     // ---------------------------------------------------------------------------
 
-    // Server Lambda — runs the Next.js app via OpenNext
-    // Requires `pnpm build:open-next` at repo root before `cdk deploy`
     const serverFn = new lambda.Function(this, 'ServerFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../../.open-next/server-function')
+        path.join(__dirname, '../../.open-next/server-functions/default')
       ),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(30),
@@ -96,7 +87,6 @@ export class AttStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
     })
 
-    // Image optimisation Lambda — handles Next.js image requests
     const imageOptFn = new lambda.Function(this, 'ImageOptFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
@@ -105,15 +95,21 @@ export class AttStack extends cdk.Stack {
       ),
       memorySize: 1536,
       timeout: cdk.Duration.seconds(25),
+      environment: {
+        BUCKET_NAME: assetsBucket.bucketName,
+        BUCKET_KEY_PREFIX: '_assets',
+      },
     })
+
+    assetsBucket.grantRead(imageOptFn)
 
     const imageOptUrl = imageOptFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     })
 
     // ---------------------------------------------------------------------------
-    // CloudFront distribution
-    // Default: server Lambda; static assets served from S3 for cache efficiency
+    // CloudFront — behaviors match OpenNext v4 output manifest
+    // Assets are deployed under _assets/ prefix; origin path translates back
     // ---------------------------------------------------------------------------
     const serverOrigin = new origins.HttpOrigin(
       cdk.Fn.select(2, cdk.Fn.split('/', serverUrl.url))
@@ -123,7 +119,10 @@ export class AttStack extends cdk.Stack {
       cdk.Fn.select(2, cdk.Fn.split('/', imageOptUrl.url))
     )
 
-    const assetsOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket)
+    // S3 origin with /_assets prefix — CloudFront prepends this when fetching
+    const assetsOrigin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket, {
+      originPath: '/_assets',
+    })
 
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
@@ -134,32 +133,31 @@ export class AttStack extends cdk.Stack {
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
       additionalBehaviors: {
-        '/_next/static/*': {
-          origin: assetsOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-        '/assets/*': {
-          origin: assetsOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-        '/api/image*': {
+        // Image optimizer — must be before /_next/* to take precedence
+        '/_next/image*': {
           origin: imageOptOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         },
+        // All other _next assets (JS, CSS, fonts) served from S3
+        '/_next/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
       },
     })
 
+    // OpenNext v4 assets go under _assets/ in S3
     new s3deploy.BucketDeployment(this, 'DeployAssets', {
       sources: [
         s3deploy.Source.asset(path.join(__dirname, '../../.open-next/assets')),
       ],
       destinationBucket: assetsBucket,
+      destinationKeyPrefix: '_assets',
       distribution,
-      distributionPaths: ['/_next/static/*', '/assets/*'],
+      distributionPaths: ['/_next/*'],
     })
 
     // ---------------------------------------------------------------------------
