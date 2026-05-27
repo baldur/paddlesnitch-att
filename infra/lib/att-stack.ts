@@ -13,6 +13,7 @@ export class AttStack extends cdk.Stack {
 
     // Private bucket for ATT data: users, sessions, traces, leaderboard JSON
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
+      bucketName: 'paddlesnitch-data-prod',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       versioned: false,
@@ -20,6 +21,7 @@ export class AttStack extends cdk.Stack {
 
     // Private bucket for Next.js static assets — served via CloudFront OAC
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
+      bucketName: 'paddlesnitch-assets-prod',
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
