@@ -6,18 +6,17 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import { Construct } from 'constructs'
 
 export class AttStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
 
-    // ---------------------------------------------------------------------------
-    // Secrets — must exist in SSM before first deploy:
+    // Must exist in SSM before first deploy:
     //   aws ssm put-parameter --name /att/password-hash-key \
-    //     --value "$(openssl rand -hex 32)" --type SecureString --region eu-west-1
-    // ---------------------------------------------------------------------------
-    const passwordHashKey = cdk.SecretValue.ssmSecure('/att/password-hash-key').toString()
+    //     --value "$(openssl rand -hex 32)" --type String --region eu-west-1
+    const passwordHashKey = ssm.StringParameter.valueForStringParameter(this, '/att/password-hash-key')
 
     // ---------------------------------------------------------------------------
     // GitHub Actions OIDC — allows CI to deploy without stored AWS keys
