@@ -6,6 +6,12 @@ import L from 'leaflet'
 import type { LatLng, Line } from '@/lib/types'
 import RiverLayer from './RiverLayer'
 
+const TILES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+}
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+
 // Fix Leaflet default icon paths broken by webpack
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -39,6 +45,7 @@ export default function DrawingMap({
   const [startPts, setStartPts] = useState<LatLng[]>([])
   const [finishPts, setFinishPts] = useState<LatLng[]>([])
   const [mounted, setMounted] = useState(false)
+  const [dark, setDark] = useState(true)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -157,18 +164,21 @@ export default function DrawingMap({
         )}
       </div>
 
-      <div style={{ cursor: mode ? 'crosshair' : 'grab' }}>
+      <div className="relative" style={{ cursor: mode ? 'crosshair' : 'grab' }}>
+        <button
+          onClick={() => setDark(d => !d)}
+          className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-white border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+          title="Toggle map style"
+        >
+          {dark ? 'LIGHT MAP' : 'DARK MAP'}
+        </button>
         <MapContainer
           center={defaultCenter}
           zoom={14}
           style={{ height: 400, width: '100%' }}
         >
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            maxZoom={19}
-          />
-          <RiverLayer />
+          <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
+          <RiverLayer dark={dark} />
           <ClickHandler onMapClick={handleClick} />
           {startPts.map((pt, i) => (
             <CircleMarker
@@ -204,7 +214,7 @@ export default function DrawingMap({
             <Polyline positions={finishPts} pathOptions={{ color: '#b91c1c', weight: 3 }} />
           )}
         </MapContainer>
-      </div>
+      </div> {/* relative wrapper */}
 
       {mode && (
         <p className="text-xs text-[#64748b]">

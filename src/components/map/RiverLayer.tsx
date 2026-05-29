@@ -1,58 +1,73 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 
 const PANE = 'riverPane'
 
-// Style by OSM waterway type (w property set by download script)
-function riverStyle(feature?: { properties?: { w?: string } }) {
+function riverStyle(dark: boolean, feature?: { properties?: { w?: string } }) {
   const type = feature?.properties?.w ?? 'river'
+  if (dark) {
+    return {
+      color: '#06b6d4',
+      weight: type === 'river' ? 3 : 2,
+      opacity: type === 'river' ? 1 : 0.85,
+      fillOpacity: 0,
+    }
+  }
   return {
-    color: '#06b6d4',
-    weight: type === 'river' ? 3 : type === 'canal' ? 2 : 1.2,
-    opacity: type === 'river' ? 1 : type === 'canal' ? 0.85 : 0.65,
+    color: '#0369a1',
+    weight: type === 'river' ? 4 : 2.5,
+    opacity: 1,
     fillOpacity: 0,
   }
 }
 
-export default function RiverLayer() {
+export default function RiverLayer({ dark = true }: { dark?: boolean }) {
   const map = useMap()
+  const layerRef = useRef<L.GeoJSON | null>(null)
 
+  // Load GeoJSON once on mount
   useEffect(() => {
-    // Dedicated pane so the CSS glow filter only applies to river lines
     if (!map.getPane(PANE)) {
-      const pane = map.createPane(PANE)
-      pane.style.zIndex = '350'
-      // Neon glow matching the app's design language
-      pane.style.filter = 'drop-shadow(0 0 3px rgba(6,182,212,0.9)) drop-shadow(0 0 6px rgba(6,182,212,0.5))'
+      map.createPane(PANE).style.zIndex = '350'
     }
 
-    let layer: L.GeoJSON | null = null
     let cancelled = false
-
     fetch('/data/rivers.geojson')
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        layer = L.geoJSON(data as any, {
-          style: riverStyle,
+        layerRef.current = L.geoJSON(data as any, {
+          style: f => riverStyle(dark, f as { properties?: { w?: string } }),
           pane: PANE,
           interactive: false,
         })
-        layer.addTo(map)
-        layer.bringToBack()
+        layerRef.current.addTo(map)
+        layerRef.current.bringToBack()
       })
-      .catch(() => {
-        // Rivers are cosmetic — fail silently if file hasn't been downloaded yet
-      })
+      .catch(() => {})
 
     return () => {
       cancelled = true
-      if (layer) map.removeLayer(layer)
+      if (layerRef.current) { map.removeLayer(layerRef.current); layerRef.current = null }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map])
+
+  // Re-style whenever dark toggles
+  useEffect(() => {
+    const pane = map.getPane(PANE)
+    if (pane) {
+      pane.style.filter = dark
+        ? 'drop-shadow(0 0 3px rgba(6,182,212,0.9)) drop-shadow(0 0 6px rgba(6,182,212,0.5))'
+        : 'none'
+    }
+    if (layerRef.current) {
+      layerRef.current.setStyle(f => riverStyle(dark, f as { properties?: { w?: string } }))
+    }
+  }, [map, dark])
 
   return null
 }

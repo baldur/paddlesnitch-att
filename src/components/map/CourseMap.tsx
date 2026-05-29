@@ -6,6 +6,12 @@ import L from 'leaflet'
 import type { CourseMetadata } from '@/lib/types'
 import RiverLayer from './RiverLayer'
 
+const TILES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+}
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -32,6 +38,7 @@ function FitBounds({ course }: { course: CourseMetadata }) {
 
 export default function CourseMap({ course }: { course: CourseMetadata }) {
   const [mounted, setMounted] = useState(false)
+  const [dark, setDark] = useState(true)
   useEffect(() => { setMounted(true) }, [])
 
   if (!mounted)
@@ -41,18 +48,22 @@ export default function CourseMap({ course }: { course: CourseMetadata }) {
   const isLoop = course.type === 'loop' || !course.finishLine
 
   return (
-    <MapContainer
-      center={center}
-      zoom={14}
-      style={{ height: 300, width: '100%' }}
-      zoomControl={true}
-    >
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        maxZoom={19}
-      />
-      <RiverLayer />
+    <div className="relative">
+      <button
+        onClick={() => setDark(d => !d)}
+        className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-white border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+        title="Toggle map style"
+      >
+        {dark ? 'LIGHT MAP' : 'DARK MAP'}
+      </button>
+      <MapContainer
+        center={center}
+        zoom={14}
+        style={{ height: 300, width: '100%' }}
+        zoomControl={true}
+      >
+        <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
+        <RiverLayer dark={dark} />
       <FitBounds course={course} />
 
       {isLoop ? (
@@ -106,6 +117,7 @@ export default function CourseMap({ course }: { course: CourseMetadata }) {
           />
         </>
       )}
-    </MapContainer>
+      </MapContainer>
+    </div>
   )
 }
