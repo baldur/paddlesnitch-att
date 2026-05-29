@@ -1,8 +1,5 @@
 import type { TrackPoint } from './types'
 
-// FIT semicircle to degrees
-const SEMICIRCLES_TO_DEG = 180 / Math.pow(2, 31)
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FitRecord = Record<string, any>
 
@@ -13,6 +10,7 @@ export async function parseFit(buffer: ArrayBuffer): Promise<TrackPoint[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     parser.parse(buffer, (err: string | undefined, data: any) => {
       if (err) return reject(new Error(err))
+      // fit-file-parser already converts semicircles → degrees
       const records: FitRecord[] = data?.records ?? []
       const points: TrackPoint[] = []
       for (const r of records) {
@@ -20,8 +18,8 @@ export async function parseFit(buffer: ArrayBuffer): Promise<TrackPoint[]> {
         const timestamp = r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp)
         if (isNaN(timestamp.getTime())) continue
         points.push({
-          lat: r.position_lat * SEMICIRCLES_TO_DEG,
-          lng: r.position_long * SEMICIRCLES_TO_DEG,
+          lat: r.position_lat,
+          lng: r.position_long,
           timestamp,
           hr: r.heart_rate,
           cadence: r.cadence,
