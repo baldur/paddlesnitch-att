@@ -12,7 +12,6 @@ const TILES = {
 }
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
 
-// Fix Leaflet default icon paths broken by webpack
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -21,22 +20,28 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
+type CourseTypeInput = 'point_to_point' | 'loop' | 'gate'
+
+type GateEntry = { pts: LatLng[]; direction: 1 | -1 }
+
+type MapState = {
+  startLine?: Line
+  finishLine?: Line
+  gateDirection?: 1 | -1
+  gates?: Array<{ line: Line; direction: 1 | -1 }>
+}
+
 type Props = {
-  onChange: (lines: { startLine?: Line; finishLine?: Line }) => void
+  onChange: (state: MapState) => void
   defaultCenter?: LatLng
-  courseType?: 'one_way' | 'loop'
+  courseType?: CourseTypeInput
 }
 
 function ClickHandler({ onMapClick }: { onMapClick: (pt: LatLng) => void }) {
-  useMapEvents({
-    click(e) {
-      onMapClick([e.latlng.lat, e.latlng.lng])
-    },
-  })
+  useMapEvents({ click(e) { onMapClick([e.latlng.lat, e.latlng.lng]) } })
   return null
 }
 
-// Reading town centre — used when geolocation is unavailable
 const READING: LatLng = [51.4543, -0.9781]
 
 function GeolocateCenter() {
@@ -45,204 +50,352 @@ function GeolocateCenter() {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       pos => map.setView([pos.coords.latitude, pos.coords.longitude], 14),
-      () => {} // permission denied or error — stay on fallback
+      () => {}
     )
   }, [map])
   return null
 }
 
+// Arrow pointing from gate midpoint toward the active crossing side
+function DirectionArrow({ line, direction, color }: { line: Line; direction: 1 | -1; color: string }) {
+  const [A, B] = line
+  const dlat = B[0] - A[0], dlng = B[1] - A[1]
+  const len = Math.sqrt(dlat * dlat + dlng * dlng)
+  const mid: LatLng = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]
+  const nLat = (dlng / len) * direction, nLng = (-dlat / len) * direction
+  const tLat = dlat / len, tLng = dlng / len
+  const shaft = len * 0.65, head = len * 0.28, spread = len * 0.18
+  const tip: LatLng = [mid[0] + nLat * shaft, mid[1] + nLng * shaft]
+  const h1: LatLng = [tip[0] - nLat * head + tLat * spread, tip[1] - nLng * head + tLng * spread]
+  const h2: LatLng = [tip[0] - nLat * head - tLat * spread, tip[1] - nLng * head - tLng * spread]
+  return (
+    <>
+      <Polyline positions={[mid, tip]} pathOptions={{ color, weight: 4, opacity: 1 }} />
+      <Polyline positions={[tip, h1]} pathOptions={{ color, weight: 4, opacity: 1 }} />
+      <Polyline positions={[tip, h2]} pathOptions={{ color, weight: 4, opacity: 1 }} />
+    </>
+  )
+}
+
+function directionLabel(line: Line, dir: 1 | -1): string {
+  const [A, B] = line
+  const dlat = B[0] - A[0], dlng = B[1] - A[1]
+  const len = Math.sqrt(dlat * dlat + dlng * dlng)
+  const nLat = (dlng / len) * dir, nLng = (-dlat / len) * dir
+  if (Math.abs(nLat) >= Math.abs(nLng)) return nLat > 0 ? '↑ N' : '↓ S'
+  return nLng > 0 ? '→ E' : '← W'
+}
+
+// Color per gate index
+function gateColor(index: number, total: number): string {
+  if (index === 0) return '#15803d'          // start: green
+  if (index === total - 1) return '#b91c1c'  // finish: red
+  return '#d97706'                           // intermediate: amber
+}
+
 export default function DrawingMap({
   onChange,
   defaultCenter = READING,
-  courseType = 'one_way',
+  courseType = 'point_to_point',
 }: Props) {
-  const [mode, setMode] = useState<'start' | 'finish' | null>(null)
+  const [mode, setMode] = useState<'start' | 'finish' | number | null>(null)
   const [startPts, setStartPts] = useState<LatLng[]>([])
   const [finishPts, setFinishPts] = useState<LatLng[]>([])
+  const [gateEntries, setGateEntries] = useState<GateEntry[]>([
+    { pts: [], direction: 1 },
+    { pts: [], direction: 1 },
+  ])
   const [mounted, setMounted] = useState(false)
   const [dark, setDark] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Reset state when course type changes
   useEffect(() => {
-    setStartPts([])
-    setFinishPts([])
+    setStartPts([]); setFinishPts([])
+    setGateEntries([{ pts: [], direction: 1 }, { pts: [], direction: 1 }])
     setMode(null)
-    onChange({ startLine: undefined, finishLine: undefined })
+    onChange({})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseType])
 
-  const emit = (sp: LatLng[], fp: LatLng[]) => {
-    if (courseType === 'loop') {
-      onChange({
-        startLine: sp.length === 2 ? (sp as Line) : undefined,
-        finishLine: undefined,
-      })
-    } else {
-      onChange({
-        startLine: sp.length === 2 ? (sp as Line) : undefined,
-        finishLine: fp.length === 2 ? (fp as Line) : undefined,
-      })
-    }
+  const isTwoLine = courseType === 'point_to_point'
+  const isGate = courseType === 'gate'
+
+  // ── emit helpers ─────────────────────────────────────────────────────────────
+
+  const emitSimple = (sp: LatLng[], fp: LatLng[]) => {
+    onChange({
+      startLine: sp.length === 2 ? (sp as Line) : undefined,
+      ...(isTwoLine ? { finishLine: fp.length === 2 ? (fp as Line) : undefined } : {}),
+    })
   }
 
+  const emitGates = (entries: GateEntry[]) => {
+    const complete = entries.every(g => g.pts.length === 2)
+    if (!complete) { onChange({}); return }
+    const gates = entries.map(g => ({ line: g.pts as Line, direction: g.direction }))
+    onChange({ gates })
+  }
+
+  // ── click handler ─────────────────────────────────────────────────────────────
+
   const handleClick = (pt: LatLng) => {
-    if (mode === 'start') {
+    if (isGate) {
+      if (typeof mode !== 'number') return
+      setGateEntries(prev => {
+        const next = prev.map((g, i) => {
+          if (i !== mode) return g
+          const pts = g.pts.length < 2 ? [...g.pts, pt] : [pt]
+          return { ...g, pts }
+        })
+        if (next[mode as number].pts.length === 2) setMode(null)
+        emitGates(next)
+        return next
+      })
+    } else if (mode === 'start') {
       const next = startPts.length < 2 ? [...startPts, pt] : [pt]
       setStartPts(next)
-      emit(next, finishPts)
+      emitSimple(next, finishPts)
       if (next.length === 2) setMode(null)
     } else if (mode === 'finish') {
       const next = finishPts.length < 2 ? [...finishPts, pt] : [pt]
       setFinishPts(next)
-      emit(startPts, next)
+      emitSimple(startPts, next)
       if (next.length === 2) setMode(null)
     }
   }
 
-  const resetStart = () => {
-    setStartPts([])
-    setMode('start')
-    emit([], finishPts)
+  // ── gate management ───────────────────────────────────────────────────────────
+
+  const addGate = () => {
+    setGateEntries(prev => {
+      const next = [
+        ...prev.slice(0, -1),
+        { pts: [], direction: 1 as const },
+        prev[prev.length - 1],
+      ]
+      emitGates(next)
+      return next
+    })
   }
 
-  const resetFinish = () => {
-    setFinishPts([])
-    setMode('finish')
-    emit(startPts, [])
+  const removeGate = (index: number) => {
+    if (mode === index) setMode(null)
+    setGateEntries(prev => {
+      const next = prev.filter((_, i) => i !== index)
+      emitGates(next)
+      return next
+    })
   }
+
+  const resetGate = (index: number) => {
+    setGateEntries(prev => {
+      const next = prev.map((g, i) => i === index ? { ...g, pts: [] } : g)
+      emitGates(next)
+      return next
+    })
+    setMode(index)
+  }
+
+  const flipGate = (index: number) => {
+    setGateEntries(prev => {
+      const next = prev.map((g, i) =>
+        i === index ? { ...g, direction: (g.direction === 1 ? -1 : 1) as 1 | -1 } : g
+      )
+      emitGates(next)
+      return next
+    })
+  }
+
+  // ── simple (loop / p2p) resets ────────────────────────────────────────────────
+
+  const resetStart = () => { setStartPts([]); setMode('start'); emitSimple([], finishPts) }
+  const resetFinish = () => { setFinishPts([]); setMode('finish'); emitSimple(startPts, []) }
 
   if (!mounted) return <div style={{ height: 400 }} className="bg-[#f8fafc] border border-[#e2e8f0]" />
 
   const startDone = startPts.length === 2
   const finishDone = finishPts.length === 2
+  const cursorStyle = mode !== null ? 'crosshair' : 'grab'
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2 flex-wrap">
-        {courseType === 'loop' ? (
+
+      {/* ── Gate controls (multi-gate UI) ────────────────────────────────────── */}
+      {isGate && (
+        <div className="flex flex-col gap-1.5">
+          {gateEntries.map((gate, i) => {
+            const total = gateEntries.length
+            const isStart = i === 0
+            const isFinish = i === total - 1
+            const color = gateColor(i, total)
+            const done = gate.pts.length === 2
+            const label = isStart ? 'START' : isFinish ? 'FINISH' : `GATE ${i}`
+            return (
+              <div key={i} className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] tracking-widest font-bold w-14 shrink-0" style={{ color }}>
+                  {label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => done ? resetGate(i) : setMode(mode === i ? null : i)}
+                  className={`px-3 py-1 text-xs border transition-colors ${
+                    mode === i
+                      ? 'border-[#0369a1] text-[#0369a1]'
+                      : done
+                      ? 'border-[#64748b] text-[#64748b] opacity-70'
+                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1]'
+                  }`}
+                >
+                  {done
+                    ? '✓ LINE (reset)'
+                    : mode === i
+                    ? `POINT ${gate.pts.length + 1}/2`
+                    : 'SET LINE'}
+                </button>
+                {done && (
+                  <button
+                    type="button"
+                    onClick={() => flipGate(i)}
+                    className="px-3 py-1 text-xs border border-[#0369a1] text-[#0369a1] hover:bg-[#f0f9ff] transition-colors"
+                  >
+                    FLIP ⇄ {directionLabel(gate.pts as Line, gate.direction)}
+                  </button>
+                )}
+                {!isStart && !isFinish && (
+                  <button
+                    type="button"
+                    onClick={() => removeGate(i)}
+                    className="px-2 py-1 text-xs border border-[#e2e8f0] text-[#64748b] hover:border-[#b91c1c] hover:text-[#b91c1c] transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )
+          })}
           <button
             type="button"
-            onClick={() => (startDone ? resetStart() : setMode(mode === 'start' ? null : 'start'))}
+            onClick={addGate}
+            className="self-start px-3 py-1 text-xs border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+          >
+            + ADD GATE
+          </button>
+        </div>
+      )}
+
+      {/* ── Simple controls (loop / point_to_point) ──────────────────────────── */}
+      {!isGate && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <button
+            type="button"
+            onClick={() => startDone ? resetStart() : setMode(mode === 'start' ? null : 'start')}
             className={`px-3 py-1.5 text-xs border transition-colors ${
               mode === 'start'
-                ? 'border-[#7c3aed] text-[#7c3aed]'
+                ? (isTwoLine ? 'border-[#15803d] text-[#15803d]' : 'border-[#7c3aed] text-[#7c3aed]')
                 : startDone
-                ? 'border-[#7c3aed] text-[#7c3aed] opacity-70'
-                : 'border-[#e2e8f0] text-[#64748b] hover:border-[#7c3aed] hover:text-[#7c3aed]'
+                ? (isTwoLine ? 'border-[#15803d] text-[#15803d] opacity-70' : 'border-[#7c3aed] text-[#7c3aed] opacity-70')
+                : (isTwoLine
+                    ? 'border-[#e2e8f0] text-[#64748b] hover:border-[#15803d] hover:text-[#15803d]'
+                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#7c3aed] hover:text-[#7c3aed]')
             }`}
           >
             {startDone
-              ? '✓ CROSSING LINE (click to reset)'
-              : mode === 'start'
-              ? `PLACE POINT ${startPts.length + 1}/2`
-              : 'SET CROSSING LINE'}
+              ? `✓ ${isTwoLine ? 'START LINE' : 'CROSSING LINE'} (click to reset)`
+              : mode === 'start' ? `PLACE POINT ${startPts.length + 1}/2`
+              : `SET ${isTwoLine ? 'START LINE' : 'CROSSING LINE'}`}
           </button>
-        ) : (
-          <>
+          {isTwoLine && (
             <button
               type="button"
-              onClick={() => (startDone ? resetStart() : setMode(mode === 'start' ? null : 'start'))}
+              onClick={() => finishDone ? resetFinish() : setMode(mode === 'finish' ? null : 'finish')}
               className={`px-3 py-1.5 text-xs border transition-colors ${
-                mode === 'start'
-                  ? 'border-[#15803d] text-[#15803d]'
-                  : startDone
-                  ? 'border-[#15803d] text-[#15803d] opacity-70'
-                  : 'border-[#e2e8f0] text-[#64748b] hover:border-[#15803d] hover:text-[#15803d]'
-              }`}
-            >
-              {startDone
-                ? '✓ START LINE (click to reset)'
-                : mode === 'start'
-                ? `PLACE POINT ${startPts.length + 1}/2`
-                : 'SET START LINE'}
-            </button>
-            <button
-              type="button"
-              onClick={() => (finishDone ? resetFinish() : setMode(mode === 'finish' ? null : 'finish'))}
-              className={`px-3 py-1.5 text-xs border transition-colors ${
-                mode === 'finish'
-                  ? 'border-[#b91c1c] text-[#b91c1c]'
-                  : finishDone
-                  ? 'border-[#b91c1c] text-[#b91c1c] opacity-70'
+                mode === 'finish' ? 'border-[#b91c1c] text-[#b91c1c]'
+                  : finishDone ? 'border-[#b91c1c] text-[#b91c1c] opacity-70'
                   : 'border-[#e2e8f0] text-[#64748b] hover:border-[#b91c1c] hover:text-[#b91c1c]'
               }`}
             >
-              {finishDone
-                ? '✓ FINISH LINE (click to reset)'
-                : mode === 'finish'
-                ? `PLACE POINT ${finishPts.length + 1}/2`
-                : 'SET FINISH LINE'}
+              {finishDone ? '✓ FINISH LINE (click to reset)' : mode === 'finish' ? `PLACE POINT ${finishPts.length + 1}/2` : 'SET FINISH LINE'}
             </button>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      <div className="relative" style={{ cursor: mode ? 'crosshair' : 'grab' }}>
+      {/* ── Map ──────────────────────────────────────────────────────────────── */}
+      <div className="relative" style={{ cursor: cursorStyle }}>
         <button
           onClick={() => setDark(d => !d)}
           className="absolute top-2 right-2 z-[1001] px-2 py-1 text-[10px] border bg-white border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
-          title="Toggle map style"
         >
           {dark ? 'LIGHT MAP' : 'DARK MAP'}
         </button>
-        <MapContainer
-          center={defaultCenter}
-          zoom={14}
-          style={{ height: 400, width: '100%' }}
-        >
+        <MapContainer center={defaultCenter} zoom={14} style={{ height: 400, width: '100%' }}>
           <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
           <RiverLayer dark={dark} />
           <GeolocateCenter />
           <ClickHandler onMapClick={handleClick} />
-          {startPts.map((pt, i) => (
-            <CircleMarker
-              key={`s${i}`}
-              center={pt}
-              radius={6}
-              pathOptions={{
-                color: courseType === 'loop' ? '#7c3aed' : '#15803d',
-                fillColor: courseType === 'loop' ? '#7c3aed' : '#15803d',
-                fillOpacity: 1,
-              }}
+
+          {/* Gate lines */}
+          {isGate && gateEntries.map((gate, i) => {
+            if (gate.pts.length === 0) return null
+            const total = gateEntries.length
+            const color = gateColor(i, total)
+            const done = gate.pts.length === 2
+            return (
+              <span key={i}>
+                {gate.pts.map((pt, j) => (
+                  <CircleMarker key={j} center={pt} radius={5}
+                    pathOptions={{ color, fillColor: color, fillOpacity: 1 }}
+                  />
+                ))}
+                {done && (
+                  <Polyline positions={gate.pts} pathOptions={{ color, weight: 3, dashArray: '8 4' }} />
+                )}
+                {done && (
+                  <DirectionArrow line={gate.pts as Line} direction={gate.direction} color={color} />
+                )}
+              </span>
+            )
+          })}
+
+          {/* Simple: start line / crossing line */}
+          {!isGate && startPts.map((pt, i) => (
+            <CircleMarker key={`s${i}`} center={pt} radius={6}
+              pathOptions={{ color: isTwoLine ? '#15803d' : '#7c3aed', fillColor: isTwoLine ? '#15803d' : '#7c3aed', fillOpacity: 1 }}
             />
           ))}
-          {startDone && (
-            <Polyline
-              positions={startPts}
-              pathOptions={{
-                color: courseType === 'loop' ? '#7c3aed' : '#15803d',
-                weight: 3,
-                dashArray: courseType === 'loop' ? '8 4' : undefined,
-              }}
+          {!isGate && startDone && (
+            <Polyline positions={startPts}
+              pathOptions={{ color: isTwoLine ? '#15803d' : '#7c3aed', weight: 3, dashArray: isTwoLine ? undefined : '8 4' }}
             />
           )}
-          {courseType === 'one_way' && finishPts.map((pt, i) => (
-            <CircleMarker
-              key={`f${i}`}
-              center={pt}
-              radius={6}
+
+          {/* Simple: finish line (point_to_point only) */}
+          {isTwoLine && finishPts.map((pt, i) => (
+            <CircleMarker key={`f${i}`} center={pt} radius={6}
               pathOptions={{ color: '#b91c1c', fillColor: '#b91c1c', fillOpacity: 1 }}
             />
           ))}
-          {courseType === 'one_way' && finishDone && (
+          {isTwoLine && finishDone && (
             <Polyline positions={finishPts} pathOptions={{ color: '#b91c1c', weight: 3 }} />
           )}
         </MapContainer>
-      </div> {/* relative wrapper */}
+      </div>
 
-      {mode && (
+      {mode !== null && !isGate && (
         <p className="text-xs text-[#64748b]">
           Click 2 points on the map to set the{' '}
-          <span className={
-            mode === 'start'
-              ? courseType === 'loop' ? 'text-[#7c3aed]' : 'text-[#15803d]'
-              : 'text-[#b91c1c]'
-          }>
-            {courseType === 'loop' ? 'crossing line' : `${mode} line`}
-          </span>
-          . Pan/zoom with scroll and drag.
+          <span className={mode === 'start' ? (isTwoLine ? 'text-[#15803d]' : 'text-[#7c3aed]') : 'text-[#b91c1c]'}>
+            {mode === 'start' ? (isTwoLine ? 'start line' : 'crossing line') : 'finish line'}
+          </span>. Pan/zoom with scroll and drag.
+        </p>
+      )}
+      {isGate && typeof mode === 'number' && (
+        <p className="text-xs text-[#64748b]">
+          Click 2 points on the map to draw{' '}
+          <span className="text-[#0369a1]">
+            {mode === 0 ? 'the start gate' : mode === gateEntries.length - 1 ? 'the finish gate' : `gate ${mode}`}
+          </span>. Pan/zoom with scroll and drag.
         </p>
       )}
     </div>

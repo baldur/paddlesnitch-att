@@ -1,4 +1,4 @@
-import type { LatLng, Line, TrackPoint, Split, ProcessedResult } from './types'
+import type { LatLng, Line, TrackPoint, Split, ProcessedResult, CourseType } from './types'
 
 const EARTH_RADIUS_M = 6371000
 
@@ -159,6 +159,17 @@ function buildResult(
   const hrSeries = segment.filter(p => p.hr !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), bpm: p.hr! }))
   const cadenceSeries = segment.filter(p => p.cadence !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), spm: p.cadence! }))
 
+  const startPt: LatLng = [
+    track[startCrossing.trackIndex].lat + startCrossing.t * (track[startCrossing.trackIndex + 1].lat - track[startCrossing.trackIndex].lat),
+    track[startCrossing.trackIndex].lng + startCrossing.t * (track[startCrossing.trackIndex + 1].lng - track[startCrossing.trackIndex].lng),
+  ]
+  const finishPt: LatLng = [
+    track[finishCrossing.trackIndex].lat + finishCrossing.t * (track[finishCrossing.trackIndex + 1].lat - track[finishCrossing.trackIndex].lat),
+    track[finishCrossing.trackIndex].lng + finishCrossing.t * (track[finishCrossing.trackIndex + 1].lng - track[finishCrossing.trackIndex].lng),
+  ]
+  const midPoints = segment.map((p): LatLng => [p.lat, p.lng])
+  const trackSegment: LatLng[] = [startPt, ...midPoints, finishPt]
+
   return {
     startTimestamp: startCrossing.timestamp.toISOString(),
     finishTimestamp: finishCrossing.timestamp.toISOString(),
@@ -168,34 +179,105 @@ function buildResult(
     avgCadence,
     hrSeries: hrSeries.length > 0 ? hrSeries : undefined,
     cadenceSeries: cadenceSeries.length > 0 ? cadenceSeries : undefined,
+    trackSegment,
   }
 }
 
-// Try every start-line crossing and pair it with the nearest subsequent finish crossing.
-// Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
-// This handles full-session uploads where the user crosses the course lines incidentally
-// before or after their actual race effort.
-export function processTrace(
+// Multi-gate: athlete must cross each gate in the defined direction in sequence.
+// Tries every valid start crossing and returns the fastest complete run.
+function processMultiGate(
   track: TrackPoint[],
-  startLine: Line,
-  finishLine?: Line
+  gates: Array<{ line: Line; direction: 1 | -1 }>,
+  minValidSeconds: number
 ): ProcessedResult | null {
-  if (track.length < 2) return null
+  if (track.length < 2 || gates.length < 2) return null
 
-  const startCrossings = findAllCrossings(track, startLine)
+  const startCrossings = findAllCrossings(track, gates[0].line)
+    .filter(c => c.rxsSign === gates[0].direction)
   if (startCrossings.length === 0) return null
 
   let best: ProcessedResult | null = null
 
   for (const startCrossing of startCrossings) {
-    const finishCrossing = finishLine
-      ? findFirstCrossing(track, finishLine, startCrossing.trackIndex + 1)
-      : findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, -startCrossing.rxsSign)
+    let current: Crossing = startCrossing
+    let valid = true
+
+    for (let g = 1; g < gates.length; g++) {
+      const next = findFirstCrossing(track, gates[g].line, current.trackIndex + 1, gates[g].direction)
+      if (!next) { valid = false; break }
+      current = next
+    }
+
+    if (!valid) continue
+    const candidate = buildResult(track, startCrossing, current)
+    if (!candidate || candidate.totalElapsedSeconds < minValidSeconds) continue
+    if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) best = candidate
+  }
+
+  return best
+}
+
+// Try every start-line crossing and pair it with the correct finish crossing for the course type.
+// Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
+export function processTrace(
+  track: TrackPoint[],
+  startLine: Line,
+  finishLine: Line | undefined,
+  courseType: CourseType = 'point_to_point',
+  minValidSeconds = 0,
+  gateDirection?: 1 | -1,
+  gates?: Array<{ line: Line; direction: 1 | -1 }>
+): ProcessedResult | null {
+  if (track.length < 2) return null
+
+  // Multi-gate: delegate to dedicated processor
+  if (courseType === 'gate' && gates && gates.length >= 2) {
+    return processMultiGate(track, gates, minValidSeconds)
+  }
+
+  const allStartCrossings = findAllCrossings(track, startLine)
+  if (allStartCrossings.length === 0) return null
+
+  // gate: only crossings in the defined direction can start the clock
+  const startCrossings = (courseType === 'gate' && gateDirection != null)
+    ? allStartCrossings.filter(c => c.rxsSign === gateDirection)
+    : allStartCrossings
+
+  if (startCrossings.length === 0) return null
+
+  let best: ProcessedResult | null = null
+
+  for (const startCrossing of startCrossings) {
+    let finishCrossing: Crossing | null = null
+
+    if (courseType === 'point_to_point' || courseType === 'one_way') {
+      if (!finishLine) continue
+      finishCrossing = findFirstCrossing(track, finishLine, startCrossing.trackIndex + 1)
+    } else if (courseType === 'loop') {
+      // any next crossing regardless of direction
+      finishCrossing = findFirstCrossing(track, startLine, startCrossing.trackIndex + 1)
+    } else if (courseType === 'gate') {
+      // if a finish line is provided, use it; otherwise expect opposite-direction re-crossing
+      if (finishLine) {
+        finishCrossing = findFirstCrossing(track, finishLine, startCrossing.trackIndex + 1)
+      } else {
+        finishCrossing = findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, -startCrossing.rxsSign)
+      }
+    } else if (courseType === 'out_and_back') {
+      finishCrossing = findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, -startCrossing.rxsSign)
+    } else if (courseType === 'lap') {
+      finishCrossing = findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, startCrossing.rxsSign)
+    } else if (courseType === 'figure_eight') {
+      const mid = findFirstCrossing(track, startLine, startCrossing.trackIndex + 1, -startCrossing.rxsSign)
+      if (!mid) continue
+      finishCrossing = findFirstCrossing(track, startLine, mid.trackIndex + 1, startCrossing.rxsSign)
+    }
 
     if (!finishCrossing) continue
 
     const candidate = buildResult(track, startCrossing, finishCrossing)
     if (!candidate) continue
+    if (candidate.totalElapsedSeconds < minValidSeconds) continue
 
     if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) {
       best = candidate

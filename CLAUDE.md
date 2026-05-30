@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 45 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
+pnpm test         # 54 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -158,10 +158,33 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 ### Course
 A named stretch of water with:
 - **Start line** — exactly 2 lat/lng points defining a straight line across the river
-- **Finish line** — exactly 2 lat/lng points defining a straight line across the river
-- **Distance** — auto-calculated as the Haversine distance between the midpoints of the start and finish lines. Never asked for manually.
+- **Finish line** — exactly 2 lat/lng points (only for `point_to_point`; omitted for all single-line course types)
+- **Course type** — determines how the clock start/stop is detected (see below)
+- **Distance** — auto-calculated from start/finish midpoints (`point_to_point`) or entered manually for single-line types
 - **Sport** — `kayak` | `rowing` | `both`
 - Owned by the user who created it (the **course admin**)
+
+### Course Types
+
+Three canonical types surfaced in the UI:
+
+| Type | Lines | Description |
+|---|---|---|
+| `point_to_point` | 2 | Start and finish at different locations. Clock starts at start line, stops at finish line. Distance auto-calculated from midpoint to midpoint. |
+| `loop` | 1 | Cross the same line twice (any direction). Clock starts on first crossing, stops on second. Use for out-and-back or circular loops. Set `minValidSeconds` to filter warmup false positives. |
+| `gate` | 2+ | Ordered gates each with a crossing direction. Athletes must cross every gate in the specified direction, in sequence. Start gate starts the clock; finish gate stops it. Intermediate gates verify route compliance (e.g. turning buoys). |
+
+Legacy aliases (accepted in API, not surfaced in UI): `one_way` = `point_to_point`, `out_and_back` = gate-like, `lap` = loop same-direction, `figure_eight` = three crossings.
+
+**Crossing direction (`rxsSign`)**: `segmentIntersect()` returns `rxs = rx*sy - ry*sx` (r = track segment direction, s = line direction). `rxsSign = Math.sign(rxs)`. The right-hand normal of `line[0]→line[1]` points in the `+1` direction; `gateDirection = 1` means athletes must approach from that side. The direction is shown as a blue filled dot on the active side, hollow gray on the inactive side.
+
+**Multi-gate (`processMultiGate`)**: finds all valid start crossings of `gates[0]` with required direction, then chains through each subsequent gate. Returns the shortest complete run. Lives in `geo.ts`.
+
+**minValidSeconds**: Stored on `CourseMetadata`; any result shorter than this is discarded. Useful for loop courses where warmup crossings can create false positives shorter than any real race time.
+
+**trackSegment**: `ProcessedResult.trackSegment` stores the interpolated lat/lng path from start crossing to finish crossing. Used to plot the leader's track on the leaderboard map.
+
+`processTrace` in `geo.ts` uses the best-effort algorithm: tries every valid start crossing, returns the shortest valid pair.
 
 ### Time Trial
 An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`.
@@ -479,7 +502,7 @@ Trials: Spring Sprint 2025 (closed) · Summer Championships 2025 (closed) · Har
 
 ## Testing
 
-Use **Vitest**. 45 tests across 6 files:
+Use **Vitest**. 54 tests across 6 files:
 - `src/lib/geo.test.ts` — haversine, line crossing, processTrace, formatTime
 - `src/lib/gpx.test.ts` — GPX parser unit tests
 - `src/lib/fit.test.ts` — FIT parser unit tests (mocks fit-file-parser)
