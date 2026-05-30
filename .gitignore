@@ -37,6 +37,9 @@ yarn-error.log*
 # local data store (filesystem S3 substitute)
 /.local-data/
 
+# cognito-local emulator state (user pool + users)
+/.cognito/
+
 # downloaded static assets (run pnpm rivers to regenerate)
 /public/data/rivers.geojson
 

@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     exclude: ['**/node_modules/**', '**/infra/**', '**/.open-next/**', '**/.next/**'],
+    globalSetup: ['./src/tests/global-setup.ts'],
+    testTimeout: 15000,
   },
   resolve: {
     alias: {

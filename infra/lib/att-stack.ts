@@ -6,7 +6,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
-import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
@@ -16,11 +15,6 @@ import { Construct } from 'constructs'
 export class AttStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
-
-    // Must exist in SSM before first deploy:
-    //   aws ssm put-parameter --name /att/password-hash-key \
-    //     --value "$(openssl rand -hex 32)" --type String --region eu-west-1
-    const passwordHashKey = ssm.StringParameter.valueForStringParameter(this, '/att/password-hash-key')
 
     // ---------------------------------------------------------------------------
     // GitHub Actions OIDC — allows CI to deploy without stored AWS keys
@@ -65,17 +59,21 @@ export class AttStack extends cdk.Stack {
     })
 
     // ---------------------------------------------------------------------------
-    // Cognito User Pool — foundation for social login (Google/Apple) later
-    // Currently not used by the app; wired in when we switch auth flows.
+    // Cognito User Pool — identity store for all users
     // ---------------------------------------------------------------------------
     const userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: 'paddlesnitch-users',
-      selfSignUpEnabled: false, // app handles signup via custom auth
+      selfSignUpEnabled: true,
       signInAliases: { email: true },
       autoVerify: { email: true },
+      standardAttributes: {
+        email: { required: true, mutable: true },
+        fullname: { required: false, mutable: true },
+      },
       passwordPolicy: {
         minLength: 8,
         requireUppercase: true,
+        requireLowercase: true,
         requireDigits: true,
         requireSymbols: false,
       },
@@ -86,8 +84,16 @@ export class AttStack extends cdk.Stack {
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool,
       userPoolClientName: 'paddlesnitch-web',
-      authFlows: { userPassword: true, userSrp: true },
+      authFlows: {
+        userPassword: true,
+        adminUserPassword: true,
+      },
       generateSecret: false,
+      idTokenValidity: cdk.Duration.hours(24),
+      accessTokenValidity: cdk.Duration.hours(24),
+      refreshTokenValidity: cdk.Duration.days(30),
+      enableTokenRevocation: true,
+      preventUserExistenceErrors: true,
     })
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId })
@@ -109,7 +115,9 @@ export class AttStack extends cdk.Stack {
         DATA_BUCKET: dataBucket.bucketName,
         NODE_ENV: 'production',
         NEXT_PUBLIC_BASE_URL: 'https://paddlesnitch.com',
-        PASSWORD_HASH_KEY: passwordHashKey,
+        COGNITO_USER_POOL_ID: userPool.userPoolId,
+        COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
+        COGNITO_REGION: this.region,
       },
     })
 
@@ -118,6 +126,16 @@ export class AttStack extends cdk.Stack {
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail'],
       resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+    }))
+
+    // Cognito admin operations the app calls (sign-up confirmation, token revocation)
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'cognito-idp:AdminConfirmSignUp',
+        'cognito-idp:AdminGetUser',
+        'cognito-idp:RevokeToken',
+      ],
+      resources: [userPool.userPoolArn],
     }))
 
     const serverUrl = serverFn.addFunctionUrl({

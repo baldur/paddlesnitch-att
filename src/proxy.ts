@@ -13,7 +13,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith('/att/admin') ||
     (req.method !== 'GET' && pathname.startsWith('/att/api') && !pathname.startsWith('/att/api/auth'))
 
-  if (requiresAuth && !req.cookies.get('tt_session')) {
+  if (requiresAuth && !req.cookies.get('tt_id')) {
     const url = req.nextUrl.clone()
     url.pathname = '/att/auth'
     url.searchParams.set('next', pathname)

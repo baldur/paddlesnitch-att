@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createUser } from '@/lib/users'
-import { createSession, SESSION_COOKIE } from '@/lib/sessions'
+import { signUp, signIn } from '@/lib/cognito'
+import { setAuthCookies } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   const { email, displayName, password } = await req.json()
@@ -15,21 +15,30 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const result = await createUser(email, displayName, password)
-  if ('error' in result) {
-    return NextResponse.json({ error: result.error }, { status: 409 })
+  const normalised = String(email).toLowerCase().trim()
+
+  const created = await signUp(normalised, String(displayName).trim(), password)
+  if ('error' in created) {
+    if (created.error === 'email_exists') {
+      return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
+    }
+    if (created.error === 'invalid_password') {
+      return NextResponse.json({
+        error: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+      }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Sign-up failed' }, { status: 500 })
   }
 
-  const token = await createSession(result.id)
+  const tokens = await signIn(normalised, password)
+  if ('error' in tokens) {
+    return NextResponse.json({ error: 'Signed up but auto-login failed — please sign in.' }, { status: 500 })
+  }
+
   const res = NextResponse.json(
-    { id: result.id, email: result.email, displayName: result.displayName },
+    { id: created.sub, email: normalised, displayName: String(displayName).trim() },
     { status: 201 }
   )
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30,
-  })
+  setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
   return res
 }

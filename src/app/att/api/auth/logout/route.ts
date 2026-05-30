@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { deleteSession, SESSION_COOKIE } from '@/lib/sessions'
+import { revoke } from '@/lib/cognito'
+import { REFRESH_COOKIE, clearAuthCookies } from '@/lib/auth'
 
 export async function POST() {
   const cookieStore = await cookies()
-  const token = cookieStore.get(SESSION_COOKIE)?.value
-  if (token) {
-    await deleteSession(token)
-  }
+  const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value
+  if (refreshToken) await revoke(refreshToken)
+
   const res = NextResponse.json({ ok: true })
-  res.cookies.delete(SESSION_COOKIE)
+  clearAuthCookies(res.cookies)
   return res
 }
