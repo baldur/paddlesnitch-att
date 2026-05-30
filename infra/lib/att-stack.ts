@@ -7,6 +7,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
+import * as cognito from 'aws-cdk-lib/aws-cognito'
 import { Construct } from 'constructs'
 
 export class AttStack extends cdk.Stack {
@@ -61,6 +62,35 @@ export class AttStack extends cdk.Stack {
     })
 
     // ---------------------------------------------------------------------------
+    // Cognito User Pool — foundation for social login (Google/Apple) later
+    // Currently not used by the app; wired in when we switch auth flows.
+    // ---------------------------------------------------------------------------
+    const userPool = new cognito.UserPool(this, 'UserPool', {
+      userPoolName: 'paddlesnitch-users',
+      selfSignUpEnabled: false, // app handles signup via custom auth
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      passwordPolicy: {
+        minLength: 8,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: false,
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    })
+
+    const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
+      userPool,
+      userPoolClientName: 'paddlesnitch-web',
+      authFlows: { userPassword: true, userSrp: true },
+      generateSecret: false,
+    })
+
+    new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId })
+    new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId })
+
+    // ---------------------------------------------------------------------------
     // Compute — OpenNext v4 outputs to server-functions/default
     // ---------------------------------------------------------------------------
 
@@ -81,6 +111,11 @@ export class AttStack extends cdk.Stack {
     })
 
     dataBucket.grantReadWrite(serverFn)
+
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+    }))
 
     const serverUrl = serverFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
