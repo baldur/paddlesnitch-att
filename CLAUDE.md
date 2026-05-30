@@ -68,6 +68,69 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
+## Development Workflow
+
+### Day-to-day
+
+```
+pnpm dev          # local server on :3000, filesystem storage, local auth
+# make changes
+pnpm test         # must be all green before shipping
+pnpm build        # TypeScript compile check — no errors allowed
+```
+
+Run `pnpm seed` once after deleting `.local-data/` to get demo data back.
+
+### Before every deploy
+
+Run this checklist in order. If anything fails, fix it first.
+
+**Automated:**
+```bash
+pnpm test         # 16 unit tests (geo, GPX parser)
+pnpm build        # TypeScript — catches type regressions
+```
+
+**Manual smoke test** (run locally against `pnpm dev`):
+
+| Flow | Steps |
+|---|---|
+| Auth | Sign up new account → sign in → sign out → sign in again |
+| Course creation | Admin → New course → draw start + finish on map → save |
+| Trial creation | Course admin page → create trial → set date → open it |
+| FIT upload | Open trial → upload `.fit` file → verify result on leaderboard |
+| GPX upload | Open trial → upload `.gpx` file → verify result on leaderboard |
+| Leaderboard | Check times display, 500 m splits expand correctly |
+| Map toggle | Confirm dark/light toggle works on course map and drawing map |
+
+Only test flows affected by your change if the change is small and isolated. Run the full table before any deploy that touches auth, storage, parsing, or geo logic.
+
+### Deploy sequence
+
+```bash
+pnpm build:open-next                  # production bundle (includes OpenNext v4)
+cd infra
+npx cdk deploy --profile paddlesnitch --require-approval never
+```
+
+SSO session expires after ~8 h. If CDK says "Unable to resolve AWS account", run:
+```bash
+aws sso login --profile paddlesnitch
+```
+
+### Test coverage gaps (known)
+
+These flows have no automated tests yet — manual smoke test is the only safety net:
+- FIT parser (bug fixed 2026-05-29 — a test would have caught it)
+- CSV parser
+- Upload API route (parse → process → leaderboard rebuild)
+- Auth flows (signup, login, magic link)
+- Course/trial CRUD API routes
+
+When fixing a bug in any of the above, add a regression test at the same time.
+
+---
+
 ## What This Is
 
 **ATT — Automated Time Trials.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
