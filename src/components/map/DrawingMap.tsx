@@ -1,6 +1,6 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Polyline, CircleMarker, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, CircleMarker, useMapEvents, useMap } from 'react-leaflet'
 import { useState, useEffect } from 'react'
 import L from 'leaflet'
 import type { LatLng, Line } from '@/lib/types'
@@ -36,16 +36,31 @@ function ClickHandler({ onMapClick }: { onMapClick: (pt: LatLng) => void }) {
   return null
 }
 
+// Reading town centre — used when geolocation is unavailable
+const READING: LatLng = [51.4543, -0.9781]
+
+function GeolocateCenter() {
+  const map = useMap()
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      pos => map.setView([pos.coords.latitude, pos.coords.longitude], 14),
+      () => {} // permission denied or error — stay on fallback
+    )
+  }, [map])
+  return null
+}
+
 export default function DrawingMap({
   onChange,
-  defaultCenter = [51.534, -0.9],
+  defaultCenter = READING,
   courseType = 'one_way',
 }: Props) {
   const [mode, setMode] = useState<'start' | 'finish' | null>(null)
   const [startPts, setStartPts] = useState<LatLng[]>([])
   const [finishPts, setFinishPts] = useState<LatLng[]>([])
   const [mounted, setMounted] = useState(false)
-  const [dark, setDark] = useState(true)
+  const [dark, setDark] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -179,6 +194,7 @@ export default function DrawingMap({
         >
           <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
           <RiverLayer dark={dark} />
+          <GeolocateCenter />
           <ClickHandler onMapClick={handleClick} />
           {startPts.map((pt, i) => (
             <CircleMarker
