@@ -30,7 +30,7 @@ export class AttStack extends cdk.Stack {
       roleName: 'att-github-deploy',
       assumedBy: new iam.WebIdentityPrincipal(githubProvider.openIdConnectProviderArn, {
         StringLike: {
-          'token.actions.githubusercontent.com:sub': 'repo:baldur/paddlesnitch:ref:refs/heads/main',
+          'token.actions.githubusercontent.com:sub': 'repo:baldur/paddlesnitch-att:ref:refs/heads/main',
         },
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
