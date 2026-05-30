@@ -1,15 +1,20 @@
 import path from 'path'
 import fs from 'fs/promises'
 
-const LOCAL_ROOT = path.join(process.cwd(), '.local-data')
-const IS_DEV = process.env.NODE_ENV === 'development' || process.env.USE_LOCAL_STORAGE === 'true'
+// Both helpers read env vars at call time so tests can set DATA_DIR / USE_LOCAL_STORAGE in beforeEach
+function localRoot() {
+  return process.env.DATA_DIR ?? path.join(process.cwd(), '.local-data')
+}
+function isDev() {
+  return process.env.NODE_ENV === 'development' || process.env.USE_LOCAL_STORAGE === 'true'
+}
 
 // In dev: filesystem under .local-data/
 // In prod: S3 (same interface, different backing)
 
 export async function getObject(key: string): Promise<Buffer | null> {
-  if (IS_DEV) {
-    const filePath = path.join(LOCAL_ROOT, key)
+  if (isDev()) {
+    const filePath = path.join(localRoot(), key)
     try {
       return await fs.readFile(filePath)
     } catch {
@@ -31,8 +36,8 @@ export async function getObject(key: string): Promise<Buffer | null> {
 }
 
 export async function putObject(key: string, body: Buffer | string): Promise<void> {
-  if (IS_DEV) {
-    const filePath = path.join(LOCAL_ROOT, key)
+  if (isDev()) {
+    const filePath = path.join(localRoot(), key)
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, body)
     return
@@ -50,8 +55,8 @@ export async function putObject(key: string, body: Buffer | string): Promise<voi
 }
 
 export async function listKeys(prefix: string): Promise<string[]> {
-  if (IS_DEV) {
-    const dir = path.join(LOCAL_ROOT, prefix)
+  if (isDev()) {
+    const dir = path.join(localRoot(), prefix)
     try {
       return (await fs.readdir(dir, { recursive: true }))
         .filter(f => !f.includes('/') || true) // include nested
@@ -69,8 +74,8 @@ export async function listKeys(prefix: string): Promise<string[]> {
 }
 
 export async function deleteObject(key: string): Promise<void> {
-  if (IS_DEV) {
-    const filePath = path.join(LOCAL_ROOT, key)
+  if (isDev()) {
+    const filePath = path.join(localRoot(), key)
     try {
       await fs.unlink(filePath)
     } catch {

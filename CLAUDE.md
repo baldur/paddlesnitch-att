@@ -87,23 +87,22 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 16 unit tests (geo, GPX parser)
+pnpm test         # 45 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
 pnpm build        # TypeScript — catches type regressions
 ```
 
-**Manual smoke test** (run locally against `pnpm dev`):
+The test suite covers the full upload pipeline end-to-end (GPX → parse → cross lines → leaderboard) and all auth flows. These are integration tests against a real temp filesystem — no mocks except `next/headers` (Next.js runtime-only).
 
-| Flow | Steps |
+**Manual smoke test** (run locally against `pnpm dev`; only needed for UI and map flows):
+
+| Flow | When to check |
 |---|---|
-| Auth | Sign up new account → sign in → sign out → sign in again |
-| Course creation | Admin → New course → draw start + finish on map → save |
-| Trial creation | Course admin page → create trial → set date → open it |
-| FIT upload | Open trial → upload `.fit` file → verify result on leaderboard |
-| GPX upload | Open trial → upload `.gpx` file → verify result on leaderboard |
-| Leaderboard | Check times display, 500 m splits expand correctly |
-| Map toggle | Confirm dark/light toggle works on course map and drawing map |
+| Course creation | Any change to DrawingMap or course API |
+| Trial open/close UI | Any change to admin pages |
+| Leaderboard display | Any change to LeaderboardTable or splits rendering |
+| Map dark/light toggle | Any change to map components |
 
-Only test flows affected by your change if the change is small and isolated. Run the full table before any deploy that touches auth, storage, parsing, or geo logic.
+Run the manual steps only for flows affected by your change. The automated tests cover auth, upload, parsing, and the core timing pipeline.
 
 ### Deploy sequence
 
@@ -120,14 +119,12 @@ aws sso login --profile paddlesnitch
 
 ### Test coverage gaps (known)
 
-These flows have no automated tests yet — manual smoke test is the only safety net:
-- FIT parser (bug fixed 2026-05-29 — a test would have caught it)
-- CSV parser
-- Upload API route (parse → process → leaderboard rebuild)
-- Auth flows (signup, login, magic link)
+These flows have no automated tests yet:
+- Magic link auth (request + verify)
 - Course/trial CRUD API routes
+- Map components (UI only — manual)
 
-When fixing a bug in any of the above, add a regression test at the same time.
+When fixing a bug in any uncovered area, add a regression test at the same time.
 
 ---
 
