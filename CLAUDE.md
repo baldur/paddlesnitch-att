@@ -201,7 +201,7 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 | Maps | Leaflet + react-leaflet v5 | Free, no API key |
 | Map drawing | Custom click-to-place | 2 clicks per line; no Leaflet.draw dependency |
 | Auth (local dev) | Cookie-based sessions (filesystem) | Password, magic link (15 min email token); `tt_session` httpOnly cookie |
-| Auth (production) | Custom cookie sessions (S3-backed) | Working; Cognito migration planned but not needed yet |
+| Auth (production) | Custom cookie sessions (S3-backed) + magic link via SES | Working; Cognito User Pool provisioned for future social login |
 | Storage (local dev) | Filesystem under `.local-data/` | Drop-in abstraction in `src/lib/storage.ts` |
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | Next.js API routes | Same handlers used in local dev and prod |
@@ -290,19 +290,45 @@ Auth in production: custom cookie-based sessions — user records and session to
 
 ---
 
-## Auth System (Local Dev)
+## Auth System
 
-Passwords are hashed with HMAC-SHA256 (key: `tt-local-auth`). For production, Cognito handles credentials; the local system is only for dev.
+### How it works today
+
+Three sign-in options available to users:
+1. **Password** — email + password, hashed with HMAC-SHA256
+2. **Magic link** — passwordless; request a link at `/att/auth`, click it in email, session created. 15-min single-use token. In dev: logs to console. In production: sent via AWS SES from `noreply@paddlesnitch.com` *(requires `paddlesnitch.com` verified in SES + account out of sandbox mode — one-time AWS console setup)*
+3. **Social login (Google, Apple)** — not yet wired, but Cognito User Pool is provisioned (`paddlesnitch-users`) and ready. Adding Google is a CDK config change + update to the sign-in page.
+
+### Session mechanics
 
 - **Session cookie:** `tt_session` — httpOnly, sameSite=lax, path=/, 30-day maxAge
-- **Proxy (`src/proxy.ts`):** Auth is required for `/att/admin/*` routes and all non-GET `/att/api/*` requests (except `/att/api/auth*`). GET requests to non-admin pages (leaderboard, upload form, home) are publicly accessible without a cookie. Unauthenticated requests that need auth redirect to `/att/auth?next={path}`.
-- **`getAuthUser()`:** reads cookie → looks up session → looks up user → returns `AuthUser | null`
-- **Signup:** `POST /att/api/auth/signup` — creates user + session, sets cookie
-- **Login:** `POST /att/api/auth/login` — verifies password, creates session, sets cookie
-- **Logout:** `POST /att/api/auth/logout` — deletes session from filesystem, clears cookie
-- **Magic link:** `POST /att/api/auth/magic-request` + `GET /att/api/auth/magic-verify?token=` — 15-min single-use token emailed to user; dev mode logs to console
+- **`getAuthUser()`:** reads cookie → looks up session in storage → looks up user → returns `AuthUser | null`
+- Sessions and users stored as JSON in `.local-data/` (dev) or S3 `paddlesnitch-data-prod` (prod)
+- Passwords are hashed with HMAC-SHA256 (key from SSM `/att/password-hash-key`)
 
-Public pages: home (open trials list), leaderboard, upload form (shows sign-in prompt if no session). Admin pages require login.
+### Routes
+
+- `POST /att/api/auth/signup` — creates user + session, sets cookie
+- `POST /att/api/auth/login` — verifies password, creates session, sets cookie
+- `POST /att/api/auth/logout` — deletes session, clears cookie
+- `GET  /att/api/auth/me` — returns current user or 401
+- `POST /att/api/auth/magic-request` — creates token, emails link
+- `GET  /att/api/auth/magic-verify?token=` — validates token, creates session, sets cookie
+
+### Access control
+
+- **Proxy (`src/proxy.ts`):** blocks unauthenticated requests to `/att/admin/*` and non-GET `/att/api/*` (except `/att/api/auth*`); redirects to `/att/auth?next={path}`
+- Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt)
+- Admin pages require login
+
+### Adding Google/Apple OAuth (future)
+
+Cognito User Pool `paddlesnitch-users` is already deployed. Steps when ready:
+1. Register OAuth client in Google Cloud Console / Apple Developer portal
+2. Add identity provider to the User Pool in CDK (`cognito.UserPoolIdentityProviderGoogle`)
+3. Add a Cognito domain + hosted UI callback URL
+4. Update `/att/auth` sign-in page to add "Sign in with Google" button (OAuth redirect flow)
+5. Update `getAuthUser()` to verify Cognito JWT in addition to (or instead of) the session cookie
 
 ---
 
