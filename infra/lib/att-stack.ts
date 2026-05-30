@@ -8,6 +8,9 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
+import * as acm from 'aws-cdk-lib/aws-certificatemanager'
+import * as route53 from 'aws-cdk-lib/aws-route53'
+import * as route53targets from 'aws-cdk-lib/aws-route53-targets'
 import { Construct } from 'constructs'
 
 export class AttStack extends cdk.Stack {
@@ -158,7 +161,13 @@ export class AttStack extends cdk.Stack {
       originPath: '/_assets',
     })
 
+    const certificate = acm.Certificate.fromCertificateArn(this, 'Certificate',
+      'arn:aws:acm:us-east-1:423220633280:certificate/3c7ad0c4-5bd2-4959-907b-971417a0ff08'
+    )
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      domainNames: ['paddlesnitch.com', 'www.paddlesnitch.com'],
+      certificate,
       defaultBehavior: {
         origin: serverOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -192,6 +201,21 @@ export class AttStack extends cdk.Stack {
       destinationKeyPrefix: '_assets',
       distribution,
       distributionPaths: ['/_next/*'],
+    })
+
+    // ---------------------------------------------------------------------------
+    // DNS — www alias pointing to same CloudFront distribution
+    // (apex A record was created manually in Route53; www was missing)
+    // ---------------------------------------------------------------------------
+    const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: 'Z08692883MHJE285KA9DQ',
+      zoneName: 'paddlesnitch.com',
+    })
+
+    new route53.ARecord(this, 'WwwAlias', {
+      zone: hostedZone,
+      recordName: 'www',
+      target: route53.RecordTarget.fromAlias(new route53targets.CloudFrontTarget(distribution)),
     })
 
     // ---------------------------------------------------------------------------
