@@ -66,6 +66,19 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+#### 5. Tests Are Not Optional
+
+**Every behaviour change ships with a test. No exceptions.**
+
+- **New feature** → write tests that would fail without it before writing the implementation.
+- **Bug fix** → write a test that reproduces the bug first, then fix it. The test name should describe the bug (e.g. `'returns coordinates in degrees, not semicircles'`).
+- **Changed behaviour** → update the existing tests that cover it. A passing test suite after a behaviour change means the tests weren't testing the right thing — fix them.
+- **Refactor** → tests must pass before and after with no changes to test assertions.
+
+If a change touches a file that has no tests, flag it and add coverage for the affected logic before shipping. Do not ship untested behaviour changes.
+
+Run `pnpm test` before every commit. If tests fail, fix them — do not disable or delete them to make CI green.
+
 ---
 
 ## Development Workflow
