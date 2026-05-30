@@ -6,11 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [next, setNext] = useState('/att')
-
-  useEffect(() => {
-    setNext(searchParams.get('next') ?? '/att')
-  }, [searchParams])
+  const next = searchParams.get('next') ?? '/att'
 
   // Redirect if already signed in
   useEffect(() => {
