@@ -201,7 +201,7 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 | Maps | Leaflet + react-leaflet v5 | Free, no API key |
 | Map drawing | Custom click-to-place | 2 clicks per line; no Leaflet.draw dependency |
 | Auth (local dev) | Cookie-based sessions (filesystem) | Password, magic link (15 min email token); `tt_session` httpOnly cookie |
-| Auth (production) | AWS Cognito (User Pools) | Not yet wired; stub in `src/lib/auth.ts` |
+| Auth (production) | Custom cookie sessions (S3-backed) | Working; Cognito migration planned but not needed yet |
 | Storage (local dev) | Filesystem under `.local-data/` | Drop-in abstraction in `src/lib/storage.ts` |
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | Next.js API routes | Same handlers used in local dev and prod |
@@ -262,7 +262,7 @@ S3 paddlesnitch-data-prod  ← all user data (users, sessions, courses, trials, 
 
 OpenNext v4 bundles the Next.js server into a single Lambda. No API Gateway — CloudFront routes directly to a Lambda function URL. Static assets (JS/CSS/images) go to S3 and are served by CloudFront with long cache TTLs.
 
-Auth in production: currently uses the same cookie-based session system as local dev (sessions stored in S3). Planned migration to Cognito: swap `src/lib/auth.ts` to verify Cognito JWT from `Authorization: Bearer` header; `getAuthUser()` signature stays the same.
+Auth in production: custom cookie-based sessions — user records and session tokens stored as JSON in S3 (`paddlesnitch-data-prod`), same code as local dev (which uses `.local-data/` instead). Fully functional. Planned Cognito migration would replace this with AWS-managed identity (MFA, password reset, OAuth); swap `src/lib/auth.ts` to verify Cognito JWT and `getAuthUser()` signature stays the same.
 
 ---
 
