@@ -119,6 +119,12 @@ Run the manual steps only for flows affected by your change. The automated tests
 
 ### Deploy sequence
 
+**Normal path — just push:**
+```bash
+git push origin main   # triggers GitHub Actions: test → build → cdk deploy
+```
+
+**Manual deploy** (use if CI is broken or you need to deploy from your machine):
 ```bash
 pnpm build:open-next                  # production bundle (includes OpenNext v4)
 cd infra
@@ -162,7 +168,7 @@ An event on a Course with a date. A course can host many time trials. Has a stat
 
 ### Entry
 A participant's submission for a specific time trial, consisting of:
-- A raw GPS trace file (GPX or FIT format)
+- A raw GPS trace file (GPX, FIT, or CSV format)
 - A processed result (see below)
 - The submitting user's identity
 
@@ -200,8 +206,9 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | Next.js API routes | Same handlers used in local dev and prod |
 | Processing | Inline in the upload API route | No Lambda trigger in local dev |
-| IaC | AWS CDK (TypeScript) | `infra/` — OpenNext v4, CloudFront + S3 |
-| CDN | CloudFront + S3 OAC | Stack defined; not yet deployed |
+| IaC | AWS CDK (TypeScript) | `infra/` — OpenNext v4, CloudFront + Lambda |
+| CDN | CloudFront + S3 OAC | Deployed — `d1745e47jh0mdf.cloudfront.net` (eu-west-1) |
+| CI/CD | GitHub Actions | Push to `main` → test → build → CDK deploy (OIDC, no stored creds) |
 
 ---
 
@@ -241,20 +248,21 @@ Filesystem (.local-data/)
 
 ---
 
-## Architecture (Production — planned)
+## Architecture (Production)
 
 ```
 Browser
   │
-  ├─── CloudFront ──► S3 (frontend bundle)
-  ├─── CloudFront ──► S3 (public data)
-  └─── API Gateway HTTP API ──► Lambda functions
-                                    (same handlers as API routes, bundled with esbuild)
+  └─── CloudFront (d1745e47jh0mdf.cloudfront.net)
+         ├──► S3 paddlesnitch-assets-prod  (static assets, served via OAC)
+         └──► Lambda (server function)     (Next.js SSR + API routes via OpenNext v4)
 
-S3 Upload ──► S3 Event ──► Processing Lambda
+S3 paddlesnitch-data-prod  ← all user data (users, sessions, courses, trials, entries)
 ```
 
-Auth in production: swap `src/lib/auth.ts` to verify Cognito JWT from `Authorization: Bearer` header instead of reading the session cookie. The `getAuthUser()` function signature stays the same.
+OpenNext v4 bundles the Next.js server into a single Lambda. No API Gateway — CloudFront routes directly to a Lambda function URL. Static assets (JS/CSS/images) go to S3 and are served by CloudFront with long cache TTLs.
+
+Auth in production: currently uses the same cookie-based session system as local dev (sessions stored in S3). Planned migration to Cognito: swap `src/lib/auth.ts` to verify Cognito JWT from `Authorization: Bearer` header; `getAuthUser()` signature stays the same.
 
 ---
 
@@ -360,7 +368,7 @@ src/
 XML. Extract `<trkpt lat="" lon=""><time>`. Heart rate: `<gpxtpx:hr>`. Cadence: `<gpxtpx:cad>`. Parser: `src/lib/gpx.ts` (regex, no XML library).
 
 ### FIT
-Binary. `fit-file-parser` npm package. `position_lat`/`position_long` in semicircles (÷ 2³¹/180). Fields: `timestamp`, `heart_rate`, `cadence`. Parser: `src/lib/fit.ts`.
+Binary. `fit-file-parser` npm package. Returns `position_lat`/`position_long` already in degrees (no semicircle conversion needed). Fields: `timestamp`, `heart_rate`, `cadence`. Parser: `src/lib/fit.ts`.
 
 ### CSV
 Comma-separated. Flexible column detection (case-insensitive, ignores spaces/underscores): lat/latitude, lon/lng/longitude, time/timestamp/datetime (unix seconds, unix ms, ISO 8601, `YYYY-MM-DD HH:MM:SS`). Optional: hr/heartrate/bpm, cadence/cad/strokerate. Parser: `src/lib/csv.ts`.
@@ -394,7 +402,7 @@ Enforced in two layers:
 - **Drawing**: `DrawingMap.tsx` uses click-to-place. Click "SET START LINE", click 2 points across the river, line is drawn. Repeat for finish. Lines can be reset. No Leaflet.draw dependency.
 - **SSR**: All Leaflet components are `'use client'`. Server Components that need a map use `CourseMapClient.tsx` which wraps `CourseMap` in `next/dynamic` with `{ ssr: false }`. Direct `ssr: false` in Server Components is not allowed in Next.js 16.
 - **Icons**: Leaflet default marker icon URLs are patched on import (webpack breaks the default paths).
-- **Tiles**: CartoDB Dark Matter (`dark_all`) — dark background matches the app theme, water features visible.
+- **Tiles**: Default is CartoDB Voyager (light). A toggle button lets users switch to CartoDB Dark Matter (`dark_all`). River layer recolours to match: cyan neon on dark, blue on light.
 - **River overlay**: `RiverLayer.tsx` fetches `/data/rivers.geojson` (OSM UK data, downloaded once via `pnpm rivers`) and renders it as non-interactive cyan (`#06b6d4`) lines with a neon glow behind the course lines. Line weight/opacity scales by waterway type (`w` property: `river` | `canal`). Fails silently if file is missing.
 - **Coordinates**: `[lat, lng]` throughout — NOT GeoJSON order.
 
@@ -413,7 +421,7 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 pnpm dev        # Next.js on :3000, filesystem storage, local session auth
 pnpm seed       # Populate .local-data/ with 8 users, 2 courses, 3 trials, 13 entries
 pnpm rivers     # Download Natural Earth river GeoJSON → public/data/rivers.geojson (run once)
-pnpm test       # Vitest (16 tests)
+pnpm test       # Vitest (45 tests across 6 files)
 pnpm test --watch
 ```
 
@@ -445,11 +453,15 @@ Trials: Spring Sprint 2025 (closed) · Summer Championships 2025 (closed) · Har
 
 ## Testing
 
-Use **Vitest**. Currently:
-- `src/lib/geo.test.ts` — unit tests for haversine, line crossing, processTrace, formatTime
+Use **Vitest**. 45 tests across 6 files:
+- `src/lib/geo.test.ts` — haversine, line crossing, processTrace, formatTime
 - `src/lib/gpx.test.ts` — GPX parser unit tests
+- `src/lib/fit.test.ts` — FIT parser unit tests (mocks fit-file-parser)
+- `src/lib/csv.test.ts` — CSV parser: flexible columns, all timestamp formats, edge cases
+- `src/tests/auth.test.ts` — integration: signup, login, logout, /me (real filesystem, mocked cookies)
+- `src/tests/upload.test.ts` — integration: full upload pipeline → leaderboard (real filesystem)
 
-Pattern for new tests: pure lib functions get unit tests; API routes get integration tests using a real temp `.local-data/` dir (no mocking of storage).
+Pattern: pure lib functions get unit tests; API routes get integration tests against a real temp `.local-data/` dir. Only `next/headers` is mocked (Next.js server-only API).
 
 Run: `pnpm test`
 
@@ -476,7 +488,7 @@ Run: `pnpm test`
 CSS utilities in `globals.css`:
 - `.tabular` — `font-variant-numeric: tabular-nums` for times
 
-Maps are an exception — CartoDB Dark Matter tiles stay dark. All other UI is light.
+Maps default to light (CartoDB Voyager) with a toggle to dark. All other UI is always light.
 No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets ≥ 44px.
 
 ---
