@@ -528,6 +528,7 @@ No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets �
 - Start/finish lines: exactly `[[lat, lng], [lat, lng]]`.
 - Course distance: auto-calculated (Haversine between midpoints of start and finish lines). Not stored as user input.
 - `next/dynamic` with `{ ssr: false }` must only appear inside `'use client'` components. Use `CourseMapClient.tsx` pattern.
+- **Never store `useSearchParams()` values in `useState`** — the state initialises before the effect that reads params, causing race conditions. Derive values directly: `const next = searchParams.get('next') ?? '/att'`.
 - **Route prefix `/att` is baked into the source** (`src/app/att/`) — no Next.js `basePath` config. All `href`, `fetch()`, and `router.push()` calls include `/att` explicitly.
 - YAGNI + KISS: don't build what isn't needed; simplest thing that works.
 - Never commit AWS credentials. IAM roles for Lambda; `aws sso` locally.
