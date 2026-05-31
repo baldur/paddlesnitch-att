@@ -23,10 +23,16 @@ function mockAuth(idToken: string | null) {
   } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 }
 
-function uploadReq(trialId: string, file: File, boatClass: string = 'K1') {
+function uploadReq(trialId: string, file: File, boatClass: string = 'K1', crew?: Array<{ name: string; seat: number | 'C' }>) {
   const form = new FormData()
   form.append('file', file)
   form.append('boatClass', boatClass)
+  // Default crew = one seat for the singles classes the tests use most. Tests
+  // that exercise crew validation pass their own array.
+  const defaultCrew = crew ?? (boatClass === 'K1' || boatClass === '1X'
+    ? [{ name: 'Soloist', seat: 1 as const }]
+    : undefined)
+  if (defaultCrew) form.append('crew', JSON.stringify(defaultCrew))
   return new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
     method: 'POST',
     body: form,
@@ -58,7 +64,10 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
 
     const gpx = makeGpxBuffer(makeTestTrack())
     await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2'),
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2', [
+        { name: 'Bow', seat: 1 },
+        { name: 'Stroke', seat: 2 },
+      ]),
       { params: Promise.resolve({ trialId: trial.id }) },
     )
 
@@ -74,6 +83,10 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(entries[0].displayName).toBe(user.email.split('@')[0])
     expect(entries[0].totalElapsedSeconds).toBeGreaterThan(0)
     expect(entries[0].boatClass).toBe('K2')
+    expect(entries[0].crew).toEqual([
+      { name: 'Bow', seat: 1 },
+      { name: 'Stroke', seat: 2 },
+    ])
   })
 
   it('returns 400 when boatClass is missing', async () => {
@@ -103,6 +116,62 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const gpx = makeGpxBuffer(makeTestTrack())
     const res = await upload(
       uploadReq(trial.id, new File([gpx], 'run.gpx'), 'Coracle'),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when crew size does not match boat class', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    // K2 needs 2 crew, we only provide 1
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2', [{ name: 'Solo', seat: 1 }]),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('needs 2')
+  })
+
+  it('returns 400 when crew has duplicate seats', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2', [
+        { name: 'A', seat: 1 },
+        { name: 'B', seat: 1 },
+      ]),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('listed more than once')
+  })
+
+  it('returns 400 when a multi-person boat is missing the cox', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    // 4+ requires 5 seats: 1-4 + C
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), '4+', [
+        { name: 'B', seat: 1 },
+        { name: 'C', seat: 2 },
+        { name: 'D', seat: 3 },
+        { name: 'S', seat: 4 },
+      ]),
       { params: Promise.resolve({ trialId: trial.id }) },
     )
     expect(res.status).toBe(400)

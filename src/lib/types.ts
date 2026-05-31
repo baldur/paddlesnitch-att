@@ -95,12 +95,44 @@ export function isBoatClass(value: unknown): value is BoatClass {
   return typeof value === 'string' && (BOAT_CLASSES as string[]).includes(value)
 }
 
+// A seat in a boat. 1 = bow, N = stroke, 'C' = cox.
+export type CrewMember = {
+  name: string
+  seat: number | 'C'
+}
+
+// Returns the full list of seat slots for a boat class. Used by both UI
+// (to render the right number of rows) and validation (to check completeness).
+export function expectedSeats(boatClass: BoatClass): Array<number | 'C'> {
+  const info = BOAT_CLASS_INFO[boatClass]
+  const seats: Array<number | 'C'> = Array.from({ length: info.crewSize }, (_, i) => i + 1)
+  if (info.hasCox) seats.push('C')
+  return seats
+}
+
+// Validates a crew list against a boat class. Returns null if valid, error string otherwise.
+export function validateCrew(boatClass: BoatClass, crew: CrewMember[]): string | null {
+  const expected = expectedSeats(boatClass)
+  if (crew.length !== expected.length) {
+    return `${boatClass} needs ${expected.length} crew member${expected.length === 1 ? '' : 's'}, got ${crew.length}`
+  }
+  const seatsSeen = new Set<number | 'C'>()
+  for (const m of crew) {
+    if (!m.name || !m.name.trim()) return 'All crew members need a name'
+    if (!expected.includes(m.seat)) return `Seat ${m.seat} is not valid for ${boatClass}`
+    if (seatsSeen.has(m.seat)) return `Seat ${m.seat} listed more than once`
+    seatsSeen.add(m.seat)
+  }
+  return null
+}
+
 export type LeaderboardEntry = {
   entryId: string
   userId: string
   displayName: string
   submittedAt: string
   boatClass: BoatClass
+  crew: CrewMember[]
   totalElapsedSeconds: number
   splits: Split[]
 }
