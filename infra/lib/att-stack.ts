@@ -72,7 +72,14 @@ export class AttStack extends cdk.Stack {
       userPoolName: 'paddlesnitch-users',
       selfSignUpEnabled: true,
       signInAliases: { email: true },
-      autoVerify: { email: true },
+      // autoVerify explicitly disabled. The signUp handler immediately calls
+      // AdminConfirmSignUp, so the user is confirmed without ever needing to
+      // click a link. Leaving autoVerify on caused Cognito to send a verification
+      // email from no-reply@verificationemail.com (its default sender) which
+      // looked like spam and was functionally dead-letter. CDK defaults this to
+      // true when signInAliases.email is set — must override explicitly. Re-enable
+      // only after SES is wired into the pool AND we actually need verification.
+      autoVerify: { email: false, phone: false },
       passwordPolicy: {
         minLength: 8,
         requireUppercase: true,
