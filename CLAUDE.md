@@ -86,7 +86,7 @@ Run `pnpm test` before every commit. If tests fail, fix them — do not disable 
 ### Day-to-day
 
 ```
-pnpm dev          # local server on :3000, filesystem storage, local auth
+pnpm dev          # one command: cognito-local on :9229, init, Next.js on :3000
 # make changes
 pnpm test         # must be all green before shipping
 pnpm build        # TypeScript compile check — no errors allowed
@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 54 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
+pnpm test         # 55 tests: geo, GPX, FIT, CSV parsers + Cognito-backed auth + upload pipeline
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -139,7 +139,8 @@ aws sso login --profile paddlesnitch
 ### Test coverage gaps (known)
 
 These flows have no automated tests yet:
-- Magic link auth (request + verify)
+- Magic link auth (currently disabled — re-add tests when the Lambda triggers ship)
+- Token refresh path in `getAuthUser()` (manual smoke only)
 - Course/trial CRUD API routes
 - Map components (UI only — manual)
 
@@ -256,12 +257,12 @@ Browser
 
 API routes (under `/att/api/`):
 ```
-auth/signup           POST — Cognito SignUp + auto-confirm (dev) / email confirmation (prod)
-auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets ID-token cookie
-auth/logout           POST — clears cookie, revokes refresh token
+auth/signup           POST — Cognito SignUp + AdminConfirmSignUp, sets tt_id + tt_refresh
+auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets tt_id + tt_refresh
+auth/logout           POST — clears cookies, revokes refresh token
 auth/me               GET  — returns claims from current ID token or 401
-auth/magic-request    POST — generates token, emails via SES (prod) / console (dev)
-auth/magic-verify     GET  — verifies token, issues Cognito session, sets cookie
+auth/magic-request    POST — 501 Not Implemented (deferred follow-up; see Auth System)
+auth/magic-verify     GET  — redirects to /att/auth?error=magic_disabled (deferred follow-up)
 courses               GET / POST
 courses/[id]          GET / PATCH
 trials                GET (?courseId=) / POST
@@ -340,10 +341,12 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 
 ### Session mechanics
 
-- **Cookie**: `tt_session` — httpOnly, sameSite=lax, path=/, 30-day maxAge. **Contents**: Cognito **ID token** (JWT, signed by the user pool).
-- **`getAuthUser()`** (`src/lib/auth.ts`): reads cookie → verifies the JWT signature against the pool's JWKS (`https://cognito-idp.<region>.amazonaws.com/<poolId>/.well-known/jwks.json`, cached) → returns `{ id, email, displayName }` from claims (`sub`, `email`, `name`).
-- **No server-side session store.** The cookie is the session — verification is local once the JWKS is cached.
-- **Logout**: clear cookie; revoke the refresh token via Cognito.
+- **Cookies**: two httpOnly cookies, sameSite=lax, path=/.
+  - `tt_id` — Cognito **ID token** (JWT). 24h maxAge, matches Cognito ID-token validity.
+  - `tt_refresh` — Cognito **refresh token**. 30d maxAge.
+- **`getAuthUser()`** (`src/lib/auth.ts`): reads `tt_id` → verifies the JWT signature against the pool's JWKS (`https://cognito-idp.<region>.amazonaws.com/<poolId>/.well-known/jwks.json`, cached) → returns `{ id, email, displayName }` from claims (`sub`, `email`, `name`). If the ID token is expired and the context is mutable (Route Handler / Server Action), silently exchanges `tt_refresh` for a fresh ID token and updates the cookie.
+- **No server-side session store.** The cookies are the session — verification is local once the JWKS is cached.
+- **Logout**: clear both cookies; call Cognito `RevokeToken` on the refresh token.
 
 ### Environment variables
 
@@ -356,12 +359,12 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 
 ### Routes
 
-- `POST /att/api/auth/signup` — Cognito `SignUp` (auto-confirm in dev; email confirmation in prod)
-- `POST /att/api/auth/login` — Cognito `InitiateAuth` (USER_PASSWORD_AUTH), sets cookie with ID token
-- `POST /att/api/auth/logout` — clears cookie, calls Cognito `RevokeToken`
-- `GET  /att/api/auth/me` — verifies JWT, returns user claims or 401
-- `POST /att/api/auth/magic-request` — generates token, emails magic link
-- `GET  /att/api/auth/magic-verify?token=` — verifies token, calls `AdminInitiateAuth`, sets cookie
+- `POST /att/api/auth/signup` — Cognito `SignUp` + `AdminConfirmSignUp`, signs in, sets `tt_id` + `tt_refresh`
+- `POST /att/api/auth/login` — Cognito `InitiateAuth` (USER_PASSWORD_AUTH), sets `tt_id` + `tt_refresh`
+- `POST /att/api/auth/logout` — clears both cookies, calls Cognito `RevokeToken`
+- `GET  /att/api/auth/me` — verifies JWT (and silent-refreshes if expired), returns user claims or 401
+- `POST /att/api/auth/magic-request` — disabled in v1 (returns 501 with friendly message)
+- `GET  /att/api/auth/magic-verify` — disabled in v1 (redirects to `/att/auth?error=magic_disabled`)
 
 ### Access control
 
@@ -419,10 +422,8 @@ src/
     csv.ts                     ← CSV parser (flexible column names, unix/ISO timestamps)
     parse.ts                   ← Dispatcher: parseTrace(filename, buffer) → ParseResult
     storage.ts                 ← getObject/putObject/deleteObject/listKeys/getJson/putJson
-    auth.ts                    ← getAuthUser(): reads cookie → verifies Cognito JWT → user claims
-    cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, adminSignIn, revoke; endpoint from env
-    email.ts                   ← sendEmail(): console in dev, SES in prod
-    magic-tokens.ts            ← createMagicToken / verifyMagicToken; tokens expire in 15 min
+    auth.ts                    ← getAuthUser(): reads tt_id, verifies JWT, silent-refreshes via tt_refresh
+    cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, refresh, revoke, verifyIdToken
   components/
     AuthNav.tsx                ← Client component: shows user name + logout, or "SIGN IN" link
     map/
@@ -539,15 +540,16 @@ Trials: Spring Sprint 2025 (closed) · Summer Championships 2025 (closed) · Har
 
 ## Testing
 
-Use **Vitest**. 54 tests across 6 files:
+Use **Vitest**. 55 tests across 6 files. Vitest `globalSetup` spawns its own cognito-local on :9230 so auth/upload tests run against the real Cognito SDK surface (no mocks except `next/headers`).
 - `src/lib/geo.test.ts` — haversine, line crossing, processTrace, formatTime
 - `src/lib/gpx.test.ts` — GPX parser unit tests
 - `src/lib/fit.test.ts` — FIT parser unit tests (mocks fit-file-parser)
 - `src/lib/csv.test.ts` — CSV parser: flexible columns, all timestamp formats, edge cases
-- `src/tests/auth.test.ts` — integration: signup, login, logout, /me (real filesystem, mocked cookies)
-- `src/tests/upload.test.ts` — integration: full upload pipeline → leaderboard (real filesystem)
+- `src/tests/auth.test.ts` — integration: signup, login, logout, /me against cognito-local (mocked cookies only)
+- `src/tests/upload.test.ts` — integration: full upload pipeline → leaderboard (real filesystem + cognito-local)
+- `src/tests/cognito-test-server.ts` + `src/tests/global-setup.ts` — spawn the test cognito-local instance, create pool/client, set env
 
-Pattern: pure lib functions get unit tests; API routes get integration tests against a real temp `.local-data/` dir. Only `next/headers` is mocked (Next.js server-only API).
+Pattern: pure lib functions get unit tests; API routes get integration tests against real temp filesystem + real cognito-local. Only `next/headers` is mocked (Next.js server-only API). No SDK mocks.
 
 Run: `pnpm test`
 

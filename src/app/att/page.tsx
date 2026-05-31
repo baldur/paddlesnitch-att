@@ -3,6 +3,11 @@ import { getJson, listKeys } from '@/lib/storage'
 import AuthNav from '@/components/AuthNav'
 import type { TrialMetadata, CourseMetadata } from '@/lib/types'
 
+// Reads live trial state from storage on every request — never prerender.
+// Without this, `next build` tries to fetch from S3 at build time and fails
+// when AWS credentials / bucket aren't available in CI.
+export const dynamic = 'force-dynamic'
+
 async function getOpenTrials() {
   const keys = await listKeys('trials/')
   const metaKeys = keys.filter(
