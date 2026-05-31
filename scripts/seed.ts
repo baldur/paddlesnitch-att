@@ -278,10 +278,15 @@ async function main() {
     // get the submitter + filler names drawn from the rest of the user pool.
     const crew = buildSeedCrew(spec.boatClass, user.displayName)
 
+    const raceDate = spec.raceStart.toISOString().slice(0, 10)
+    const traceRecordedDate = raceDate // seed always has matching dates — no discrepancy
     const stored = {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: new Date(spec.raceStart.getTime() + spec.elapsedSeconds * 1000 + 60_000).toISOString(),
       filename: 'trace.gpx',
+      raceDate,
+      traceRecordedDate,
+      dateDiscrepancy: false,
       boatClass: spec.boatClass,
       crew,
       result,
@@ -291,6 +296,7 @@ async function main() {
     return {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: stored.submittedAt,
+      raceDate,
       boatClass: spec.boatClass,
       crew,
       totalElapsedSeconds: result.totalElapsedSeconds,
