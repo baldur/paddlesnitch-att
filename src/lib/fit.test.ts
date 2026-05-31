@@ -42,10 +42,11 @@ describe('parseFit', () => {
     // If the bug were reintroduced, lat would be ~4.3e-6 instead of ~51.5
   })
 
-  it('parses heart rate and cadence', async () => {
+  it('discards heart rate and cadence even when present in the source file', async () => {
+    // Privacy: HR/cadence are stripped at parse time, never enter the data model.
     const track = await parseFit(new ArrayBuffer(0))
-    expect(track[0].hr).toBe(142)
-    expect(track[0].cadence).toBe(28)
+    expect(track[0]).not.toHaveProperty('hr')
+    expect(track[0]).not.toHaveProperty('cadence')
   })
 
   it('parses timestamps as Date objects', async () => {

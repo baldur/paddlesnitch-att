@@ -1,12 +1,11 @@
 import type { TrackPoint } from './types'
 
+// HR and cadence are intentionally NOT extracted, even when present in the
+// source GPX. See docs/features/courses-and-entries.md.
 export function parseGpx(xml: string): TrackPoint[] {
-  // Use regex for minimal dependency footprint — GPX is regular enough for this
   const points: TrackPoint[] = []
   const trkptRe = /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/g
   const timeRe = /<time>([^<]+)<\/time>/
-  const hrRe = /<(?:gpxtpx|ns3):hr>(\d+)<\/(?:gpxtpx|ns3):hr>/
-  const cadRe = /<(?:gpxtpx|ns3):cad>(\d+)<\/(?:gpxtpx|ns3):cad>/
 
   let m: RegExpExecArray | null
   while ((m = trkptRe.exec(xml)) !== null) {
@@ -18,16 +17,7 @@ export function parseGpx(xml: string): TrackPoint[] {
     const timestamp = new Date(timeMatch[1])
     if (isNaN(timestamp.getTime())) continue
 
-    const hrMatch = hrRe.exec(inner)
-    const cadMatch = cadRe.exec(inner)
-
-    points.push({
-      lat,
-      lng,
-      timestamp,
-      hr: hrMatch ? parseInt(hrMatch[1]) : undefined,
-      cadence: cadMatch ? parseInt(cadMatch[1]) : undefined,
-    })
+    points.push({ lat, lng, timestamp })
   }
 
   return points

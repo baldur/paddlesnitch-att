@@ -137,12 +137,6 @@ function calculateSplits(
   return splits
 }
 
-function avgOf(values: (number | undefined)[]): number | undefined {
-  const defined = values.filter((v): v is number => v !== undefined)
-  if (defined.length === 0) return undefined
-  return defined.reduce((a, b) => a + b, 0) / defined.length
-}
-
 function buildResult(
   track: TrackPoint[],
   startCrossing: Crossing,
@@ -154,10 +148,6 @@ function buildResult(
 
   const splits = calculateSplits(track, startCrossing, finishCrossing)
   const segment = track.slice(startCrossing.trackIndex, finishCrossing.trackIndex + 2)
-  const avgHeartRate = avgOf(segment.map(p => p.hr))
-  const avgCadence = avgOf(segment.map(p => p.cadence))
-  const hrSeries = segment.filter(p => p.hr !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), bpm: p.hr! }))
-  const cadenceSeries = segment.filter(p => p.cadence !== undefined).map(p => ({ timestamp: p.timestamp.toISOString(), spm: p.cadence! }))
 
   const startPt: LatLng = [
     track[startCrossing.trackIndex].lat + startCrossing.t * (track[startCrossing.trackIndex + 1].lat - track[startCrossing.trackIndex].lat),
@@ -175,10 +165,6 @@ function buildResult(
     finishTimestamp: finishCrossing.timestamp.toISOString(),
     totalElapsedSeconds: (finishMs - startMs) / 1000,
     splits,
-    avgHeartRate,
-    avgCadence,
-    hrSeries: hrSeries.length > 0 ? hrSeries : undefined,
-    cadenceSeries: cadenceSeries.length > 0 ? cadenceSeries : undefined,
     trackSegment,
   }
 }

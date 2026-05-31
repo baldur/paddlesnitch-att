@@ -35,10 +35,12 @@ describe('parseGpx', () => {
     expect(track[0].timestamp).toEqual(new Date('2024-06-01T10:00:00Z'))
   })
 
-  it('parses heart rate and cadence from Garmin extensions', () => {
+  it('discards heart rate and cadence even when present in the source file', () => {
+    // Privacy: HR/cadence are stripped at parse time, never enter the data model.
     const track = parseGpx(GPX_WITH_METRICS)
-    expect(track[0].hr).toBe(142)
-    expect(track[0].cadence).toBe(28)
+    expect(track).toHaveLength(1)
+    expect(track[0]).not.toHaveProperty('hr')
+    expect(track[0]).not.toHaveProperty('cadence')
   })
 
   it('returns empty array for empty gpx', () => {

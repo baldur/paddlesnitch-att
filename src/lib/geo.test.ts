@@ -3,8 +3,8 @@ import { haversine, processTrace, formatTime } from './geo'
 import type { TrackPoint, Line } from './types'
 
 // Helpers
-function pt(lat: number, lng: number, ms: number, hr?: number, cadence?: number): TrackPoint {
-  return { lat, lng, timestamp: new Date(ms), hr, cadence }
+function pt(lat: number, lng: number, ms: number): TrackPoint {
+  return { lat, lng, timestamp: new Date(ms) }
 }
 
 describe('haversine', () => {
@@ -76,17 +76,20 @@ describe('processTrace', () => {
     expect(result.trackSegment![result.trackSegment!.length - 1][0]).toBeCloseTo(0.005, 3)
   })
 
-  it('includes hr and cadence averages when present', () => {
-    const trackWithMetrics: TrackPoint[] = [
-      pt(0.000, 0, 0, 120, 30),
-      pt(0.002, 0, 10_000, 140, 32),
-      pt(0.004, 0, 20_000, 150, 34),
-      pt(0.006, 0, 30_000, 130, 28),
-      pt(0.008, 0, 40_000, 125, 29),
-    ]
-    const result = processTrace(trackWithMetrics, startLine, finishLine)!
-    expect(result.avgHeartRate).toBeDefined()
-    expect(result.avgCadence).toBeDefined()
+  it('does not expose hr or cadence on the result', () => {
+    // Privacy: HR/cadence are stripped at parse time and the ProcessedResult
+    // type itself has no HR/cadence fields. This is a belt-and-braces check
+    // against regressions.
+    const result = processTrace([
+      pt(0.000, 0, 0),
+      pt(0.002, 0, 10_000),
+      pt(0.004, 0, 20_000),
+      pt(0.006, 0, 30_000),
+    ], startLine, finishLine)!
+    expect(result).not.toHaveProperty('avgHeartRate')
+    expect(result).not.toHaveProperty('avgCadence')
+    expect(result).not.toHaveProperty('hrSeries')
+    expect(result).not.toHaveProperty('cadenceSeries')
   })
 })
 
