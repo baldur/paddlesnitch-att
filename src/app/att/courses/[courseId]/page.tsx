@@ -1,0 +1,126 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { getJson, listKeys } from '@/lib/storage'
+import AuthNav from '@/components/AuthNav'
+import CourseMapClient from '@/components/map/CourseMapClient'
+import { getAuthUser } from '@/lib/auth'
+import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+
+export const dynamic = 'force-dynamic'
+
+export default async function CourseDetailPage({
+  params,
+}: {
+  params: Promise<{ courseId: string }>
+}) {
+  const { courseId } = await params
+
+  const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
+  if (!course) notFound()
+
+  const trialKeys = await listKeys('trials/')
+  const trialMetaKeys = trialKeys.filter(
+    k => k.endsWith('metadata.json') && !k.includes('/entries/')
+  )
+  const trials = (
+    await Promise.all(trialMetaKeys.map(k => getJson<TrialMetadata>(k)))
+  ).filter((t): t is TrialMetadata => t !== null && t.courseId === courseId)
+
+  const sortedTrials = [...trials].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+
+  const user = await getAuthUser()
+  const isOwner = user?.id === course.adminUserId
+
+  return (
+    <main className="flex-1 flex flex-col">
+      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/att/courses" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+            ← COURSES
+          </Link>
+          <span className="text-[#64748b] shrink-0">/</span>
+          <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
+        </div>
+        <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0 ml-4">
+          {isOwner && (
+            <Link href={`/att/admin/courses/${course.id}`} className="hover:text-[#0369a1] transition-colors">
+              EDIT
+            </Link>
+          )}
+          <AuthNav />
+        </nav>
+      </header>
+
+      <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
+        <section>
+          <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-1">
+            {course.name.toUpperCase()}
+          </h1>
+          <p className="text-xs text-[#64748b] mb-4">
+            {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
+            {course.type === 'loop' && ' · LOOP'}
+          </p>
+          <CourseMapClient course={course} />
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">
+              Time Trials
+            </h2>
+            {user && (
+              <Link
+                href={`/att/admin/trials/new?courseId=${course.id}`}
+                className="text-xs text-[#0369a1] hover:underline tracking-widest"
+              >
+                + NEW TRIAL
+              </Link>
+            )}
+          </div>
+          {sortedTrials.length === 0 ? (
+            <div className="border border-[#e2e8f0] p-6 text-center text-[#64748b] text-sm">
+              No trials on this course yet.
+              {user && (
+                <>
+                  {' '}
+                  <Link href={`/att/admin/trials/new?courseId=${course.id}`} className="text-[#0369a1] hover:underline">
+                    Open the first one
+                  </Link>
+                  .
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {sortedTrials.map(t => (
+                <Link
+                  key={t.id}
+                  href={`/att/trials/${t.id}`}
+                  className="border border-[#e2e8f0] px-4 py-3 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
+                >
+                  <div>
+                    <div className="text-[#0f172a] text-sm group-hover:text-[#0369a1] transition-colors">
+                      {t.name}
+                    </div>
+                    <div className="text-xs text-[#64748b] mt-0.5">{t.date}</div>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-0.5 border ${
+                      t.status === 'open'
+                        ? 'border-[#15803d] text-[#15803d]'
+                        : 'border-[#64748b] text-[#64748b]'
+                    }`}
+                  >
+                    {t.status.toUpperCase()}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  )
+}
