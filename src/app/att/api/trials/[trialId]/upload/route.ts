@@ -4,8 +4,8 @@ import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject, listKeys } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace } from '@/lib/geo'
-import { isBoatClass } from '@/lib/types'
-import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult, BoatClass } from '@/lib/types'
+import { isBoatClass, validateCrew } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult, BoatClass, CrewMember } from '@/lib/types'
 
 type StoredEntry = {
   entryId: string
@@ -14,6 +14,7 @@ type StoredEntry = {
   submittedAt: string
   filename: string
   boatClass: BoatClass
+  crew: CrewMember[]
   result: ProcessedResult
 }
 
@@ -31,6 +32,7 @@ async function rebuildLeaderboard(trialId: string): Promise<void> {
       displayName: e.displayName,
       submittedAt: e.submittedAt,
       boatClass: e.boatClass,
+      crew: e.crew,
       totalElapsedSeconds: e.result.totalElapsedSeconds,
       splits: e.result.splits,
     }))
@@ -46,6 +48,29 @@ function resolveActivityUrl(url: string): string | null {
   return null
 }
 
+// Parses the `crew` form field (JSON string in multipart, array in JSON body)
+// and normalises the seat values (incoming JSON may have seat: "1" instead of 1).
+function parseCrewField(raw: unknown): CrewMember[] | { error: string } {
+  let parsed: unknown = raw
+  if (typeof raw === 'string') {
+    try { parsed = JSON.parse(raw) } catch { return { error: 'crew is not valid JSON' } }
+  }
+  if (!Array.isArray(parsed)) return { error: 'crew must be an array' }
+  const out: CrewMember[] = []
+  for (const m of parsed) {
+    if (!m || typeof m !== 'object') return { error: 'crew member must be an object' }
+    const rec = m as { name?: unknown; seat?: unknown }
+    if (typeof rec.name !== 'string') return { error: 'crew member name must be a string' }
+    let seat: number | 'C'
+    if (rec.seat === 'C' || rec.seat === 'c') seat = 'C'
+    else if (typeof rec.seat === 'number' && Number.isInteger(rec.seat) && rec.seat > 0) seat = rec.seat
+    else if (typeof rec.seat === 'string' && /^\d+$/.test(rec.seat)) seat = parseInt(rec.seat, 10)
+    else return { error: 'crew member seat must be a positive integer or "C"' }
+    out.push({ name: rec.name.trim(), seat })
+  }
+  return out
+}
+
 async function processBuffer(
   arrayBuffer: ArrayBuffer,
   filename: string,
@@ -53,6 +78,7 @@ async function processBuffer(
   user: { id: string; displayName: string },
   trialId: string,
   boatClass: BoatClass,
+  crew: CrewMember[],
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
 
@@ -84,6 +110,7 @@ async function processBuffer(
     submittedAt: new Date().toISOString(),
     filename,
     boatClass,
+    crew,
     result,
   }
   await putJson(`${basePath}/result.json`, stored)
@@ -112,11 +139,15 @@ export async function POST(
 
   if (contentType.includes('application/json')) {
     const body = await req.json()
-    const { url, boatClass } = body
+    const { url, boatClass, crew: rawCrew } = body
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 })
     if (!isBoatClass(boatClass)) {
       return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
     }
+    const crew = parseCrewField(rawCrew)
+    if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
+    const crewError = validateCrew(boatClass, crew)
+    if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
 
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {
@@ -146,7 +177,7 @@ export async function POST(
     }
 
     const arrayBuffer = await fetchRes.arrayBuffer()
-    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass)
+    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass, crew)
   }
 
   // File upload (multipart/form-data)
@@ -157,7 +188,11 @@ export async function POST(
   if (!isBoatClass(boatClassRaw)) {
     return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
   }
+  const crew = parseCrewField(formData.get('crew'))
+  if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
+  const crewError = validateCrew(boatClassRaw, crew)
+  if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
 
   const arrayBuffer = await file.arrayBuffer()
-  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw)
+  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw, crew)
 }

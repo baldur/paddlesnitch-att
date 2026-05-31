@@ -2,7 +2,25 @@
 import React, { useState } from 'react'
 import { formatTime } from '@/lib/geo'
 import { BOAT_CLASSES } from '@/lib/types'
-import type { LeaderboardEntry, BoatClass } from '@/lib/types'
+import type { LeaderboardEntry, BoatClass, CrewMember } from '@/lib/types'
+
+// Sort crew so bow comes first, stroke last, cox last of all.
+function seatSort(a: CrewMember, b: CrewMember): number {
+  if (a.seat === 'C') return 1
+  if (b.seat === 'C') return -1
+  return (a.seat as number) - (b.seat as number)
+}
+
+// Short prefix used on each crew member in the expanded view.
+// hasCox is needed because the rowing convention puts cox last but it isn't
+// a numbered seat.
+function seatBadge(seat: number | 'C', total: number, hasCox: boolean): string {
+  if (seat === 'C') return 'C'
+  const rowerCount = hasCox ? total - 1 : total
+  if (seat === 1) return 'B'           // Bow
+  if (seat === rowerCount) return 'S'  // Stroke
+  return String(seat)
+}
 
 export default function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -82,6 +100,19 @@ export default function LeaderboardTable({ entries }: { entries: LeaderboardEntr
                   {isOpen && (
                     <tr key={`${entry.entryId}-splits`} className="border-b border-[#f1f5f9] bg-[#f8fafc]">
                       <td colSpan={6} className="px-4 py-3">
+                        {entry.crew && entry.crew.length > 1 && (
+                          <div className="mb-4">
+                            <div className="text-[#64748b] text-xs tracking-wider mb-1.5">CREW</div>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                              {[...entry.crew].sort(seatSort).map(m => (
+                                <span key={String(m.seat)}>
+                                  <span className="text-[#64748b] mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'))}</span>
+                                  <span className="text-[#0f172a]">{m.name}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <table className="text-xs border-collapse">
                           <thead>
                             <tr className="text-[#64748b] tracking-wider">

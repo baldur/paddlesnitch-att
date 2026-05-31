@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 63 tests: geo, GPX, FIT, CSV parsers + Cognito-backed auth + upload + courses access model
+pnpm test         # 82 tests: parsers + Cognito auth + upload (boat class + crew) + courses access + crew validation
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -502,7 +502,7 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 pnpm dev        # starts cognito-local + creates pool/client + starts Next.js, all in one terminal
 pnpm seed       # wipes .local-data + Cognito users; reseeds 8 users / 2 courses / 3 trials / 13 entries
 pnpm rivers     # downloads UK river GeoJSON → public/data/rivers.geojson (run once)
-pnpm test       # Vitest, 63 tests across 7 files (spawns its own cognito-local on :9230)
+pnpm test       # Vitest, 82 tests across 8 files (spawns its own cognito-local on :9230)
 pnpm test:watch
 ```
 
@@ -547,7 +547,7 @@ Trials: Spring Sprint 2025 (closed) · Summer Championships 2025 (closed) · Har
 
 ## Testing
 
-Use **Vitest**. 63 tests across 7 files. Vitest `globalSetup` spawns its own cognito-local on :9230 so auth/upload/courses tests run against the real Cognito SDK surface (no mocks except `next/headers`).
+Use **Vitest**. 82 tests across 8 files. Vitest `globalSetup` spawns its own cognito-local on :9230 so auth/upload/courses tests run against the real Cognito SDK surface (no mocks except `next/headers`).
 - `src/lib/geo.test.ts` — haversine, line crossing, processTrace, formatTime
 - `src/lib/gpx.test.ts` — GPX parser unit tests
 - `src/lib/fit.test.ts` — FIT parser unit tests (mocks fit-file-parser)
