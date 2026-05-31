@@ -61,15 +61,18 @@ export class AttStack extends cdk.Stack {
     // ---------------------------------------------------------------------------
     // Cognito User Pool — identity store for all users
     // ---------------------------------------------------------------------------
+    // NOTE on schema: Cognito does NOT allow modifying a user pool's Schema
+    // after creation. Declaring `standardAttributes` here on the already-deployed
+    // pool causes UPDATE_FAILED with "Invalid AttributeDataType input". `email`
+    // and `name` are already standard Cognito attributes available by default —
+    // the signUp call passes them in UserAttributes and Cognito stores them.
+    // If we ever need to require/extend attributes, the only safe path is to
+    // create a new pool.
     const userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: 'paddlesnitch-users',
       selfSignUpEnabled: true,
       signInAliases: { email: true },
       autoVerify: { email: true },
-      standardAttributes: {
-        email: { required: true, mutable: true },
-        fullname: { required: false, mutable: true },
-      },
       passwordPolicy: {
         minLength: 8,
         requireUppercase: true,
