@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
-import { getJson, putJson, putObject, listKeys } from '@/lib/storage'
+import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace } from '@/lib/geo'
-import { isBoatClass } from '@/lib/types'
-import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult, BoatClass } from '@/lib/types'
+import { isBoatClass, validateCrew } from '@/lib/types'
+import { dateDiscrepancy, utcDateString } from '@/lib/format'
+import { rebuildLeaderboard } from '@/lib/leaderboard'
+import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember } from '@/lib/types'
 
 type StoredEntry = {
   entryId: string
@@ -13,30 +15,12 @@ type StoredEntry = {
   displayName: string
   submittedAt: string
   filename: string
+  raceDate: string                 // ISO date (YYYY-MM-DD) — user-picked
+  traceRecordedDate: string        // ISO date — derived from the first GPS point
+  dateDiscrepancy: boolean         // true if raceDate and traceRecordedDate differ
   boatClass: BoatClass
+  crew: CrewMember[]
   result: ProcessedResult
-}
-
-async function rebuildLeaderboard(trialId: string): Promise<void> {
-  const keys = await listKeys(`trials/${trialId}/entries/`)
-  const resultKeys = keys.filter(k => k.endsWith('result.json'))
-  const entries = (
-    await Promise.all(resultKeys.map(k => getJson<StoredEntry>(k)))
-  ).filter((e): e is StoredEntry => e !== null && e.result !== null)
-
-  const leaderboard: LeaderboardEntry[] = entries
-    .map(e => ({
-      entryId: e.entryId,
-      userId: e.userId,
-      displayName: e.displayName,
-      submittedAt: e.submittedAt,
-      boatClass: e.boatClass,
-      totalElapsedSeconds: e.result.totalElapsedSeconds,
-      splits: e.result.splits,
-    }))
-    .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)
-
-  await putJson(`trials/${trialId}/leaderboard.json`, leaderboard)
 }
 
 function resolveActivityUrl(url: string): string | null {
@@ -46,6 +30,29 @@ function resolveActivityUrl(url: string): string | null {
   return null
 }
 
+// Parses the `crew` form field (JSON string in multipart, array in JSON body)
+// and normalises the seat values (incoming JSON may have seat: "1" instead of 1).
+function parseCrewField(raw: unknown): CrewMember[] | { error: string } {
+  let parsed: unknown = raw
+  if (typeof raw === 'string') {
+    try { parsed = JSON.parse(raw) } catch { return { error: 'crew is not valid JSON' } }
+  }
+  if (!Array.isArray(parsed)) return { error: 'crew must be an array' }
+  const out: CrewMember[] = []
+  for (const m of parsed) {
+    if (!m || typeof m !== 'object') return { error: 'crew member must be an object' }
+    const rec = m as { name?: unknown; seat?: unknown }
+    if (typeof rec.name !== 'string') return { error: 'crew member name must be a string' }
+    let seat: number | 'C'
+    if (rec.seat === 'C' || rec.seat === 'c') seat = 'C'
+    else if (typeof rec.seat === 'number' && Number.isInteger(rec.seat) && rec.seat > 0) seat = rec.seat
+    else if (typeof rec.seat === 'string' && /^\d+$/.test(rec.seat)) seat = parseInt(rec.seat, 10)
+    else return { error: 'crew member seat must be a positive integer or "C"' }
+    out.push({ name: rec.name.trim(), seat })
+  }
+  return out
+}
+
 async function processBuffer(
   arrayBuffer: ArrayBuffer,
   filename: string,
@@ -53,6 +60,8 @@ async function processBuffer(
   user: { id: string; displayName: string },
   trialId: string,
   boatClass: BoatClass,
+  crew: CrewMember[],
+  raceDate: string,
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
 
@@ -71,6 +80,11 @@ async function processBuffer(
     )
   }
 
+  // The trace's recorded date is the UTC date of the first track point.
+  // If the user-picked race date differs from this, flag a discrepancy.
+  const traceRecordedDate = utcDateString(parseResult.track[0].timestamp)
+  const discrepancy = dateDiscrepancy(raceDate, traceRecordedDate)
+
   const entryId = nanoid()
   const ext = filename.split('.').pop()?.toLowerCase() ?? 'gpx'
   const basePath = `trials/${trialId}/entries/${user.id}/${entryId}`
@@ -83,13 +97,26 @@ async function processBuffer(
     displayName: user.displayName,
     submittedAt: new Date().toISOString(),
     filename,
+    raceDate,
+    traceRecordedDate,
+    dateDiscrepancy: discrepancy,
     boatClass,
+    crew,
     result,
   }
   await putJson(`${basePath}/result.json`, stored)
   await rebuildLeaderboard(trialId)
 
-  return NextResponse.json({ entryId, result }, { status: 201 })
+  return NextResponse.json({ entryId, result, dateDiscrepancy: discrepancy }, { status: 201 })
+}
+
+// raceDate must be YYYY-MM-DD. Returns the normalised string or null if invalid.
+function normaliseRaceDate(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+  const d = new Date(`${raw}T00:00:00Z`)
+  if (isNaN(d.getTime())) return null
+  return raw
 }
 
 export async function POST(
@@ -112,11 +139,17 @@ export async function POST(
 
   if (contentType.includes('application/json')) {
     const body = await req.json()
-    const { url, boatClass } = body
+    const { url, boatClass, crew: rawCrew, raceDate: rawRaceDate } = body
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 })
     if (!isBoatClass(boatClass)) {
       return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
     }
+    const crew = parseCrewField(rawCrew)
+    if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
+    const crewError = validateCrew(boatClass, crew)
+    if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
+    const raceDate = normaliseRaceDate(rawRaceDate)
+    if (!raceDate) return NextResponse.json({ error: 'Race date is required (YYYY-MM-DD)' }, { status: 400 })
 
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {
@@ -146,7 +179,7 @@ export async function POST(
     }
 
     const arrayBuffer = await fetchRes.arrayBuffer()
-    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass)
+    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass, crew, raceDate)
   }
 
   // File upload (multipart/form-data)
@@ -157,7 +190,13 @@ export async function POST(
   if (!isBoatClass(boatClassRaw)) {
     return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
   }
+  const crew = parseCrewField(formData.get('crew'))
+  if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
+  const crewError = validateCrew(boatClassRaw, crew)
+  if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
+  const raceDate = normaliseRaceDate(formData.get('raceDate'))
+  if (!raceDate) return NextResponse.json({ error: 'Race date is required (YYYY-MM-DD)' }, { status: 400 })
 
   const arrayBuffer = await file.arrayBuffer()
-  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw)
+  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw, crew, raceDate)
 }

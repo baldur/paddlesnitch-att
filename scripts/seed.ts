@@ -16,7 +16,8 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 import { parseGpx } from '../src/lib/gpx'
 import { processTrace, haversine } from '../src/lib/geo'
-import type { CourseMetadata, TrialMetadata, LeaderboardEntry, BoatClass } from '../src/lib/types'
+import { BOAT_CLASS_INFO, expectedSeats } from '../src/lib/types'
+import type { CourseMetadata, TrialMetadata, LeaderboardEntry, BoatClass, CrewMember } from '../src/lib/types'
 
 const ROOT = path.join(process.cwd(), '.local-data')
 
@@ -273,11 +274,21 @@ async function main() {
     const basePath = `trials/${trialId}/entries/${user.id}/${entryId}`
     await writeRaw(`${basePath}/trace.gpx`, gpx)
 
+    // Build a plausible crew. Singles get the submitter at seat 1; larger boats
+    // get the submitter + filler names drawn from the rest of the user pool.
+    const crew = buildSeedCrew(spec.boatClass, user.displayName)
+
+    const raceDate = spec.raceStart.toISOString().slice(0, 10)
+    const traceRecordedDate = raceDate // seed always has matching dates — no discrepancy
     const stored = {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: new Date(spec.raceStart.getTime() + spec.elapsedSeconds * 1000 + 60_000).toISOString(),
       filename: 'trace.gpx',
+      raceDate,
+      traceRecordedDate,
+      dateDiscrepancy: false,
       boatClass: spec.boatClass,
+      crew,
       result,
     }
     await write(`${basePath}/result.json`, stored)
@@ -285,10 +296,24 @@ async function main() {
     return {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: stored.submittedAt,
+      raceDate,
       boatClass: spec.boatClass,
+      crew,
       totalElapsedSeconds: result.totalElapsedSeconds,
       splits: result.splits,
     }
+  }
+
+  function buildSeedCrew(boatClass: BoatClass, submitterName: string): CrewMember[] {
+    const seats = expectedSeats(boatClass)
+    const others = Object.values(userMap)
+      .map(u => u.displayName)
+      .filter(n => n !== submitterName)
+    const fill = [...others]
+    return seats.map((seat, i) => ({
+      seat,
+      name: i === 0 ? submitterName : (fill.shift() ?? `Crew ${i + 1}`),
+    }))
   }
 
   async function buildLeaderboard(trialId: string, entries: LeaderboardEntry[]) {
@@ -299,13 +324,13 @@ async function main() {
   console.log('\n  entries: Spring Sprint 2025')
   const t1Base = new Date('2025-04-12T10:00:00.000Z')
   const t1Entries: LeaderboardEntry[] = []
-  // Mix of kayak (course is sport=both) and sculling classes — realistic-looking spread
+  // Mix of singles + multi-person crews so the leaderboard demonstrates both
   for (const [email, secs, boatClass] of [
     ['sigridur@example.is', 285, 'K1'],
-    ['gunnar@example.is',   291, 'K1'],
+    ['gunnar@example.is',   289, 'K2'],   // K2: gunnar + a crewmate
     ['helga@example.is',    298, '1X'],
     ['arni@example.is',     307, 'K1'],
-    ['eva@example.is',      315, '1X'],
+    ['eva@example.is',      315, '2X'],   // 2X scull: eva + a crewmate
     ['bjarni@example.is',   324, 'K1'],
   ] as [string, number, BoatClass][]) {
     const e = await addEntry(t1Id, C1_START, C1_FINISH, {
@@ -326,7 +351,7 @@ async function main() {
   for (const [email, secs, boatClass] of [
     ['gunnar@example.is',   287, 'K1'],
     ['sigridur@example.is', 293, 'K1'],
-    ['ragnhild@example.is', 301, '1X'],
+    ['ragnhild@example.is', 295, '4-'], // 4- sweep: ragnhild + 3 crewmates
     ['helga@example.is',    311, '1X'],
   ] as [string, number, BoatClass][]) {
     const e = await addEntry(t2Id, C1_START, C1_FINISH, {

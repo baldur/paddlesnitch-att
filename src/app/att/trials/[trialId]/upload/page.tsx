@@ -2,8 +2,8 @@
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
-import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
-import type { AuthUser, BoatClass } from '@/lib/types'
+import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
+import type { AuthUser, BoatClass, CrewMember } from '@/lib/types'
 
 export default function UploadPage({
   params,
@@ -19,6 +19,11 @@ export default function UploadPage({
   const [inputMode, setInputMode] = useState<'file' | 'url'>('file')
   const [activityUrl, setActivityUrl] = useState('')
   const [boatClass, setBoatClass] = useState<BoatClass | ''>('')
+  // Crew is keyed by the boat class. When the class changes we re-initialise
+  // crew so seat indexes always match the selected boat.
+  const [crew, setCrew] = useState<CrewMember[]>([])
+  // Race date defaults to today (local timezone). Stored as YYYY-MM-DD.
+  const [raceDate, setRaceDate] = useState(() => new Date().toISOString().split('T')[0])
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -27,15 +32,43 @@ export default function UploadPage({
       .catch(() => setAuthUser(null))
   }, [])
 
+  // Reset / re-template the crew list whenever the boat class changes.
+  // Seat 1 (bow) is pre-filled with the signed-in user's display name so the
+  // common case of "I'm the bow rower" is one click.
+  useEffect(() => {
+    if (!boatClass) { setCrew([]); return }
+    const seats = expectedSeats(boatClass)
+    const me = authUser?.displayName ?? ''
+    setCrew(seats.map(seat => ({
+      seat,
+      name: seat === 1 ? me : '',
+    })))
+  }, [boatClass, authUser?.displayName])
+
+  function updateCrewName(seat: number | 'C', name: string) {
+    setCrew(prev => prev.map(m => m.seat === seat ? { ...m, name } : m))
+  }
+
+  function seatLabel(seat: number | 'C', total: number): string {
+    if (seat === 'C') return 'Cox'
+    if (seat === 1) return 'Bow (1)'
+    if (seat === total) return `Stroke (${seat})`
+    return `Seat ${seat}`
+  }
+
+  function preflight(): string | null {
+    if (!boatClass) return 'Select a boat class before submitting.'
+    const crewError = validateCrew(boatClass, crew)
+    if (crewError) return crewError
+    return null
+  }
+
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
     if (!file) return
-    if (!boatClass) {
-      setError('Select a boat class before submitting.')
-      setStatus('error')
-      return
-    }
+    const err = preflight()
+    if (err) { setError(err); setStatus('error'); return }
 
     setStatus('uploading')
     setError('')
@@ -43,6 +76,8 @@ export default function UploadPage({
     const formData = new FormData()
     formData.append('file', file)
     formData.append('boatClass', boatClass)
+    formData.append('crew', JSON.stringify(crew))
+    formData.append('raceDate', raceDate)
 
     try {
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
@@ -61,11 +96,8 @@ export default function UploadPage({
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!activityUrl.trim()) return
-    if (!boatClass) {
-      setError('Select a boat class before submitting.')
-      setStatus('error')
-      return
-    }
+    const err = preflight()
+    if (err) { setError(err); setStatus('error'); return }
 
     setStatus('uploading')
     setError('')
@@ -74,7 +106,7 @@ export default function UploadPage({
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: activityUrl.trim(), boatClass }),
+        body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew, raceDate }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
@@ -85,8 +117,61 @@ export default function UploadPage({
     }
   }
 
-  // Render a labelled boat-class dropdown. Multi-person boats are flagged so
-  // the user knows that crew details (added in Phase 3) will be required later.
+  // Crew editor — only renders when a multi-person class is selected.
+  // Singles (K1, 1X) auto-populate the single seat from the signed-in user;
+  // the editor is hidden because there's nothing to edit.
+  function CrewEditor() {
+    if (!boatClass) return null
+    const info = BOAT_CLASS_INFO[boatClass]
+    const total = info.crewSize
+    if (total === 1 && !info.hasCox) return null
+    return (
+      <div className="flex flex-col gap-2">
+        <label className="text-xs text-[#64748b] tracking-widest">CREW</label>
+        <p className="text-xs text-[#64748b] -mt-1">
+          One row per seat. Seat 1 is bow, {total} is stroke{info.hasCox ? ', C is cox' : ''}.
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {crew.map(m => (
+            <div key={String(m.seat)} className="flex items-center gap-2">
+              <span className="text-xs text-[#64748b] tracking-widest w-20 shrink-0 tabular">
+                {seatLabel(m.seat, total)}
+              </span>
+              <input
+                type="text"
+                required
+                placeholder={m.seat === 'C' ? 'Cox name' : 'Crew member name'}
+                value={m.name}
+                onChange={e => updateCrewName(m.seat, e.target.value)}
+                className={inputClass + ' flex-1'}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function RaceDatePicker() {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-[#64748b] tracking-widest">RACE DATE</label>
+        <input
+          type="date"
+          required
+          value={raceDate}
+          onChange={e => setRaceDate(e.target.value)}
+          className={`${inputClass} cursor-pointer`}
+        />
+        <p className="text-xs text-[#64748b]">
+          When did you actually race? Defaults to today. We&apos;ll flag a warning if it
+          doesn&apos;t match the date in your GPS file.
+        </p>
+      </div>
+    )
+  }
+
+  // Render a labelled boat-class dropdown.
   function BoatClassPicker() {
     return (
       <div className="flex flex-col gap-2">
@@ -211,6 +296,8 @@ export default function UploadPage({
                 </div>
 
                 <BoatClassPicker />
+                <CrewEditor />
+                <RaceDatePicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
@@ -246,6 +333,8 @@ export default function UploadPage({
                 </div>
 
                 <BoatClassPicker />
+                <CrewEditor />
+                <RaceDatePicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">

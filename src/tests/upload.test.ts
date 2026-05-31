@@ -23,10 +23,23 @@ function mockAuth(idToken: string | null) {
   } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 }
 
-function uploadReq(trialId: string, file: File, boatClass: string = 'K1') {
+function uploadReq(trialId: string, file: File, opts: {
+  boatClass?: string
+  crew?: Array<{ name: string; seat: number | 'C' }>
+  raceDate?: string | null  // null = omit
+} = {}) {
+  const boatClass = opts.boatClass ?? 'K1'
   const form = new FormData()
   form.append('file', file)
   form.append('boatClass', boatClass)
+  // Default crew = one seat for the singles the most tests use.
+  const defaultCrew = opts.crew ?? (boatClass === 'K1' || boatClass === '1X'
+    ? [{ name: 'Soloist', seat: 1 as const }]
+    : undefined)
+  if (defaultCrew) form.append('crew', JSON.stringify(defaultCrew))
+  // Default raceDate matches makeTestTrack's recorded date (2024-06-01) so
+  // tests don't accidentally flag a discrepancy. Pass null to omit.
+  if (opts.raceDate !== null) form.append('raceDate', opts.raceDate ?? '2024-06-01')
   return new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
     method: 'POST',
     body: form,
@@ -58,7 +71,13 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
 
     const gpx = makeGpxBuffer(makeTestTrack())
     await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2'),
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), {
+        boatClass: 'K2',
+        crew: [
+          { name: 'Bow', seat: 1 },
+          { name: 'Stroke', seat: 2 },
+        ],
+      }),
       { params: Promise.resolve({ trialId: trial.id }) },
     )
 
@@ -74,6 +93,10 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(entries[0].displayName).toBe(user.email.split('@')[0])
     expect(entries[0].totalElapsedSeconds).toBeGreaterThan(0)
     expect(entries[0].boatClass).toBe('K2')
+    expect(entries[0].crew).toEqual([
+      { name: 'Bow', seat: 1 },
+      { name: 'Stroke', seat: 2 },
+    ])
   })
 
   it('returns 400 when boatClass is missing', async () => {
@@ -102,7 +125,69 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
 
     const gpx = makeGpxBuffer(makeTestTrack())
     const res = await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'Coracle'),
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { boatClass: 'Coracle' }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when crew size does not match boat class', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    // K2 needs 2 crew, we only provide 1
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { boatClass: 'K2', crew: [{ name: 'Solo', seat: 1 }] }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('needs 2')
+  })
+
+  it('returns 400 when crew has duplicate seats', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), {
+        boatClass: 'K2',
+        crew: [
+          { name: 'A', seat: 1 },
+          { name: 'B', seat: 1 },
+        ],
+      }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('listed more than once')
+  })
+
+  it('returns 400 when a multi-person boat is missing the cox', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    // 4+ requires 5 seats: 1-4 + C
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), {
+        boatClass: '4+',
+        crew: [
+          { name: 'B', seat: 1 },
+          { name: 'C', seat: 2 },
+          { name: 'D', seat: 3 },
+          { name: 'S', seat: 4 },
+        ],
+      }),
       { params: Promise.resolve({ trialId: trial.id }) },
     )
     expect(res.status).toBe(400)
@@ -151,5 +236,67 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     const gpx = makeGpxBuffer(makeTestTrack())
     const res = await upload(uploadReq(trial.id, new File([gpx], 'run.gpx')), { params: Promise.resolve({ trialId: trial.id }) })
     expect(res.status).toBe(401)
+  })
+
+  it('returns 400 when raceDate is missing', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: null }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toContain('Race date')
+  })
+
+  it('returns 400 when raceDate is not YYYY-MM-DD', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024/06/01' }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('does not flag discrepancy when raceDate matches the trace date', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())  // trace recorded 2024-06-01
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024-06-01' }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.dateDiscrepancy).toBe(false)
+  })
+
+  it('flags discrepancy when raceDate differs from the trace date', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())  // trace recorded 2024-06-01
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024-06-05' }),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.dateDiscrepancy).toBe(true)
   })
 })
