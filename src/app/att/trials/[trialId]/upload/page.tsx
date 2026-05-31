@@ -22,6 +22,8 @@ export default function UploadPage({
   // Crew is keyed by the boat class. When the class changes we re-initialise
   // crew so seat indexes always match the selected boat.
   const [crew, setCrew] = useState<CrewMember[]>([])
+  // Race date defaults to today (local timezone). Stored as YYYY-MM-DD.
+  const [raceDate, setRaceDate] = useState(() => new Date().toISOString().split('T')[0])
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -75,6 +77,7 @@ export default function UploadPage({
     formData.append('file', file)
     formData.append('boatClass', boatClass)
     formData.append('crew', JSON.stringify(crew))
+    formData.append('raceDate', raceDate)
 
     try {
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
@@ -103,7 +106,7 @@ export default function UploadPage({
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew }),
+        body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew, raceDate }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
@@ -145,6 +148,25 @@ export default function UploadPage({
             </div>
           ))}
         </div>
+      </div>
+    )
+  }
+
+  function RaceDatePicker() {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-[#64748b] tracking-widest">RACE DATE</label>
+        <input
+          type="date"
+          required
+          value={raceDate}
+          onChange={e => setRaceDate(e.target.value)}
+          className={`${inputClass} cursor-pointer`}
+        />
+        <p className="text-xs text-[#64748b]">
+          When did you actually race? Defaults to today. We&apos;ll flag a warning if it
+          doesn&apos;t match the date in your GPS file.
+        </p>
       </div>
     )
   }
@@ -275,6 +297,7 @@ export default function UploadPage({
 
                 <BoatClassPicker />
                 <CrewEditor />
+                <RaceDatePicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
@@ -311,6 +334,7 @@ export default function UploadPage({
 
                 <BoatClassPicker />
                 <CrewEditor />
+                <RaceDatePicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
