@@ -490,23 +490,22 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 
 ## Local Development
 
-You need **two processes** running: the Next.js dev server and the cognito-local emulator. Easiest is two terminals.
-
 ```bash
-# Terminal 1 — Cognito emulator (must be running before pnpm dev)
-pnpm cognito    # cognito-local on :9229; user db in .cognito-local/
-
-# Terminal 2 — Next.js
-pnpm dev        # Next.js on :3000
-
-# Utilities
-pnpm seed       # Populate .local-data/ + cognito-local with 8 users, 2 courses, 3 trials, 13 entries
-pnpm rivers     # Download Natural Earth river GeoJSON → public/data/rivers.geojson (run once)
-pnpm test       # Vitest (54 tests across 6 files)
-pnpm test --watch
+pnpm dev        # starts cognito-local + creates pool/client + starts Next.js, all in one terminal
+pnpm seed       # wipes .local-data + Cognito users; reseeds 8 users / 2 courses / 3 trials / 13 entries
+pnpm rivers     # downloads UK river GeoJSON → public/data/rivers.geojson (run once)
+pnpm test       # Vitest, 55 tests across 6 files (spawns its own cognito-local on :9230)
+pnpm test:watch
 ```
 
-`.env.local`:
+`pnpm dev` (`scripts/dev.ts`) orchestrates the stack: if cognito-local is already running on `:9229` it reuses it, otherwise it spawns one. Then runs `pnpm cognito:init` (idempotent — creates pool/client + writes `.env.local`), then starts `next dev`. Ctrl+C cleans up both processes. Output is tagged `[cognito]` / `[next]` / `[info]`.
+
+Other scripts:
+- `pnpm cognito` — bare cognito-local (use if you want to run it in a separate terminal)
+- `pnpm cognito:init` — re-run pool/client init (rarely needed; `pnpm dev` does this)
+- `pnpm next` — bare `next dev` (assumes cognito-local is already up)
+
+`.env.local` is written by `pnpm cognito:init`. You can edit it but the COGNITO_* vars will be overwritten if you re-run init:
 ```
 NODE_ENV=development
 USE_LOCAL_STORAGE=true
@@ -516,9 +515,9 @@ COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
 COGNITO_REGION=eu-west-1
 ```
 
-The cognito-local pool ID and client ID are printed when you first run `pnpm cognito` (or check `.cognito-local/db/`). They're stable across restarts as long as you don't delete the db directory.
+The pool ID and client ID are stable across restarts as long as you don't delete `.cognito/`.
 
-**Reset everything**: `rm -rf .local-data .cognito-local` then `pnpm cognito` (terminal 1), then `pnpm seed`.
+**Reset everything**: `rm -rf .local-data .cognito` then `pnpm dev` (recreates pool), then `pnpm seed` (creates users + demo data).
 
 No Docker, no AWS creds needed for normal dev.
 
