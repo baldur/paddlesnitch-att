@@ -32,8 +32,7 @@ export function parseCsv(text: string): TrackPoint[] {
 
   if (latI === -1 || lngI === -1 || timeI === -1) return []
 
-  const hrI = findCol(headers, 'hr', 'heartrate', 'heart_rate', 'bpm')
-  const cadI = findCol(headers, 'cadence', 'cad', 'strokerate', 'strokes')
+  // HR / cadence columns are intentionally ignored — see types.ts.
 
   const points: TrackPoint[] = []
 
@@ -50,19 +49,7 @@ export function parseCsv(text: string): TrackPoint[] {
     if (!isFinite(lat) || !isFinite(lng) || !timestamp) continue
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue
 
-    const pt: TrackPoint = { lat, lng, timestamp }
-
-    if (hrI !== -1) {
-      const hr = parseFloat(cols[hrI] ?? '')
-      if (isFinite(hr) && hr > 0) pt.hr = hr
-    }
-
-    if (cadI !== -1) {
-      const cad = parseFloat(cols[cadI] ?? '')
-      if (isFinite(cad) && cad > 0) pt.cadence = cad
-    }
-
-    points.push(pt)
+    points.push({ lat, lng, timestamp })
   }
 
   return points

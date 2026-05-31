@@ -2,7 +2,8 @@
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
-import type { AuthUser } from '@/lib/types'
+import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
+import type { AuthUser, BoatClass } from '@/lib/types'
 
 export default function UploadPage({
   params,
@@ -17,6 +18,7 @@ export default function UploadPage({
   const [error, setError] = useState('')
   const [inputMode, setInputMode] = useState<'file' | 'url'>('file')
   const [activityUrl, setActivityUrl] = useState('')
+  const [boatClass, setBoatClass] = useState<BoatClass | ''>('')
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -29,12 +31,18 @@ export default function UploadPage({
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
     if (!file) return
+    if (!boatClass) {
+      setError('Select a boat class before submitting.')
+      setStatus('error')
+      return
+    }
 
     setStatus('uploading')
     setError('')
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('boatClass', boatClass)
 
     try {
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
@@ -53,6 +61,11 @@ export default function UploadPage({
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!activityUrl.trim()) return
+    if (!boatClass) {
+      setError('Select a boat class before submitting.')
+      setStatus('error')
+      return
+    }
 
     setStatus('uploading')
     setError('')
@@ -61,7 +74,7 @@ export default function UploadPage({
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: activityUrl.trim() }),
+        body: JSON.stringify({ url: activityUrl.trim(), boatClass }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Upload failed')
@@ -70,6 +83,40 @@ export default function UploadPage({
       setError(err instanceof Error ? err.message : 'Upload failed')
       setStatus('error')
     }
+  }
+
+  // Render a labelled boat-class dropdown. Multi-person boats are flagged so
+  // the user knows that crew details (added in Phase 3) will be required later.
+  function BoatClassPicker() {
+    return (
+      <div className="flex flex-col gap-2">
+        <label className="text-xs text-[#64748b] tracking-widest">BOAT CLASS</label>
+        <select
+          required
+          value={boatClass}
+          onChange={e => setBoatClass(e.target.value as BoatClass | '')}
+          className={inputClass}
+        >
+          <option value="">— Select —</option>
+          <optgroup label="Kayak">
+            {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => (
+              <option key={c} value={c}>
+                {c} · {BOAT_CLASS_INFO[c].crewSize} paddler{BOAT_CLASS_INFO[c].crewSize > 1 ? 's' : ''}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Rowing">
+            {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => {
+              const info = BOAT_CLASS_INFO[c]
+              const seats = info.crewSize === 1
+                ? '1 sculler'
+                : `${info.crewSize} rower${info.crewSize > 1 ? 's' : ''}${info.hasCox ? ' + cox' : ''}`
+              return <option key={c} value={c}>{c} · {seats}</option>
+            })}
+          </optgroup>
+        </select>
+      </div>
+    )
   }
 
   const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors w-full'
@@ -159,9 +206,11 @@ export default function UploadPage({
                     className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm file:bg-[#f1f5f9] file:text-[#0f172a] file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-[#0369a1] transition-colors cursor-pointer w-full"
                   />
                   <p className="text-xs text-[#64748b]">
-                    Export your full activity from Garmin Connect, Strava, Apple Fitness, or any GPS device. GPX, FIT, and CSV are all supported.
+                    Export your full activity from Garmin Connect, Strava, Apple Fitness, or any GPS device. GPX, FIT, and CSV are all supported. Heart rate and cadence data is discarded.
                   </p>
                 </div>
+
+                <BoatClassPicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
@@ -192,9 +241,11 @@ export default function UploadPage({
                     className={inputClass}
                   />
                   <p className="text-xs text-[#64748b]">
-                    Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it.
+                    Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it. Heart rate and cadence data is discarded.
                   </p>
                 </div>
+
+                <BoatClassPicker />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">

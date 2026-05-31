@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 55 tests: geo, GPX, FIT, CSV parsers + Cognito-backed auth + upload pipeline
+pnpm test         # 57 tests: geo, GPX, FIT, CSV parsers + Cognito-backed auth + upload pipeline (boat class required)
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -202,9 +202,11 @@ Derived from an Entry by the processing pipeline:
 - **Finish crossing time** — timestamp when the track first crosses the finish line (after the start)
 - **Total elapsed time** — finish − start in seconds
 - **500 m splits** — array of `{ distance: number, elapsedSeconds: number }` at each 500 m mark
-- **Heart rate series** — `{ timestamp, bpm }[]` if present in the trace
-- **Stroke rate series** — `{ timestamp, spm }[]` if present in the trace (Garmin FIT cadence field)
-- **Average heart rate**, **average stroke rate** (derived summaries)
+
+**Heart rate and cadence are intentionally NOT captured.** All three parsers (gpx, fit, csv) discard those fields at parse time even when the source file contains them. See `docs/features/courses-and-entries.md`.
+
+### Boat class
+Every entry carries a `boatClass`. Kayak: `K1`, `K2`, `K4`. Sculling: `1X`, `2X`, `4X+`, `4X-`. Sweep: `2-`, `4+`, `4-`, `8+`. Defined in `src/lib/types.ts` (`BoatClass`, `BOAT_CLASSES`, `BOAT_CLASS_INFO`, `isBoatClass`). The leaderboard UI defaults to showing all classes with a filter dropdown — comparing a 1X to an 8+ is not meaningful so users typically filter to their own class. Crew details (per-seat names) are added in a later phase; Phase 1 only stores the class label.
 
 ### Line Crossing Detection
 Given a GPS track as an ordered array of `[lat, lng, timestamp]` tuples and a line (two `[lat, lng]` points), a crossing is detected when any consecutive pair of track points forms a segment that intersects the line. Intersection uses standard 2D line-segment math (cross-product / parametric form). Haversine is used for distance calculations. All geo math lives in `src/lib/geo.ts`.

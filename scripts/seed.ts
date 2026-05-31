@@ -16,7 +16,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 import { parseGpx } from '../src/lib/gpx'
 import { processTrace, haversine } from '../src/lib/geo'
-import type { CourseMetadata, TrialMetadata, LeaderboardEntry } from '../src/lib/types'
+import type { CourseMetadata, TrialMetadata, LeaderboardEntry, BoatClass } from '../src/lib/types'
 
 const ROOT = path.join(process.cwd(), '.local-data')
 
@@ -86,12 +86,8 @@ function rnd(scale: number): number {
   return (Math.random() - 0.5) * 2 * scale
 }
 
-function gpxPoint(lat: number, lng: number, time: Date, hr?: number, cad?: number): string {
-  const ext =
-    hr !== undefined || cad !== undefined
-      ? `<extensions><gpxtpx:TrackPointExtension>${hr !== undefined ? `<gpxtpx:hr>${hr}</gpxtpx:hr>` : ''}${cad !== undefined ? `<gpxtpx:cad>${cad}</gpxtpx:cad>` : ''}</gpxtpx:TrackPointExtension></extensions>`
-      : ''
-  return `<trkpt lat="${lat.toFixed(7)}" lon="${lng.toFixed(7)}"><time>${time.toISOString()}</time>${ext}</trkpt>`
+function gpxPoint(lat: number, lng: number, time: Date): string {
+  return `<trkpt lat="${lat.toFixed(7)}" lon="${lng.toFixed(7)}"><time>${time.toISOString()}</time></trkpt>`
 }
 
 interface TrackParams {
@@ -99,8 +95,6 @@ interface TrackParams {
   finishLine: [[number, number], [number, number]]
   elapsedSeconds: number
   raceStart: Date
-  baseHr?: number
-  baseCad?: number
 }
 
 function buildGpx(p: TrackParams): string {
@@ -125,10 +119,7 @@ function buildGpx(p: TrackParams): string {
     const lat = smLat - i * latRate + rnd(NOISE)
     const lng = smLng - i * lngRate + rnd(NOISE)
     const t = new Date(p.raceStart.getTime() + i * 1000)
-    const frac = i / p.elapsedSeconds
-    const hr = p.baseHr !== undefined ? Math.round(p.baseHr + frac * 20 + rnd(4)) : undefined
-    const cad = p.baseCad !== undefined ? Math.round(p.baseCad + rnd(2)) : undefined
-    pts.push(gpxPoint(lat, lng, t, hr, cad))
+    pts.push(gpxPoint(lat, lng, t))
   }
 
   for (let i = 1; i <= 15; i++) {
@@ -255,8 +246,7 @@ async function main() {
     userEmail: string
     elapsedSeconds: number
     raceStart: Date
-    baseHr: number
-    baseCad: number
+    boatClass: BoatClass
   }
 
   async function addEntry(
@@ -270,8 +260,6 @@ async function main() {
       startLine, finishLine,
       elapsedSeconds: spec.elapsedSeconds,
       raceStart: spec.raceStart,
-      baseHr: spec.baseHr,
-      baseCad: spec.baseCad,
     })
 
     const track = parseGpx(gpx)
@@ -289,6 +277,7 @@ async function main() {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: new Date(spec.raceStart.getTime() + spec.elapsedSeconds * 1000 + 60_000).toISOString(),
       filename: 'trace.gpx',
+      boatClass: spec.boatClass,
       result,
     }
     await write(`${basePath}/result.json`, stored)
@@ -296,10 +285,9 @@ async function main() {
     return {
       entryId, userId: user.id, displayName: user.displayName,
       submittedAt: stored.submittedAt,
+      boatClass: spec.boatClass,
       totalElapsedSeconds: result.totalElapsedSeconds,
       splits: result.splits,
-      avgHeartRate: result.avgHeartRate,
-      avgCadence: result.avgCadence,
     }
   }
 
@@ -311,22 +299,23 @@ async function main() {
   console.log('\n  entries: Spring Sprint 2025')
   const t1Base = new Date('2025-04-12T10:00:00.000Z')
   const t1Entries: LeaderboardEntry[] = []
-  for (const [email, secs, hr, cad] of [
-    ['sigridur@example.is', 285, 158, 30],
-    ['gunnar@example.is',   291, 162, 28],
-    ['helga@example.is',    298, 165, 27],
-    ['arni@example.is',     307, 170, 26],
-    ['eva@example.is',      315, 168, 27],
-    ['bjarni@example.is',   324, 172, 25],
-  ] as [string, number, number, number][]) {
+  // Mix of kayak (course is sport=both) and sculling classes — realistic-looking spread
+  for (const [email, secs, boatClass] of [
+    ['sigridur@example.is', 285, 'K1'],
+    ['gunnar@example.is',   291, 'K1'],
+    ['helga@example.is',    298, '1X'],
+    ['arni@example.is',     307, 'K1'],
+    ['eva@example.is',      315, '1X'],
+    ['bjarni@example.is',   324, 'K1'],
+  ] as [string, number, BoatClass][]) {
     const e = await addEntry(t1Id, C1_START, C1_FINISH, {
       userEmail: email, elapsedSeconds: secs,
       raceStart: new Date(t1Base.getTime() + t1Entries.length * 5 * 60_000),
-      baseHr: hr, baseCad: cad,
+      boatClass,
     })
     if (e) {
       t1Entries.push(e)
-      console.log(`    ${userMap[email].displayName.padEnd(28)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
+      console.log(`    ${userMap[email].displayName.padEnd(28)} ${boatClass.padEnd(4)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
     }
   }
   await buildLeaderboard(t1Id, t1Entries)
@@ -334,20 +323,20 @@ async function main() {
   console.log('\n  entries: Summer Championships 2025')
   const t2Base = new Date('2025-07-19T09:30:00.000Z')
   const t2Entries: LeaderboardEntry[] = []
-  for (const [email, secs, hr, cad] of [
-    ['gunnar@example.is',   287, 160, 29],
-    ['sigridur@example.is', 293, 156, 31],
-    ['ragnhild@example.is', 301, 163, 28],
-    ['helga@example.is',    311, 167, 27],
-  ] as [string, number, number, number][]) {
+  for (const [email, secs, boatClass] of [
+    ['gunnar@example.is',   287, 'K1'],
+    ['sigridur@example.is', 293, 'K1'],
+    ['ragnhild@example.is', 301, '1X'],
+    ['helga@example.is',    311, '1X'],
+  ] as [string, number, BoatClass][]) {
     const e = await addEntry(t2Id, C1_START, C1_FINISH, {
       userEmail: email, elapsedSeconds: secs,
       raceStart: new Date(t2Base.getTime() + t2Entries.length * 5 * 60_000),
-      baseHr: hr, baseCad: cad,
+      boatClass,
     })
     if (e) {
       t2Entries.push(e)
-      console.log(`    ${userMap[email].displayName.padEnd(28)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
+      console.log(`    ${userMap[email].displayName.padEnd(28)} ${boatClass.padEnd(4)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
     }
   }
   await buildLeaderboard(t2Id, t2Entries)
@@ -355,19 +344,20 @@ async function main() {
   console.log('\n  entries: Harbour Race 2025')
   const t3Base = new Date('2025-06-07T11:00:00.000Z')
   const t3Entries: LeaderboardEntry[] = []
-  for (const [email, secs, hr, cad] of [
-    ['sigridur@example.is', 142, 160, 62],
-    ['eva@example.is',      148, 164, 60],
-    ['gunnar@example.is',   155, 168, 58],
-  ] as [string, number, number, number][]) {
+  // Course is kayak-only — all entries in K1/K2
+  for (const [email, secs, boatClass] of [
+    ['sigridur@example.is', 142, 'K1'],
+    ['eva@example.is',      148, 'K1'],
+    ['gunnar@example.is',   155, 'K1'],
+  ] as [string, number, BoatClass][]) {
     const e = await addEntry(t3Id, C2_START, C2_FINISH, {
       userEmail: email, elapsedSeconds: secs,
       raceStart: new Date(t3Base.getTime() + t3Entries.length * 4 * 60_000),
-      baseHr: hr, baseCad: cad,
+      boatClass,
     })
     if (e) {
       t3Entries.push(e)
-      console.log(`    ${userMap[email].displayName.padEnd(28)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
+      console.log(`    ${userMap[email].displayName.padEnd(28)} ${boatClass.padEnd(4)} ${(e.totalElapsedSeconds / 60).toFixed(2)} min`)
     }
   }
   await buildLeaderboard(t3Id, t3Entries)

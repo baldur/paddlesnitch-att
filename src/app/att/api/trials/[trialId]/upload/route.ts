@@ -4,7 +4,8 @@ import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject, listKeys } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace } from '@/lib/geo'
-import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
+import { isBoatClass } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult, BoatClass } from '@/lib/types'
 
 type StoredEntry = {
   entryId: string
@@ -12,6 +13,7 @@ type StoredEntry = {
   displayName: string
   submittedAt: string
   filename: string
+  boatClass: BoatClass
   result: ProcessedResult
 }
 
@@ -28,10 +30,9 @@ async function rebuildLeaderboard(trialId: string): Promise<void> {
       userId: e.userId,
       displayName: e.displayName,
       submittedAt: e.submittedAt,
+      boatClass: e.boatClass,
       totalElapsedSeconds: e.result.totalElapsedSeconds,
       splits: e.result.splits,
-      avgHeartRate: e.result.avgHeartRate,
-      avgCadence: e.result.avgCadence,
     }))
     .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)
 
@@ -39,10 +40,8 @@ async function rebuildLeaderboard(trialId: string): Promise<void> {
 }
 
 function resolveActivityUrl(url: string): string | null {
-  // Strava: https://www.strava.com/activities/12345678
   const strava = url.match(/strava\.com\/activities\/(\d+)/)
   if (strava) return `https://www.strava.com/activities/${strava[1]}/export_gpx`
-  // Direct .gpx URL
   if (/\.gpx(\?.*)?$/i.test(url)) return url
   return null
 }
@@ -52,7 +51,8 @@ async function processBuffer(
   filename: string,
   course: CourseMetadata,
   user: { id: string; displayName: string },
-  trialId: string
+  trialId: string,
+  boatClass: BoatClass,
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
 
@@ -83,6 +83,7 @@ async function processBuffer(
     displayName: user.displayName,
     submittedAt: new Date().toISOString(),
     filename,
+    boatClass,
     result,
   }
   await putJson(`${basePath}/result.json`, stored)
@@ -110,10 +111,12 @@ export async function POST(
   const contentType = req.headers.get('content-type') ?? ''
 
   if (contentType.includes('application/json')) {
-    // URL submission
     const body = await req.json()
-    const { url } = body
+    const { url, boatClass } = body
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 })
+    if (!isBoatClass(boatClass)) {
+      return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
+    }
 
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {
@@ -143,14 +146,18 @@ export async function POST(
     }
 
     const arrayBuffer = await fetchRes.arrayBuffer()
-    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId)
+    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass)
   }
 
   // File upload (multipart/form-data)
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  const boatClassRaw = formData.get('boatClass')
+  if (!isBoatClass(boatClassRaw)) {
+    return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
+  }
 
   const arrayBuffer = await file.arrayBuffer()
-  return processBuffer(arrayBuffer, file.name, course, user, trialId)
+  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw)
 }

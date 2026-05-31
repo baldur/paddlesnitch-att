@@ -36,11 +36,12 @@ describe('parseCsv', () => {
     expect(track[0].timestamp).toEqual(new Date('2024-06-01T10:00:00'))
   })
 
-  it('parses heart rate and cadence', () => {
+  it('discards heart rate and cadence even when columns are present', () => {
+    // Privacy: HR/cadence are stripped at parse time, never enter the data model.
     const csv = `lat,lon,time,hr,cadence\n51.5,-0.9,2024-06-01T10:00:00Z,142,28`
     const track = parseCsv(csv)
-    expect(track[0].hr).toBe(142)
-    expect(track[0].cadence).toBe(28)
+    expect(track[0]).not.toHaveProperty('hr')
+    expect(track[0]).not.toHaveProperty('cadence')
   })
 
   it('returns empty array when required columns are missing', () => {

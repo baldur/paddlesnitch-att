@@ -23,9 +23,10 @@ function mockAuth(idToken: string | null) {
   } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 }
 
-function uploadReq(trialId: string, file: File) {
+function uploadReq(trialId: string, file: File, boatClass: string = 'K1') {
   const form = new FormData()
   form.append('file', file)
+  form.append('boatClass', boatClass)
   return new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
     method: 'POST',
     body: form,
@@ -56,7 +57,10 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     mockAuth(user.idToken)
 
     const gpx = makeGpxBuffer(makeTestTrack())
-    await upload(uploadReq(trial.id, new File([gpx], 'run.gpx')), { params: Promise.resolve({ trialId: trial.id }) })
+    await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'K2'),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
 
     const lb = await leaderboard(
       new NextRequest(`http://x/att/api/trials/${trial.id}/leaderboard`),
@@ -69,6 +73,39 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     // so displayName falls back to the email-local-part in test environments.
     expect(entries[0].displayName).toBe(user.email.split('@')[0])
     expect(entries[0].totalElapsedSeconds).toBeGreaterThan(0)
+    expect(entries[0].boatClass).toBe('K2')
+  })
+
+  it('returns 400 when boatClass is missing', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const form = new FormData()
+    form.append('file', new File([gpx], 'run.gpx'))
+    // boatClass intentionally omitted
+    const req = new NextRequest(`http://x/att/api/trials/${trial.id}/upload`, {
+      method: 'POST',
+      body: form,
+    })
+    const res = await upload(req, { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when boatClass is an unknown value', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const gpx = makeGpxBuffer(makeTestTrack())
+    const res = await upload(
+      uploadReq(trial.id, new File([gpx], 'run.gpx'), 'Coracle'),
+      { params: Promise.resolve({ trialId: trial.id }) },
+    )
+    expect(res.status).toBe(400)
   })
 
   it('returns 422 for an unknown file format', async () => {
