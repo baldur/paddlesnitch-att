@@ -1,12 +1,19 @@
 #!/usr/bin/env node
-// Populate .local-data/ with realistic demo data.
-// Run: pnpm seed   (or: npx tsx scripts/seed.ts)
+// Populate .local-data/ + cognito-local with realistic demo data.
+// Run: pnpm seed   (after `pnpm cognito` is up and `pnpm cognito:init` has run)
 // Wipes existing seed data before writing.
 
 import fs from 'fs/promises'
 import path from 'path'
-import { createHmac } from 'crypto'
 import { nanoid } from 'nanoid'
+import {
+  CognitoIdentityProviderClient,
+  SignUpCommand,
+  AdminConfirmSignUpCommand,
+  ListUsersCommand,
+  AdminDeleteUserCommand,
+  UsernameExistsException,
+} from '@aws-sdk/client-cognito-identity-provider'
 import { parseGpx } from '../src/lib/gpx'
 import { processTrace, haversine } from '../src/lib/geo'
 import type { CourseMetadata, TrialMetadata, LeaderboardEntry } from '../src/lib/types'
@@ -25,9 +32,52 @@ async function writeRaw(key: string, content: string) {
   await fs.writeFile(filePath, content, 'utf8')
 }
 
-function hashPassword(password: string): string {
-  const key = process.env.PASSWORD_HASH_KEY ?? 'tt-local-auth'
-  return createHmac('sha256', key).update(password).digest('hex')
+const ENDPOINT = process.env.COGNITO_ENDPOINT ?? 'http://localhost:9229'
+const REGION = process.env.COGNITO_REGION ?? 'eu-west-1'
+const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID
+const CLIENT_ID = process.env.COGNITO_CLIENT_ID
+
+if (!USER_POOL_ID || !CLIENT_ID) {
+  console.error(
+    '❌  Missing COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID. ' +
+    'Run `pnpm cognito` then `pnpm cognito:init` first.'
+  )
+  process.exit(1)
+}
+
+const cognito = new CognitoIdentityProviderClient({
+  endpoint: ENDPOINT,
+  region: REGION,
+  credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+})
+
+async function wipeCognitoUsers() {
+  const list = await cognito.send(new ListUsersCommand({ UserPoolId: USER_POOL_ID, Limit: 60 }))
+  for (const u of list.Users ?? []) {
+    if (!u.Username) continue
+    await cognito.send(new AdminDeleteUserCommand({ UserPoolId: USER_POOL_ID, Username: u.Username }))
+  }
+}
+
+async function createCognitoUser(email: string, displayName: string, password: string): Promise<string> {
+  try {
+    const res = await cognito.send(new SignUpCommand({
+      ClientId: CLIENT_ID!,
+      Username: email,
+      Password: password,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'name', Value: displayName },
+      ],
+    }))
+    await cognito.send(new AdminConfirmSignUpCommand({ UserPoolId: USER_POOL_ID, Username: email }))
+    return res.UserSub!
+  } catch (err) {
+    if (err instanceof UsernameExistsException) {
+      throw new Error(`User ${email} already exists in Cognito — run with a clean pool`)
+    }
+    throw err
+  }
 }
 
 // --- GPX track generation ---
@@ -49,8 +99,8 @@ interface TrackParams {
   finishLine: [[number, number], [number, number]]
   elapsedSeconds: number
   raceStart: Date
-  baseHr?: number   // base HR at race start, rises ~20 bpm over the race
-  baseCad?: number  // base cadence spm
+  baseHr?: number
+  baseCad?: number
 }
 
 function buildGpx(p: TrackParams): string {
@@ -61,31 +111,26 @@ function buildGpx(p: TrackParams): string {
 
   const latRate = (smLat - fmLat) / p.elapsedSeconds
   const lngRate = (smLng - fmLng) / p.elapsedSeconds
-  const NOISE = 0.000009 // ~1 m
+  const NOISE = 0.000009
 
   const pts: string[] = []
 
-  // 25 warm-up points upstream of start
   for (let i = 25; i >= 1; i--) {
     const lat = smLat + i * latRate + rnd(NOISE)
     const lng = smLng + i * lngRate + rnd(NOISE)
     pts.push(gpxPoint(lat, lng, new Date(p.raceStart.getTime() - i * 1000)))
   }
 
-  // Race points (t = 0 … elapsedSeconds)
   for (let i = 0; i <= p.elapsedSeconds; i++) {
     const lat = smLat - i * latRate + rnd(NOISE)
     const lng = smLng - i * lngRate + rnd(NOISE)
     const t = new Date(p.raceStart.getTime() + i * 1000)
     const frac = i / p.elapsedSeconds
-    const hr =
-      p.baseHr !== undefined ? Math.round(p.baseHr + frac * 20 + rnd(4)) : undefined
-    const cad =
-      p.baseCad !== undefined ? Math.round(p.baseCad + rnd(2)) : undefined
+    const hr = p.baseHr !== undefined ? Math.round(p.baseHr + frac * 20 + rnd(4)) : undefined
+    const cad = p.baseCad !== undefined ? Math.round(p.baseCad + rnd(2)) : undefined
     pts.push(gpxPoint(lat, lng, t, hr, cad))
   }
 
-  // 15 cool-down points downstream of finish
   for (let i = 1; i <= 15; i++) {
     const lat = fmLat - i * latRate + rnd(NOISE)
     const lng = fmLng - i * lngRate + rnd(NOISE)
@@ -115,11 +160,8 @@ const USERS = [
   { email: 'ragnhild@example.is', displayName: 'Ragnhild Andersen',        isAdmin: false },
 ]
 
-// Elliðaár 1000 m — river flows south, start line at top
 const C1_START: [[number, number], [number, number]] = [[64.0850, -21.8350], [64.0850, -21.8310]]
 const C1_FINISH: [[number, number], [number, number]] = [[64.0760, -21.8350], [64.0760, -21.8310]]
-
-// Reykjavik Harbour 500 m — course runs west
 const C2_START: [[number, number], [number, number]] = [[64.1525, -22.0100], [64.1515, -22.0100]]
 const C2_FINISH: [[number, number], [number, number]] = [[64.1525, -22.0203], [64.1515, -22.0203]]
 
@@ -128,21 +170,17 @@ function midpoint(line: [[number, number], [number, number]]): [number, number] 
 }
 
 async function main() {
-  console.log('🌱  Seeding .local-data/ …\n')
+  console.log('🧹  Wiping .local-data/ and Cognito users …')
+  await fs.rm(ROOT, { recursive: true, force: true })
+  await wipeCognitoUsers()
 
-  // 1. Users
+  console.log('🌱  Seeding cognito-local + .local-data/ …\n')
+
+  // 1. Users — create in Cognito, the sub becomes our app user id
   const userMap: Record<string, { id: string; email: string; displayName: string }> = {}
   for (const u of USERS) {
-    const id = nanoid()
-    const stored = {
-      id,
-      email: u.email,
-      displayName: u.displayName,
-      passwordHash: hashPassword(PASSWORD),
-      createdAt: new Date().toISOString(),
-    }
-    await write(`users/${id}.json`, stored)
-    userMap[u.email] = { id, email: u.email, displayName: u.displayName }
+    const sub = await createCognitoUser(u.email, u.displayName, PASSWORD)
+    userMap[u.email] = { id: sub, email: u.email, displayName: u.displayName }
     console.log(`  user  ${u.displayName} <${u.email}>`)
   }
 
@@ -154,7 +192,7 @@ async function main() {
     id: c1Id,
     name: 'Elliðaár 1000m Sprint',
     sport: 'both',
-    type: 'one_way',
+    type: 'point_to_point',
     startLine: C1_START,
     finishLine: C1_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C1_START), midpoint(C1_FINISH))),
@@ -169,7 +207,7 @@ async function main() {
     id: c2Id,
     name: 'Reykjavik Harbour 500m',
     sport: 'kayak',
-    type: 'one_way',
+    type: 'point_to_point',
     startLine: C2_START,
     finishLine: C2_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C2_START), midpoint(C2_FINISH))),
@@ -213,7 +251,6 @@ async function main() {
   console.log('\n  trials: Spring Sprint (closed), Summer Champs (closed), Harbour Race (open)')
 
   // 4. Entries
-
   type EntrySpec = {
     userEmail: string
     elapsedSeconds: number
@@ -271,7 +308,6 @@ async function main() {
     await write(`trials/${trialId}/leaderboard.json`, sorted)
   }
 
-  // Trial 1 — Elliðaár Spring Sprint
   console.log('\n  entries: Spring Sprint 2025')
   const t1Base = new Date('2025-04-12T10:00:00.000Z')
   const t1Entries: LeaderboardEntry[] = []
@@ -295,7 +331,6 @@ async function main() {
   }
   await buildLeaderboard(t1Id, t1Entries)
 
-  // Trial 2 — Elliðaár Summer Championships
   console.log('\n  entries: Summer Championships 2025')
   const t2Base = new Date('2025-07-19T09:30:00.000Z')
   const t2Entries: LeaderboardEntry[] = []
@@ -317,7 +352,6 @@ async function main() {
   }
   await buildLeaderboard(t2Id, t2Entries)
 
-  // Trial 3 — Harbour Race (open, kayak)
   console.log('\n  entries: Harbour Race 2025')
   const t3Base = new Date('2025-06-07T11:00:00.000Z')
   const t3Entries: LeaderboardEntry[] = []
@@ -340,7 +374,7 @@ async function main() {
 
   console.log(`
 ✅  Done. All users have password: ${PASSWORD}
-    Log in at http://localhost:3000/auth
+    Log in at http://localhost:3000/att/auth
     Admin account: admin@rrc-tt.is
 `)
 }

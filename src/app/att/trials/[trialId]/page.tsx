@@ -3,7 +3,9 @@ import { getJson } from '@/lib/storage'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import AuthNav from '@/components/AuthNav'
-import type { TrialMetadata, CourseMetadata, LeaderboardEntry } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
+
+type StoredEntry = { result: ProcessedResult }
 
 export default async function TrialPage({
   params,
@@ -24,6 +26,12 @@ export default async function TrialPage({
     getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`),
     getJson<LeaderboardEntry[]>(`trials/${trialId}/leaderboard.json`),
   ])
+
+  const winner = leaderboard?.[0]
+  const winnerEntry = winner
+    ? await getJson<StoredEntry>(`trials/${trialId}/entries/${winner.userId}/${winner.entryId}/result.json`)
+    : null
+  const winnerTrack = winnerEntry?.result.trackSegment
 
   return (
     <main className="flex-1 flex flex-col">
@@ -78,16 +86,22 @@ export default async function TrialPage({
         {course && (
           <section>
             <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">Course</h2>
-            <CourseMapClient course={course} />
+            <CourseMapClient course={course} track={winnerTrack} />
             <div className="flex gap-4 mt-2 text-xs text-[#64748b]">
               <span className="flex items-center gap-1">
                 <span className="inline-block w-3 h-0.5 bg-[#15803d]" />
-                {course.type === 'loop' ? 'Crossing line' : 'Start'}
+                {course.finishLine ? 'Start' : 'Crossing line'}
               </span>
-              {course.type !== 'loop' && (
+              {course.finishLine && (
                 <span className="flex items-center gap-1">
                   <span className="inline-block w-3 h-0.5 bg-[#b91c1c]" />
                   Finish
+                </span>
+              )}
+              {winnerTrack && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-0.5 bg-[#0369a1]" />
+                  Leader&apos;s track
                 </span>
               )}
             </div>

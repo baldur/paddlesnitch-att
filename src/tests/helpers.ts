@@ -2,8 +2,7 @@ import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { nanoid } from 'nanoid'
-import { createUser } from '@/lib/users'
-import { createSession } from '@/lib/sessions'
+import { signUp, signIn } from '@/lib/cognito'
 import { putJson } from '@/lib/storage'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
@@ -19,14 +18,35 @@ export async function cleanDataDir(dir: string): Promise<void> {
   delete process.env.DATA_DIR
 }
 
-export async function makeUser(email = 'test@example.com') {
-  const result = await createUser(email, 'Test User', 'Password123')
-  if ('error' in result) throw new Error(result.error)
-  return result
+let userCounter = 0
+
+export type TestUser = {
+  id: string
+  email: string
+  displayName: string
+  idToken: string
+  refreshToken: string
 }
 
-export async function makeSession(userId: string): Promise<string> {
-  return createSession(userId)
+// Creates a fresh user in cognito-local and returns the user record + tokens.
+// Each call uses a unique email so tests can share the pool without collision.
+export async function makeUser(displayName = 'Test User'): Promise<TestUser> {
+  const email = `test-${++userCounter}-${Date.now()}@example.com`
+  const password = 'Password123'
+
+  const created = await signUp(email, displayName, password)
+  if ('error' in created) throw new Error(`signUp failed: ${created.error}`)
+
+  const tokens = await signIn(email, password)
+  if ('error' in tokens) throw new Error(`signIn failed: ${tokens.error}`)
+
+  return {
+    id: created.sub,
+    email,
+    displayName,
+    idToken: tokens.idToken,
+    refreshToken: tokens.refreshToken,
+  }
 }
 
 export async function makeCourse(adminUserId: string): Promise<CourseMetadata> {
@@ -34,9 +54,8 @@ export async function makeCourse(adminUserId: string): Promise<CourseMetadata> {
     id: nanoid(),
     name: 'Test Course',
     sport: 'both',
-    type: 'one_way',
+    type: 'point_to_point',
     adminUserId,
-    // Track goes north along lng -0.9; start crosses at lat 51.525, finish at 51.575
     startLine: [[51.525, -0.91], [51.525, -0.89]],
     finishLine: [[51.575, -0.91], [51.575, -0.89]],
     distanceMetres: 556,
@@ -64,7 +83,6 @@ export async function makeTrial(
   return trial
 }
 
-// Builds a GPX buffer from an array of [lat, lng, isoTime] tuples
 export function makeGpxBuffer(points: Array<[number, number, string]>): ArrayBuffer {
   const trkpts = points
     .map(([lat, lng, time]) => `<trkpt lat="${lat}" lon="${lng}"><time>${time}</time></trkpt>`)
@@ -73,8 +91,6 @@ export function makeGpxBuffer(points: Array<[number, number, string]>): ArrayBuf
   return new TextEncoder().encode(gpx).buffer as ArrayBuffer
 }
 
-// 11 points going north from lat 51.50 → 51.60 along lng -0.9, 1 min apart.
-// Crosses startLine (~51.525) between points 2→3, finishLine (~51.575) between 7→8.
 export function makeTestTrack(): Array<[number, number, string]> {
   return Array.from({ length: 11 }, (_, i) => [
     parseFloat((51.50 + i * 0.01).toFixed(4)),

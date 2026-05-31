@@ -63,7 +63,7 @@ async function processBuffer(
     )
   }
 
-  const result = processTrace(parseResult.track, course.startLine, course.finishLine)
+  const result = processTrace(parseResult.track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
     return NextResponse.json(
       { error: 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.' },

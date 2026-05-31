@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 45 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
+pnpm test         # 54 tests: geo, GPX, FIT, CSV parsers + auth + upload pipeline
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -158,10 +158,33 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 ### Course
 A named stretch of water with:
 - **Start line** — exactly 2 lat/lng points defining a straight line across the river
-- **Finish line** — exactly 2 lat/lng points defining a straight line across the river
-- **Distance** — auto-calculated as the Haversine distance between the midpoints of the start and finish lines. Never asked for manually.
+- **Finish line** — exactly 2 lat/lng points (only for `point_to_point`; omitted for all single-line course types)
+- **Course type** — determines how the clock start/stop is detected (see below)
+- **Distance** — auto-calculated from start/finish midpoints (`point_to_point`) or entered manually for single-line types
 - **Sport** — `kayak` | `rowing` | `both`
 - Owned by the user who created it (the **course admin**)
+
+### Course Types
+
+Three canonical types surfaced in the UI:
+
+| Type | Lines | Description |
+|---|---|---|
+| `point_to_point` | 2 | Start and finish at different locations. Clock starts at start line, stops at finish line. Distance auto-calculated from midpoint to midpoint. |
+| `loop` | 1 | Cross the same line twice (any direction). Clock starts on first crossing, stops on second. Use for out-and-back or circular loops. Set `minValidSeconds` to filter warmup false positives. |
+| `gate` | 2+ | Ordered gates each with a crossing direction. Athletes must cross every gate in the specified direction, in sequence. Start gate starts the clock; finish gate stops it. Intermediate gates verify route compliance (e.g. turning buoys). |
+
+Legacy aliases (accepted in API, not surfaced in UI): `one_way` = `point_to_point`, `out_and_back` = gate-like, `lap` = loop same-direction, `figure_eight` = three crossings.
+
+**Crossing direction (`rxsSign`)**: `segmentIntersect()` returns `rxs = rx*sy - ry*sx` (r = track segment direction, s = line direction). `rxsSign = Math.sign(rxs)`. The right-hand normal of `line[0]→line[1]` points in the `+1` direction; `gateDirection = 1` means athletes must approach from that side. The direction is shown as a blue filled dot on the active side, hollow gray on the inactive side.
+
+**Multi-gate (`processMultiGate`)**: finds all valid start crossings of `gates[0]` with required direction, then chains through each subsequent gate. Returns the shortest complete run. Lives in `geo.ts`.
+
+**minValidSeconds**: Stored on `CourseMetadata`; any result shorter than this is discarded. Useful for loop courses where warmup crossings can create false positives shorter than any real race time.
+
+**trackSegment**: `ProcessedResult.trackSegment` stores the interpolated lat/lng path from start crossing to finish crossing. Used to plot the leader's track on the leaderboard map.
+
+`processTrace` in `geo.ts` uses the best-effort algorithm: tries every valid start crossing, returns the shortest valid pair.
 
 ### Time Trial
 An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`.
@@ -200,8 +223,8 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 | Styling | Tailwind CSS v4 | No shadcn/ui — custom retro design system |
 | Maps | Leaflet + react-leaflet v5 | Free, no API key |
 | Map drawing | Custom click-to-place | 2 clicks per line; no Leaflet.draw dependency |
-| Auth (local dev) | Cookie-based sessions (filesystem) | Password, magic link (15 min email token); `tt_session` httpOnly cookie |
-| Auth (production) | Custom cookie sessions (S3-backed) + magic link via SES | Working; Cognito User Pool provisioned for future social login |
+| Auth (local dev) | cognito-local emulator on port 9229 | Same Cognito SDK calls as prod — only the endpoint URL differs |
+| Auth (production) | AWS Cognito User Pool `paddlesnitch-users` (eu-west-1_BHyKJ0toh) | Email/password + magic link via SES; Google/Apple ready to wire |
 | Storage (local dev) | Filesystem under `.local-data/` | Drop-in abstraction in `src/lib/storage.ts` |
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | Next.js API routes | Same handlers used in local dev and prod |
@@ -217,31 +240,34 @@ Walk the track from the start-crossing point, accumulating Haversine distance be
 ```
 Browser
   │
-  └─── Next.js (port 3000)
-         ├── src/proxy.ts              ← gate: redirect to /att/auth if no tt_session cookie
-         ├── app/page.tsx              ← landing page at /
-         ├── app/att/                  ← all ATT pages (server + client components)
-         └── app/att/api/              ← API route handlers (all under /att/api/)
-                ├── auth/signup    POST — create user, set session cookie
-                ├── auth/login     POST — verify password, set session cookie
-                ├── auth/logout    POST — delete session, clear cookie
-                ├── auth/me        GET  — return current user or 401
-                ├── courses        GET (list) / POST (create)
-                ├── courses/[id]   GET / PATCH
-                ├── trials         GET (list, ?courseId=) / POST (create)
-                ├── trials/[id]    GET / PATCH (open/close)
-                ├── trials/[id]/upload      POST — parse GPX/FIT, process, rebuild leaderboard
-                └── trials/[id]/leaderboard GET
+  └─── Next.js (port 3000)         ← src/proxy.ts gates protected routes
+         │
+         ├──► cognito-local (port 9229)
+         │       └── .cognito-local/db/     ← users + tokens (JSON files)
+         │
+         └──► Filesystem (.local-data/)
+                ├── courses/{courseId}/metadata.json
+                ├── trials/{trialId}/metadata.json
+                ├── trials/{trialId}/leaderboard.json
+                └── trials/{trialId}/entries/{userId}/{entryId}/
+                      ├── trace.{gpx|fit}
+                      └── result.json
+```
 
-Filesystem (.local-data/)
-  ├── users/{userId}.json          ← email, displayName, passwordHash
-  ├── sessions/{token}.json        ← userId, createdAt
-  ├── courses/{courseId}/metadata.json
-  ├── trials/{trialId}/metadata.json
-  ├── trials/{trialId}/leaderboard.json
-  └── trials/{trialId}/entries/{userId}/{entryId}/
-        ├── trace.{gpx|fit}
-        └── result.json
+API routes (under `/att/api/`):
+```
+auth/signup           POST — Cognito SignUp + auto-confirm (dev) / email confirmation (prod)
+auth/login            POST — Cognito InitiateAuth (USER_PASSWORD_AUTH), sets ID-token cookie
+auth/logout           POST — clears cookie, revokes refresh token
+auth/me               GET  — returns claims from current ID token or 401
+auth/magic-request    POST — generates token, emails via SES (prod) / console (dev)
+auth/magic-verify     GET  — verifies token, issues Cognito session, sets cookie
+courses               GET / POST
+courses/[id]          GET / PATCH
+trials                GET (?courseId=) / POST
+trials/[id]           GET / PATCH (open/close)
+trials/[id]/upload    POST — parse GPX/FIT, process, rebuild leaderboard
+trials/[id]/leaderboard GET
 ```
 
 **Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
@@ -256,24 +282,21 @@ Browser
   └─── CloudFront (d1745e47jh0mdf.cloudfront.net)
          ├──► S3 paddlesnitch-assets-prod  (static assets, served via OAC)
          └──► Lambda (server function)     (Next.js SSR + API routes via OpenNext v4)
-
-S3 paddlesnitch-data-prod  ← all user data (users, sessions, courses, trials, entries)
+                ├──► Cognito paddlesnitch-users (eu-west-1) ← users + tokens
+                ├──► S3 paddlesnitch-data-prod              ← courses, trials, entries
+                └──► SES (noreply@paddlesnitch.com)         ← magic-link emails
 ```
 
 OpenNext v4 bundles the Next.js server into a single Lambda. No API Gateway — CloudFront routes directly to a Lambda function URL. Static assets (JS/CSS/images) go to S3 and are served by CloudFront with long cache TTLs.
 
-Auth in production: custom cookie-based sessions — user records and session tokens stored as JSON in S3 (`paddlesnitch-data-prod`), same code as local dev (which uses `.local-data/` instead). Fully functional. Planned Cognito migration would replace this with AWS-managed identity (MFA, password reset, OAuth); swap `src/lib/auth.ts` to verify Cognito JWT and `getAuthUser()` signature stays the same.
+Cognito is the identity store. The server function has IAM permission to call `cognito-idp:*` against the user pool and `ses:SendEmail` for the `paddlesnitch.com` identity. The S3 data bucket holds *only* course/trial/entry data — no user records, no sessions.
 
 ---
 
 ## Local Data Layout
 
 ```
-.local-data/
-  users/
-    {userId}.json              ← { id, email, displayName, passwordHash, createdAt }
-  sessions/
-    {token}.json               ← { userId, createdAt }
+.local-data/                   ← course / trial / entry data (S3 mirror)
   courses/
     {courseId}/
       metadata.json            ← CourseMetadata type
@@ -286,49 +309,74 @@ Auth in production: custom cookie-based sessions — user records and session to
           {entryId}/
             trace.{ext}        ← raw uploaded file
             result.json        ← { entryId, userId, displayName, submittedAt, filename, result: ProcessedResult }
+
+.cognito-local/                ← cognito-local emulator state (users + tokens)
+  db/
+    local_xxx.json             ← user pool (users, password hashes, attributes)
 ```
+
+**Reset both** (no migration — users are test accounts only): `rm -rf .local-data .cognito-local` then `pnpm seed`.
 
 ---
 
 ## Auth System
 
-### How it works today
+### Identity store
 
-Three sign-in options available to users:
-1. **Password** — email + password, hashed with HMAC-SHA256
-2. **Magic link** — passwordless; request a link at `/att/auth`, click it in email, session created. 15-min single-use token. In dev: logs to console. In production: sent via AWS SES from `noreply@paddlesnitch.com` *(requires `paddlesnitch.com` verified in SES + account out of sandbox mode — one-time AWS console setup)*
-3. **Social login (Google, Apple)** — not yet wired, but Cognito User Pool is provisioned (`paddlesnitch-users`) and ready. Adding Google is a CDK config change + update to the sign-in page.
+All users live in a Cognito User Pool — no user records in S3 or the filesystem.
+
+- **Local dev**: cognito-local emulator on port 9229 (`pnpm cognito`). Stores users in `.cognito-local/db/`.
+- **Production**: AWS Cognito pool `paddlesnitch-users` — `eu-west-1_BHyKJ0toh` (eu-west-1).
+
+App code never branches on environment. Only the Cognito SDK endpoint differs:
+- dev → `COGNITO_ENDPOINT=http://localhost:9229`
+- prod → endpoint unset; SDK hits AWS directly
+
+### Sign-in flows
+
+1. **Email + password** — Cognito `USER_PASSWORD_AUTH` flow. Cognito enforces the password policy (8+ chars, mixed case, digit).
+2. **Magic link** — server generates a one-time token (stored 15 min), emails it via SES (prod) or console (dev). On click, the verify endpoint looks up the Cognito user by email and issues an ID-token cookie. Uses Cognito's `AdminInitiateAuth` under the hood — no Lambda triggers required.
+3. **Social (Google, Apple)** — not yet wired. When added: Cognito hosted UI handles OAuth, callback lands in `/att/auth/oauth-callback`.
 
 ### Session mechanics
 
-- **Session cookie:** `tt_session` — httpOnly, sameSite=lax, path=/, 30-day maxAge
-- **`getAuthUser()`:** reads cookie → looks up session in storage → looks up user → returns `AuthUser | null`
-- Sessions and users stored as JSON in `.local-data/` (dev) or S3 `paddlesnitch-data-prod` (prod)
-- Passwords are hashed with HMAC-SHA256 (key from SSM `/att/password-hash-key`)
+- **Cookie**: `tt_session` — httpOnly, sameSite=lax, path=/, 30-day maxAge. **Contents**: Cognito **ID token** (JWT, signed by the user pool).
+- **`getAuthUser()`** (`src/lib/auth.ts`): reads cookie → verifies the JWT signature against the pool's JWKS (`https://cognito-idp.<region>.amazonaws.com/<poolId>/.well-known/jwks.json`, cached) → returns `{ id, email, displayName }` from claims (`sub`, `email`, `name`).
+- **No server-side session store.** The cookie is the session — verification is local once the JWKS is cached.
+- **Logout**: clear cookie; revoke the refresh token via Cognito.
+
+### Environment variables
+
+| Var | Local dev | Production |
+|---|---|---|
+| `COGNITO_ENDPOINT` | `http://localhost:9229` | (unset) |
+| `COGNITO_USER_POOL_ID` | `local_xxx` (from cognito-local) | `eu-west-1_BHyKJ0toh` |
+| `COGNITO_CLIENT_ID` | (from cognito-local) | `svs358h7ii10o1jktvg57798m` |
+| `COGNITO_REGION` | `eu-west-1` | `eu-west-1` |
 
 ### Routes
 
-- `POST /att/api/auth/signup` — creates user + session, sets cookie
-- `POST /att/api/auth/login` — verifies password, creates session, sets cookie
-- `POST /att/api/auth/logout` — deletes session, clears cookie
-- `GET  /att/api/auth/me` — returns current user or 401
-- `POST /att/api/auth/magic-request` — creates token, emails link
-- `GET  /att/api/auth/magic-verify?token=` — validates token, creates session, sets cookie
+- `POST /att/api/auth/signup` — Cognito `SignUp` (auto-confirm in dev; email confirmation in prod)
+- `POST /att/api/auth/login` — Cognito `InitiateAuth` (USER_PASSWORD_AUTH), sets cookie with ID token
+- `POST /att/api/auth/logout` — clears cookie, calls Cognito `RevokeToken`
+- `GET  /att/api/auth/me` — verifies JWT, returns user claims or 401
+- `POST /att/api/auth/magic-request` — generates token, emails magic link
+- `GET  /att/api/auth/magic-verify?token=` — verifies token, calls `AdminInitiateAuth`, sets cookie
 
 ### Access control
 
-- **Proxy (`src/proxy.ts`):** blocks unauthenticated requests to `/att/admin/*` and non-GET `/att/api/*` (except `/att/api/auth*`); redirects to `/att/auth?next={path}`
-- Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt)
-- Admin pages require login
+- **Proxy (`src/proxy.ts`)**: cheap cookie-presence check at the edge — does NOT verify the JWT (keeps middleware fast). Redirects to `/att/auth?next={path}` if absent. Real verification happens in API/page handlers via `getAuthUser()`.
+- Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt).
+- Admin pages require login.
 
 ### Adding Google/Apple OAuth (future)
 
-Cognito User Pool `paddlesnitch-users` is already deployed. Steps when ready:
+User pool is already deployed. Steps when ready:
 1. Register OAuth client in Google Cloud Console / Apple Developer portal
-2. Add identity provider to the User Pool in CDK (`cognito.UserPoolIdentityProviderGoogle`)
-3. Add a Cognito domain + hosted UI callback URL
-4. Update `/att/auth` sign-in page to add "Sign in with Google" button (OAuth redirect flow)
-5. Update `getAuthUser()` to verify Cognito JWT in addition to (or instead of) the session cookie
+2. Add identity provider to the pool in CDK (`cognito.UserPoolIdentityProviderGoogle`)
+3. Add a Cognito domain (`userPool.addDomain(...)`) and callback URL
+4. Add "Sign in with Google" button to `/att/auth` (redirects to hosted UI)
+5. Build `/att/auth/oauth-callback/route.ts` to exchange the code for tokens, set cookie
 
 ---
 
@@ -371,10 +419,9 @@ src/
     csv.ts                     ← CSV parser (flexible column names, unix/ISO timestamps)
     parse.ts                   ← Dispatcher: parseTrace(filename, buffer) → ParseResult
     storage.ts                 ← getObject/putObject/deleteObject/listKeys/getJson/putJson
-    auth.ts                    ← getAuthUser(): reads cookie → session → user
-    users.ts                   ← createUser, findUserByEmail, findUserById, verifyPassword
-    sessions.ts                ← createSession, getSession, deleteSession; SESSION_COOKIE const
-    email.ts                   ← sendEmail(): console in dev, TODO SES in prod
+    auth.ts                    ← getAuthUser(): reads cookie → verifies Cognito JWT → user claims
+    cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, adminSignIn, revoke; endpoint from env
+    email.ts                   ← sendEmail(): console in dev, SES in prod
     magic-tokens.ts            ← createMagicToken / verifyMagicToken; tokens expire in 15 min
   components/
     AuthNav.tsx                ← Client component: shows user name + logout, or "SIGN IN" link
@@ -444,22 +491,35 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
 ## Local Development
 
 ```bash
-pnpm dev        # Next.js on :3000, filesystem storage, local session auth
-pnpm seed       # Populate .local-data/ with 8 users, 2 courses, 3 trials, 13 entries
-pnpm rivers     # Download Natural Earth river GeoJSON → public/data/rivers.geojson (run once)
-pnpm test       # Vitest (45 tests across 6 files)
-pnpm test --watch
+pnpm dev        # starts cognito-local + creates pool/client + starts Next.js, all in one terminal
+pnpm seed       # wipes .local-data + Cognito users; reseeds 8 users / 2 courses / 3 trials / 13 entries
+pnpm rivers     # downloads UK river GeoJSON → public/data/rivers.geojson (run once)
+pnpm test       # Vitest, 55 tests across 6 files (spawns its own cognito-local on :9230)
+pnpm test:watch
 ```
 
-`.env.local`:
+`pnpm dev` (`scripts/dev.ts`) orchestrates the stack: if cognito-local is already running on `:9229` it reuses it, otherwise it spawns one. Then runs `pnpm cognito:init` (idempotent — creates pool/client + writes `.env.local`), then starts `next dev`. Ctrl+C cleans up both processes. Output is tagged `[cognito]` / `[next]` / `[info]`.
+
+Other scripts:
+- `pnpm cognito` — bare cognito-local (use if you want to run it in a separate terminal)
+- `pnpm cognito:init` — re-run pool/client init (rarely needed; `pnpm dev` does this)
+- `pnpm next` — bare `next dev` (assumes cognito-local is already up)
+
+`.env.local` is written by `pnpm cognito:init`. You can edit it but the COGNITO_* vars will be overwritten if you re-run init:
 ```
 NODE_ENV=development
 USE_LOCAL_STORAGE=true
+COGNITO_ENDPOINT=http://localhost:9229
+COGNITO_USER_POOL_ID=local_xxx
+COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+COGNITO_REGION=eu-west-1
 ```
 
-No Docker, no MinIO, no Cognito needed. Sign up via the `/att/auth` page on first run — all data lands in `.local-data/`.
+The pool ID and client ID are stable across restarts as long as you don't delete `.cognito/`.
 
-The `.local-data/` directory is gitignored. Delete it to reset all local state.
+**Reset everything**: `rm -rf .local-data .cognito` then `pnpm dev` (recreates pool), then `pnpm seed` (creates users + demo data).
+
+No Docker, no AWS creds needed for normal dev.
 
 ### Seed data (pnpm seed)
 Creates deterministic demo data in `.local-data/`. Safe to re-run (nanoid IDs differ each run, so re-running adds duplicate data — delete `.local-data/` first if you want a clean reset).
@@ -479,7 +539,7 @@ Trials: Spring Sprint 2025 (closed) · Summer Championships 2025 (closed) · Har
 
 ## Testing
 
-Use **Vitest**. 45 tests across 6 files:
+Use **Vitest**. 54 tests across 6 files:
 - `src/lib/geo.test.ts` — haversine, line crossing, processTrace, formatTime
 - `src/lib/gpx.test.ts` — GPX parser unit tests
 - `src/lib/fit.test.ts` — FIT parser unit tests (mocks fit-file-parser)

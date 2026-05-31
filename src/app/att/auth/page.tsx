@@ -15,13 +15,16 @@ function AuthForm() {
     })
   }, [next, router])
 
-  const [tab, setTab] = useState<'signin' | 'signup' | 'magic'>('signin')
+  const [tab, setTab] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(
+    searchParams.get('error') === 'magic_disabled'
+      ? 'Magic link sign-in is temporarily unavailable. Please use email and password.'
+      : ''
+  )
   const [loading, setLoading] = useState(false)
-  const [magicSent, setMagicSent] = useState(false)
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,24 +72,6 @@ function AuthForm() {
     }
   }
 
-  const handleMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      await fetch('/att/api/auth/magic-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      setMagicSent(true)
-      setLoading(false)
-    } catch {
-      setError('Network error')
-      setLoading(false)
-    }
-  }
-
   const inputClass =
     'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
 
@@ -105,9 +90,6 @@ function AuthForm() {
         </button>
         <button type="button" onClick={() => { setTab('signup'); setError('') }} className={tabClass('signup')}>
           SIGN UP
-        </button>
-        <button type="button" onClick={() => { setTab('magic'); setError(''); setMagicSent(false) }} className={tabClass('magic')}>
-          MAGIC LINK
         </button>
       </div>
 
@@ -223,42 +205,6 @@ function AuthForm() {
         </form>
       )}
 
-      {tab === 'magic' && (
-        magicSent ? (
-          <div className="border border-[#15803d] bg-[#f0fdf4] px-4 py-4 text-[#15803d] text-sm">
-            Check your inbox — or your server console in development.
-          </div>
-        ) : (
-          <form onSubmit={handleMagicLink} className="flex flex-col gap-4">
-            <p className="text-xs text-[#64748b]">
-              Enter your email and we&apos;ll send a one-time sign-in link. No password needed.
-            </p>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            {error && (
-              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'SENDING…' : 'SEND LINK'}
-            </button>
-          </form>
-        )
-      )}
     </div>
   )
 }

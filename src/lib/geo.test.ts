@@ -66,6 +66,16 @@ describe('processTrace', () => {
     expect(processTrace([pt(0, 0, 0)], startLine, finishLine)).toBeNull()
   })
 
+  it('includes trackSegment with start and finish interpolated points', () => {
+    const result = processTrace(track, startLine, finishLine)!
+    expect(result.trackSegment).toBeDefined()
+    expect(result.trackSegment!.length).toBeGreaterThanOrEqual(2)
+    // First point should be near the start line (lat ≈ 0.001)
+    expect(result.trackSegment![0][0]).toBeCloseTo(0.001, 3)
+    // Last point should be near the finish line (lat ≈ 0.005)
+    expect(result.trackSegment![result.trackSegment!.length - 1][0]).toBeCloseTo(0.005, 3)
+  })
+
   it('includes hr and cadence averages when present', () => {
     const trackWithMetrics: TrackPoint[] = [
       pt(0.000, 0, 0, 120, 30),
@@ -77,6 +87,107 @@ describe('processTrace', () => {
     const result = processTrace(trackWithMetrics, startLine, finishLine)!
     expect(result.avgHeartRate).toBeDefined()
     expect(result.avgCadence).toBeDefined()
+  })
+})
+
+describe('processTrace — loop and gate course types', () => {
+  // Line at lat=0.002; segments go 0.000→0.004 or 0.004→0.000 at lng=0,
+  // so every crossing hits the midpoint at t=0.5 for clean ms arithmetic.
+  const line: Line = [[0.002, -0.001], [0.002, 0.001]]
+
+  // Track: north crossing (5s), then south crossing (25s)
+  // North crossing = rxsSign +1, south crossing = rxsSign -1
+  const twoPassTrack: TrackPoint[] = [
+    pt(0.000, 0, 0),
+    pt(0.004, 0, 10_000),   // crosses north at t=0.5 → 5s   (+1)
+    pt(0.004, 0, 10_000),
+    pt(0.000, 0, 30_000),   // crosses south at t=0.5 → 20s  (-1)
+    pt(0.000, 0, 40_000),
+  ]
+
+  it('loop: matches any two crossings regardless of direction', () => {
+    const result = processTrace(twoPassTrack, line, undefined, 'loop')
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(15, 0)
+  })
+
+  it('gate with finishLine: start at gateDirection crossing, finish at separate line', () => {
+    // startGate at lat=0.001, finishGate at lat=0.005; track crosses each on separate segments → 20s
+    const startGate: Line = [[0.001, -0.001], [0.001, 0.001]]
+    const finishGate: Line = [[0.005, -0.001], [0.005, 0.001]]
+    const gateTrack: TrackPoint[] = [
+      pt(0.000, 0, 0),
+      pt(0.002, 0, 10_000), // seg 0: crosses startGate at t=0.5 → 5s  (+1 northbound)
+      pt(0.004, 0, 20_000),
+      pt(0.006, 0, 30_000), // seg 2: crosses finishGate at t=0.5 → 25s
+    ]
+    const result = processTrace(gateTrack, startGate, finishGate, 'gate', 0, 1)
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(20, 0)
+  })
+
+  it('gate with finishLine: ignores start crossings in the wrong direction', () => {
+    const startGate: Line = [[0.001, -0.001], [0.001, 0.001]]
+    const finishGate: Line = [[0.005, -0.001], [0.005, 0.001]]
+    const gateTrack: TrackPoint[] = [
+      pt(0.000, 0, 0),
+      pt(0.002, 0, 10_000),
+      pt(0.004, 0, 20_000),
+      pt(0.006, 0, 30_000),
+    ]
+    // gateDirection=-1 requires southbound start; track only goes north → null
+    expect(processTrace(gateTrack, startGate, finishGate, 'gate', 0, -1)).toBeNull()
+  })
+
+  it('gate without finishLine: expects opposite-direction re-crossing', () => {
+    const result = processTrace(twoPassTrack, line, undefined, 'gate', 0, 1)
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(15, 0)
+  })
+
+  // Legacy types still work
+  it('out_and_back (legacy): opposite-direction finish', () => {
+    const result = processTrace(twoPassTrack, line, undefined, 'out_and_back')
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(15, 0)
+  })
+
+  const lapTrack: TrackPoint[] = [
+    pt(0.000, 0, 0),
+    pt(0.004, 0, 10_000),
+    pt(0.004, 0.005, 20_000),
+    pt(0.000, 0.005, 30_000),
+    pt(0.000, 0, 40_000),
+    pt(0.004, 0, 50_000),
+  ]
+
+  it('lap (legacy): same-direction finish', () => {
+    const result = processTrace(lapTrack, line, undefined, 'lap')
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(40, 0)
+  })
+})
+
+describe('processTrace — minValidSeconds', () => {
+  const startLine: Line = [[0.001, -0.001], [0.001, 0.001]]
+  const finishLine: Line = [[0.005, -0.001], [0.005, 0.001]]
+
+  const track: TrackPoint[] = [
+    pt(0.000, 0, 0),
+    pt(0.002, 0, 10_000),
+    pt(0.004, 0, 20_000),
+    pt(0.006, 0, 30_000),
+    pt(0.008, 0, 40_000),
+  ]
+
+  it('returns result when elapsed time meets minimum', () => {
+    const result = processTrace(track, startLine, finishLine, 'point_to_point', 19)
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(20, 0)
+  })
+
+  it('returns null when elapsed time is below minimum', () => {
+    expect(processTrace(track, startLine, finishLine, 'point_to_point', 21)).toBeNull()
   })
 })
 
