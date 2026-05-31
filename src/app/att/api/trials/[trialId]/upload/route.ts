@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
-import { getJson, putJson, putObject, listKeys } from '@/lib/storage'
+import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace } from '@/lib/geo'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
-import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult, BoatClass, CrewMember } from '@/lib/types'
+import { rebuildLeaderboard } from '@/lib/leaderboard'
+import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember } from '@/lib/types'
 
 type StoredEntry = {
   entryId: string
@@ -20,31 +21,6 @@ type StoredEntry = {
   boatClass: BoatClass
   crew: CrewMember[]
   result: ProcessedResult
-}
-
-async function rebuildLeaderboard(trialId: string): Promise<void> {
-  const keys = await listKeys(`trials/${trialId}/entries/`)
-  const resultKeys = keys.filter(k => k.endsWith('result.json'))
-  const entries = (
-    await Promise.all(resultKeys.map(k => getJson<StoredEntry>(k)))
-  ).filter((e): e is StoredEntry => e !== null && e.result !== null)
-
-  const leaderboard: LeaderboardEntry[] = entries
-    .map(e => ({
-      entryId: e.entryId,
-      userId: e.userId,
-      displayName: e.displayName,
-      submittedAt: e.submittedAt,
-      raceDate: e.raceDate,
-      ...(e.dateDiscrepancy ? { dateDiscrepancy: true } : {}),
-      boatClass: e.boatClass,
-      crew: e.crew,
-      totalElapsedSeconds: e.result.totalElapsedSeconds,
-      splits: e.result.splits,
-    }))
-    .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)
-
-  await putJson(`trials/${trialId}/leaderboard.json`, leaderboard)
 }
 
 function resolveActivityUrl(url: string): string | null {

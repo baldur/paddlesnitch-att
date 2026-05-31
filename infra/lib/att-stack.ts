@@ -131,11 +131,13 @@ export class AttStack extends cdk.Stack {
       resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
     }))
 
-    // Cognito admin operations the app calls (sign-up confirmation, token revocation)
+    // Cognito admin operations the app calls (sign-up confirmation,
+    // token revocation, GDPR Art. 17 erasure)
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: [
         'cognito-idp:AdminConfirmSignUp',
         'cognito-idp:AdminGetUser',
+        'cognito-idp:AdminDeleteUser',
         'cognito-idp:RevokeToken',
       ],
       resources: [userPool.userPoolArn],

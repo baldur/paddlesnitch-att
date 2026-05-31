@@ -2,6 +2,7 @@ import {
   CognitoIdentityProviderClient,
   SignUpCommand,
   AdminConfirmSignUpCommand,
+  AdminDeleteUserCommand,
   InitiateAuthCommand,
   RevokeTokenCommand,
   UsernameExistsException,
@@ -154,6 +155,16 @@ export async function revoke(refreshToken: string): Promise<void> {
   } catch {
     // Best effort — revocation failures shouldn't block logout.
   }
+}
+
+// Deletes the user from Cognito permanently. Used by the GDPR Art. 17
+// erasure flow. Cognito identifies users by sign-in alias (email), not by sub.
+export async function deleteUser(email: string): Promise<void> {
+  const client = makeClient()
+  await client.send(new AdminDeleteUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: email,
+  }))
 }
 
 export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
