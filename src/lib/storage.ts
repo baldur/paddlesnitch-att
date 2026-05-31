@@ -58,9 +58,16 @@ export async function listKeys(prefix: string): Promise<string[]> {
   if (isDev()) {
     const dir = path.join(localRoot(), prefix)
     try {
-      return (await fs.readdir(dir, { recursive: true }))
-        .filter(f => !f.includes('/') || true) // include nested
-        .map(f => path.join(prefix, f).replace(/\\/g, '/'))
+      // withFileTypes so we can skip directory entries — `fs.readdir` with
+      // recursive:true returns BOTH files and dirs by default, which differs
+      // from the S3 path's behaviour (only objects). Keep both consistent.
+      const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
+      return entries
+        .filter(e => e.isFile())
+        .map(e => {
+          const parent = path.relative(dir, e.parentPath ?? dir)
+          return path.join(prefix, parent, e.name).replace(/\\/g, '/')
+        })
     } catch {
       return []
     }
