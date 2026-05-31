@@ -38,8 +38,11 @@ export default async function Home() {
           <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">paddlesnitch.com</span>
         </div>
         <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <Link href="/att/admin/courses/new" className="hover:text-[#0369a1] transition-colors">
-            + NEW COURSE
+          <Link href="/att/courses" className="hover:text-[#0369a1] transition-colors">
+            COURSES
+          </Link>
+          <Link href="/att/admin/trials/new" className="hover:text-[#0369a1] transition-colors">
+            + NEW TRIAL
           </Link>
           <AuthNav />
         </nav>
@@ -62,8 +65,8 @@ export default async function Home() {
         {openTrials.length === 0 ? (
           <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
             No open trials yet.{' '}
-            <Link href="/att/admin/courses/new" className="text-[#0369a1] hover:underline">
-              Create a course
+            <Link href="/att/admin/trials/new" className="text-[#0369a1] hover:underline">
+              Open a trial
             </Link>{' '}
             to get started.
           </div>
@@ -91,6 +94,11 @@ export default async function Home() {
             ))}
           </div>
         )}
+        <div className="mt-8 text-center">
+          <Link href="/att/courses" className="text-xs text-[#64748b] tracking-widest hover:text-[#0369a1] transition-colors">
+            BROWSE ALL COURSES →
+          </Link>
+        </div>
       </section>
     </main>
   )
