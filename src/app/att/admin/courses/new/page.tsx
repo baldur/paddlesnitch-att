@@ -150,7 +150,7 @@ export default function NewCoursePage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="tt-nav-link text-sm">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>

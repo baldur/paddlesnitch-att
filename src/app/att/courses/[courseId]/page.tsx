@@ -37,7 +37,7 @@ export default async function CourseDetailPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att/courses" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att/courses" className="tt-nav-link text-sm shrink-0">
             ← COURSES
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>
@@ -45,7 +45,7 @@ export default async function CourseDetailPage({
         </div>
         <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0 ml-4">
           {isOwner && (
-            <Link href={`/att/admin/courses/${course.id}`} className="hover:text-[#0369a1] transition-colors">
+            <Link href={`/att/admin/courses/${course.id}`} className="tt-nav-link">
               EDIT
             </Link>
           )}
@@ -73,7 +73,7 @@ export default async function CourseDetailPage({
             {user && (
               <Link
                 href={`/att/admin/trials/new?courseId=${course.id}`}
-                className="text-xs text-[#0369a1] hover:underline tracking-widest"
+                className="text-xs tt-link tracking-widest"
               >
                 + NEW TRIAL
               </Link>
@@ -85,7 +85,7 @@ export default async function CourseDetailPage({
               {user && (
                 <>
                   {' '}
-                  <Link href={`/att/admin/trials/new?courseId=${course.id}`} className="text-[#0369a1] hover:underline">
+                  <Link href={`/att/admin/trials/new?courseId=${course.id}`} className="tt-link">
                     Open the first one
                   </Link>
                   .

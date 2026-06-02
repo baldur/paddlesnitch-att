@@ -24,7 +24,7 @@ export default function AuthNav() {
 
   if (!user) {
     return (
-      <Link href="/att/auth" className="text-[#64748b] hover:text-[#0369a1] transition-colors">
+      <Link href="/att/auth" className="tt-nav-link">
         SIGN IN
       </Link>
     )

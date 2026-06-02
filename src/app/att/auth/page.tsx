@@ -134,7 +134,7 @@ function AuthForm() {
             <button
               type="button"
               onClick={() => { setTab('signup'); setError('') }}
-              className="text-[#0369a1] hover:underline"
+              className="tt-link"
             >
               Sign up
             </button>
@@ -197,7 +197,7 @@ function AuthForm() {
             <button
               type="button"
               onClick={() => { setTab('signin'); setError('') }}
-              className="text-[#0369a1] hover:underline"
+              className="tt-link"
             >
               Sign in
             </button>
