@@ -30,7 +30,7 @@ export default function CookieNotice() {
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 border border-[#e2e8f0] bg-white shadow-lg p-4 text-xs text-[#0f172a] flex flex-col gap-3">
       <p>
         We use essential cookies for sign-in only. No analytics, no trackers.{' '}
-        <Link href="/att/privacy" className="text-[#0369a1] hover:underline">Privacy policy</Link>.
+        <Link href="/att/privacy" className="tt-link">Privacy policy</Link>.
       </p>
       <button
         type="button"

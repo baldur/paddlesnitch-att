@@ -37,7 +37,7 @@ export default async function TrialPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att" className="tt-nav-link text-sm shrink-0">
             ← HOME
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>

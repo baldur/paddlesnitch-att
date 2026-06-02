@@ -54,14 +54,14 @@ export default async function CoursesCataloguePage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="tt-nav-link text-sm">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>
           <span className="text-[#0f172a] text-sm">COURSES</span>
         </div>
         <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <Link href="/att/admin/courses/new" className="hover:text-[#0369a1] transition-colors">
+          <Link href="/att/admin/courses/new" className="tt-nav-link">
             + NEW COURSE
           </Link>
           <AuthNav />
@@ -77,7 +77,7 @@ export default async function CoursesCataloguePage() {
         {courses.length === 0 ? (
           <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
             No courses yet.{' '}
-            <Link href="/att/admin/courses/new" className="text-[#0369a1] hover:underline">
+            <Link href="/att/admin/courses/new" className="tt-link">
               Create the first one
             </Link>
             .

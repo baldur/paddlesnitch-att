@@ -31,3 +31,32 @@ html, body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
 }
+
+/* Inline body links — persistent subtle underline so they're discoverable
+   without screaming. The underline intensifies on hover. */
+.tt-link {
+  color: #0369a1;
+  text-decoration: underline;
+  text-decoration-color: rgba(3, 105, 161, 0.4);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
+}
+.tt-link:hover {
+  text-decoration-color: #0369a1;
+}
+
+/* Nav / CTA links in headers and footers — muted resting state, primary
+   colour and subtle underline on hover. Adds a visual cue beyond colour
+   alone so they read as clickable. */
+.tt-nav-link {
+  color: #64748b;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.tt-nav-link:hover {
+  color: #0369a1;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}

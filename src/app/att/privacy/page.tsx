@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="tt-nav-link text-sm">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>
@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
           <p>
             paddlesnitch.com is run by Baldur Gudbjornsson, the data controller for this service. For
             questions or requests about your personal data, email{' '}
-            <a href="mailto:privacy@paddlesnitch.com" className="text-[#0369a1] hover:underline">
+            <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
               privacy@paddlesnitch.com
             </a>
             . The site is hosted on Amazon Web Services in the eu-west-1 region (Ireland).
@@ -65,7 +65,7 @@ export default function PrivacyPolicy() {
         <Section title="How long we keep it">
           <p>
             We hold your data for as long as your account exists. You can delete it at any time from your{' '}
-            <Link href="/att/account" className="text-[#0369a1] hover:underline">account page</Link>{' '}
+            <Link href="/att/account" className="tt-link">account page</Link>{' '}
             — that removes your user record, all courses and trials you created, all entries you
             submitted, and rebuilds any affected leaderboards. The deletion is immediate and
             irreversible.
@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
             <li><strong>Port</strong> your data — the export download is a machine-readable JSON file.</li>
             <li><strong>Object</strong> or restrict processing — email us.</li>
             <li><strong>Complain</strong> to the Information Commissioner&apos;s Office (
-              <a href="https://ico.org.uk" className="text-[#0369a1] hover:underline">ico.org.uk</a>
+              <a href="https://ico.org.uk" className="tt-link">ico.org.uk</a>
             ) if you think we&apos;ve mishandled your data.</li>
           </ul>
         </Section>
@@ -121,7 +121,7 @@ export default function PrivacyPolicy() {
 
         <Section title="Contact">
           <p>
-            <a href="mailto:privacy@paddlesnitch.com" className="text-[#0369a1] hover:underline">
+            <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
               privacy@paddlesnitch.com
             </a>
           </p>

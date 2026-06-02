@@ -65,7 +65,7 @@ export default function AccountPage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="tt-nav-link text-sm">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>
@@ -190,10 +190,10 @@ export default function AccountPage() {
 
             <section className="text-xs text-[#64748b] border-t border-[#e2e8f0] pt-6">
               See the{' '}
-              <Link href="/att/privacy" className="text-[#0369a1] hover:underline">privacy policy</Link>{' '}
+              <Link href="/att/privacy" className="tt-link">privacy policy</Link>{' '}
               for full details on what we hold, why, and how to exercise rights we can&apos;t handle from
               this page. For rectification or other requests, email{' '}
-              <a href="mailto:privacy@paddlesnitch.com" className="text-[#0369a1] hover:underline">
+              <a href="mailto:privacy@paddlesnitch.com" className="tt-link">
                 privacy@paddlesnitch.com
               </a>
               .

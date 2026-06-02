@@ -212,7 +212,7 @@ export default function UploadPage({
         <div className="flex items-center gap-4">
           <a
             href={`/att/trials/${trialId}`}
-            className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors"
+            className="tt-nav-link text-sm"
           >
             ← LEADERBOARD
           </a>

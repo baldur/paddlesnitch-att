@@ -54,13 +54,13 @@ export default function TrialAdminPage({
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors shrink-0">
+          <Link href="/att" className="tt-nav-link text-sm shrink-0">
             ← HOME
           </Link>
           <span className="text-[#64748b] shrink-0">/</span>
           <a
             href={`/att/admin/courses/${course.id}`}
-            className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors truncate"
+            className="tt-nav-link text-sm truncate"
           >
             {course.name.toUpperCase()}
           </a>
@@ -118,7 +118,7 @@ export default function TrialAdminPage({
             {trial.status === 'open' && (
               <a
                 href={`/att/trials/${trialId}/upload`}
-                className="text-xs text-[#0369a1] hover:underline"
+                className="text-xs tt-link"
               >
                 + Upload entry
               </a>
@@ -131,7 +131,7 @@ export default function TrialAdminPage({
               {trial.status === 'open' && (
                 <>
                   {' '}
-                  <a href={`/att/trials/${trialId}/upload`} className="text-[#0369a1] hover:underline">
+                  <a href={`/att/trials/${trialId}/upload`} className="tt-link">
                     Upload a trace
                   </a>{' '}
                   to get started.
@@ -169,7 +169,7 @@ export default function TrialAdminPage({
         <section className="border-t border-[#e2e8f0] pt-6">
           <p className="text-xs text-[#64748b]">
             Public leaderboard:{' '}
-            <a href={`/att/trials/${trialId}`} className="text-[#0369a1] hover:underline">
+            <a href={`/att/trials/${trialId}`} className="tt-link">
               /att/trials/{trialId}
             </a>
           </p>

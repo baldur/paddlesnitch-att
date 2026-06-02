@@ -9,8 +9,8 @@ export default function Footer() {
         © {new Date().getFullYear()} paddlesnitch.com
       </div>
       <nav className="flex gap-4">
-        <Link href="/att/privacy" className="hover:text-[#0369a1] transition-colors">PRIVACY</Link>
-        <Link href="/att/account" className="hover:text-[#0369a1] transition-colors">ACCOUNT</Link>
+        <Link href="/att/privacy" className="tt-nav-link">PRIVACY</Link>
+        <Link href="/att/account" className="tt-nav-link">ACCOUNT</Link>
       </nav>
     </footer>
   )

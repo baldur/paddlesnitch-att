@@ -66,7 +66,7 @@ function NewTrialForm() {
           ) : courses.length === 0 ? (
             <div className="border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3 text-xs text-[#64748b]">
               No courses yet.{' '}
-              <Link href="/att/admin/courses/new" className="text-[#0369a1] hover:underline">
+              <Link href="/att/admin/courses/new" className="tt-link">
                 Create one
               </Link>{' '}
               to get started.
@@ -88,11 +88,11 @@ function NewTrialForm() {
               </select>
               {selectedCourse && (
                 <p className="text-xs text-[#64748b]">
-                  <Link href={`/att/courses/${selectedCourse.id}`} className="text-[#0369a1] hover:underline">
+                  <Link href={`/att/courses/${selectedCourse.id}`} className="tt-link">
                     View course details
                   </Link>{' '}
                   · or{' '}
-                  <Link href="/att/admin/courses/new" className="text-[#0369a1] hover:underline">
+                  <Link href="/att/admin/courses/new" className="tt-link">
                     create a new course
                   </Link>
                 </p>
@@ -100,7 +100,7 @@ function NewTrialForm() {
               {!selectedCourse && (
                 <p className="text-xs text-[#64748b]">
                   Or{' '}
-                  <Link href="/att/admin/courses/new" className="text-[#0369a1] hover:underline">
+                  <Link href="/att/admin/courses/new" className="tt-link">
                     create a new course
                   </Link>{' '}
                   if yours isn&apos;t listed.
@@ -157,7 +157,7 @@ export default function NewTrialPage() {
     <main className="flex-1 flex flex-col">
       <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/att" className="text-[#64748b] hover:text-[#0369a1] text-sm transition-colors">
+          <Link href="/att" className="tt-nav-link text-sm">
             ← HOME
           </Link>
           <span className="text-[#64748b]">/</span>
