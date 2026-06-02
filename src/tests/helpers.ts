@@ -31,7 +31,10 @@ export type TestUser = {
 // Creates a fresh user in cognito-local and returns the user record + tokens.
 // Each call uses a unique email so tests can share the pool without collision.
 export async function makeUser(displayName = 'Test User'): Promise<TestUser> {
-  const email = `test-${++userCounter}-${Date.now()}@example.com`
+  // crypto.randomUUID guarantees uniqueness across parallel test files, where
+  // ++counter + Date.now() can still collide when fired in the same ms.
+  const { randomUUID } = await import('crypto')
+  const email = `test-${++userCounter}-${randomUUID().slice(0, 8)}@example.com`
   const password = 'Password123'
 
   const created = await signUp(email, displayName, password)

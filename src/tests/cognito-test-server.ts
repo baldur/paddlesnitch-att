@@ -72,10 +72,10 @@ export async function startCognito(port: number): Promise<TestPoolHandle> {
     PoolName: 'atts-test',
     AutoVerifiedAttributes: ['email'],
     UsernameAttributes: ['email'],
-    Schema: [
-      { Name: 'email', AttributeDataType: 'String', Required: true, Mutable: true },
-      { Name: 'name', AttributeDataType: 'String', Required: false, Mutable: true },
-    ],
+    // Schema intentionally omitted — let cognito-local use Cognito's default
+    // attribute set (including email_verified). With an explicit Schema, the
+    // AdminUpdateUserAttributes call to set email_verified=true at signup
+    // fails because the attribute isn't declared.
   }))
   const userPoolId = pool.UserPool!.Id!
 
@@ -99,4 +99,26 @@ export async function stopCognito(handle: TestPoolHandle): Promise<void> {
   await new Promise(r => setTimeout(r, 200))
   if (!handle.proc.killed) handle.proc.kill('SIGKILL')
   await rm(handle.dataDir, { recursive: true, force: true })
+}
+
+// Reads the most recent ConfirmationCode stored on a user in cognito-local's
+// db. Used in tests to simulate "user gets the email and types the code in" —
+// real Cognito never returns the code over the API, but cognito-local persists
+// it as a user attribute so tests can grab it.
+//
+// Returns null if the user has no pending confirmation.
+export async function readResetCode(handle: TestPoolHandle, email: string): Promise<string | null> {
+  const { readFile } = await import('fs/promises')
+  const dbPath = join(handle.dataDir, '.cognito', 'db', `${handle.userPoolId}.json`)
+  let raw: string
+  try { raw = await readFile(dbPath, 'utf8') } catch { return null }
+  const db = JSON.parse(raw) as {
+    Users?: Record<string, { Attributes?: Array<{ Name: string; Value: string }>; ConfirmationCode?: string }>
+  }
+  const users = db.Users ?? {}
+  for (const u of Object.values(users)) {
+    const userEmail = u.Attributes?.find(a => a.Name === 'email')?.Value
+    if (userEmail === email && u.ConfirmationCode) return u.ConfirmationCode
+  }
+  return null
 }

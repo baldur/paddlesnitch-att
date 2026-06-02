@@ -138,6 +138,10 @@ function AuthForm() {
             >
               Sign up
             </button>
+            {' · '}
+            <Link href="/att/auth/forgot" className="tt-link">
+              Forgot password?
+            </Link>
           </p>
         </form>
       )}

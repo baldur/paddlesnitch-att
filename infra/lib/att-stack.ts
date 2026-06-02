@@ -73,12 +73,11 @@ export class AttStack extends cdk.Stack {
       selfSignUpEnabled: true,
       signInAliases: { email: true },
       // autoVerify explicitly disabled. The signUp handler immediately calls
-      // AdminConfirmSignUp, so the user is confirmed without ever needing to
-      // click a link. Leaving autoVerify on caused Cognito to send a verification
-      // email from no-reply@verificationemail.com (its default sender) which
-      // looked like spam and was functionally dead-letter. CDK defaults this to
-      // true when signInAliases.email is set — must override explicitly. Re-enable
-      // only after SES is wired into the pool AND we actually need verification.
+      // AdminConfirmSignUp + AdminUpdateUserAttributes (email_verified=true),
+      // so the user is confirmed and recovery-ready without Cognito sending
+      // a spam-looking verification email from its default sender.
+      // CDK defaults autoVerify to true when signInAliases.email is set, so
+      // we must override explicitly.
       autoVerify: { email: false, phone: false },
       passwordPolicy: {
         minLength: 8,
@@ -88,6 +87,17 @@ export class AttStack extends cdk.Stack {
         requireSymbols: false,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      // Send all Cognito-originated emails (password reset code, OTP code,
+      // any future verification) from noreply@paddlesnitch.com via SES.
+      // DKIM, MAIL FROM (mail.paddlesnitch.com), and DMARC are all aligned —
+      // recipients see legitimate transactional mail.
+      email: cognito.UserPoolEmail.withSES({
+        fromEmail: 'noreply@paddlesnitch.com',
+        fromName: 'paddlesnitch.com',
+        sesRegion: 'eu-west-1',
+        sesVerifiedDomain: 'paddlesnitch.com',
+        replyTo: 'privacy@paddlesnitch.com',
+      }),
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     })
 
@@ -138,12 +148,14 @@ export class AttStack extends cdk.Stack {
       resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
     }))
 
-    // Cognito admin operations the app calls (sign-up confirmation,
-    // token revocation, GDPR Art. 17 erasure)
+    // Cognito admin operations the app calls (sign-up confirmation +
+    // mark-email-verified at signup so password reset works, token
+    // revocation, GDPR Art. 17 erasure)
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: [
         'cognito-idp:AdminConfirmSignUp',
         'cognito-idp:AdminGetUser',
+        'cognito-idp:AdminUpdateUserAttributes',
         'cognito-idp:AdminDeleteUser',
         'cognito-idp:RevokeToken',
       ],
