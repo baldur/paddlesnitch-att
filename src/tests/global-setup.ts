@@ -11,6 +11,9 @@ export default async function setup() {
   process.env.COGNITO_USER_POOL_ID = handle.userPoolId
   process.env.COGNITO_CLIENT_ID = handle.clientId
   process.env.COGNITO_REGION = 'eu-west-1'
+  // Expose the cognito-local db dir so individual tests can poke at it
+  // (e.g. read the password-reset confirmation code).
+  process.env.COGNITO_LOCAL_DB_DIR = handle.dataDir
 
   // Hand the handle to teardown via a module-scoped reference.
   ;(globalThis as unknown as { __cognitoHandle: TestPoolHandle }).__cognitoHandle = handle

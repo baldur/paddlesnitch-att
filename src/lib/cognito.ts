@@ -2,9 +2,14 @@ import {
   CognitoIdentityProviderClient,
   SignUpCommand,
   AdminConfirmSignUpCommand,
+  AdminUpdateUserAttributesCommand,
   AdminDeleteUserCommand,
   InitiateAuthCommand,
   RevokeTokenCommand,
+  ForgotPasswordCommand,
+  ConfirmForgotPasswordCommand,
+  CodeMismatchException,
+  ExpiredCodeException,
   UsernameExistsException,
   NotAuthorizedException,
   UserNotFoundException,
@@ -69,11 +74,15 @@ export type CognitoError =
   | 'invalid_credentials'
   | 'invalid_password'
   | 'user_not_found'
+  | 'invalid_code'
+  | 'expired_code'
   | 'unknown'
 
 function classify(err: unknown): CognitoError {
   if (err instanceof UsernameExistsException) return 'email_exists'
   if (err instanceof InvalidPasswordException) return 'invalid_password'
+  if (err instanceof CodeMismatchException) return 'invalid_code'
+  if (err instanceof ExpiredCodeException) return 'expired_code'
   if (err instanceof NotAuthorizedException) return 'invalid_credentials'
   if (err instanceof UserNotFoundException) return 'invalid_credentials'
   return 'unknown'
@@ -95,10 +104,23 @@ export async function signUp(
         { Name: 'name', Value: displayName },
       ],
     }))
-    // Auto-confirm so the user can sign in immediately. v1 has no email verification.
+    // Auto-confirm so the user can sign in immediately.
     await client.send(new AdminConfirmSignUpCommand({
       UserPoolId: USER_POOL_ID,
       Username: email,
+    }))
+    // Mark email as verified so Cognito's password-reset (and any future
+    // OTP) flows accept the address as recoverable. Without this, account
+    // recovery via email fails — Cognito requires email_verified=true.
+    // Note: passing `email` alongside `email_verified` is required by
+    // cognito-local (and harmless on real Cognito).
+    await client.send(new AdminUpdateUserAttributesCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+      ],
     }))
     return { sub: res.UserSub! }
   } catch (err) {
@@ -140,6 +162,45 @@ export async function refresh(
     const idToken = res.AuthenticationResult?.IdToken
     if (!idToken) return { error: 'invalid_credentials' }
     return { idToken }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// Triggers Cognito to email a password-reset code to the user.
+// Returns `void` on success. We intentionally don't reveal whether the email
+// exists to the caller — Cognito with `preventUserExistenceErrors` already
+// avoids leaking that to clients, but we also return the same value either
+// way at the API layer.
+export async function forgotPassword(email: string): Promise<{ ok: true } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    await client.send(new ForgotPasswordCommand({
+      ClientId: CLIENT_ID,
+      Username: email,
+    }))
+    return { ok: true }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// Confirms a password reset: user supplies the emailed code and a new
+// password. Cognito validates the code and updates the password.
+export async function confirmForgotPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ ok: true } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    await client.send(new ConfirmForgotPasswordCommand({
+      ClientId: CLIENT_ID,
+      Username: email,
+      ConfirmationCode: code,
+      Password: newPassword,
+    }))
+    return { ok: true }
   } catch (err) {
     return { error: classify(err) }
   }
