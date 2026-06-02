@@ -101,12 +101,52 @@ export class AttStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     })
 
+    // Custom Auth Lambda triggers for OTP / passwordless sign-in.
+    // Source lives in infra/lambdas/cognito-auth/ — same .mjs files run
+    // both here and in the dev lambda-emulator.
+    const lambdaDir = path.join(__dirname, '../lambdas/cognito-auth')
+    const defineAuth = new lambda.Function(this, 'DefineAuthChallenge', {
+      functionName: 'att-cognito-define-auth-challenge',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'define-auth-challenge.handler',
+      code: lambda.Code.fromAsset(lambdaDir),
+      timeout: cdk.Duration.seconds(5),
+    })
+    const createAuth = new lambda.Function(this, 'CreateAuthChallenge', {
+      functionName: 'att-cognito-create-auth-challenge',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'create-auth-challenge.handler',
+      code: lambda.Code.fromAsset(lambdaDir),
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        FROM_EMAIL: 'noreply@paddlesnitch.com',
+      },
+    })
+    createAuth.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+    }))
+    const verifyAuth = new lambda.Function(this, 'VerifyAuthChallenge', {
+      functionName: 'att-cognito-verify-auth-challenge',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'verify-auth-challenge.handler',
+      code: lambda.Code.fromAsset(lambdaDir),
+      timeout: cdk.Duration.seconds(5),
+    })
+
+    // Attach Cognito triggers. addTrigger() also grants Cognito the
+    // lambda:InvokeFunction permission on each.
+    userPool.addTrigger(cognito.UserPoolOperation.DEFINE_AUTH_CHALLENGE, defineAuth)
+    userPool.addTrigger(cognito.UserPoolOperation.CREATE_AUTH_CHALLENGE, createAuth)
+    userPool.addTrigger(cognito.UserPoolOperation.VERIFY_AUTH_CHALLENGE_RESPONSE, verifyAuth)
+
     const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool,
       userPoolClientName: 'paddlesnitch-web',
       authFlows: {
         userPassword: true,
         adminUserPassword: true,
+        custom: true,
       },
       generateSecret: false,
       idTokenValidity: cdk.Duration.hours(24),
