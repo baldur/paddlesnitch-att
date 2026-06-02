@@ -15,7 +15,7 @@ function AuthForm() {
     })
   }, [next, router])
 
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin')
+  const [tab, setTab] = useState<'signin' | 'signup' | 'code'>('signin')
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
@@ -25,6 +25,10 @@ function AuthForm() {
       : ''
   )
   const [loading, setLoading] = useState(false)
+  // OTP flow state. `session` is non-empty once the user has requested a code
+  // and we're waiting for them to type it in.
+  const [otpSession, setOtpSession] = useState('')
+  const [otpCode, setOtpCode] = useState('')
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,6 +76,50 @@ function AuthForm() {
     }
   }
 
+  const handleOtpRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/att/api/auth/otp-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? 'Could not send code')
+      setOtpSession(data.session)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send code')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOtpVerify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/att/api/auth/otp-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, session: otpSession, code: otpCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Server returns a new session on retryable failures; swap it in
+        // so the next attempt continues the same Cognito session.
+        if (data?.session) setOtpSession(data.session)
+        throw new Error(data?.error ?? 'Could not verify code')
+      }
+      router.push(next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not verify code')
+      setLoading(false)
+    }
+  }
+
   const inputClass =
     'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors'
 
@@ -90,6 +138,9 @@ function AuthForm() {
         </button>
         <button type="button" onClick={() => { setTab('signup'); setError('') }} className={tabClass('signup')}>
           SIGN UP
+        </button>
+        <button type="button" onClick={() => { setTab('code'); setError(''); setOtpSession(''); setOtpCode('') }} className={tabClass('code')}>
+          EMAIL CODE
         </button>
       </div>
 
@@ -207,6 +258,82 @@ function AuthForm() {
             </button>
           </p>
         </form>
+      )}
+
+      {tab === 'code' && (
+        otpSession ? (
+          <form onSubmit={handleOtpVerify} className="flex flex-col gap-4">
+            <p className="text-xs text-[#64748b]">
+              We&apos;ve emailed a 6-digit code to <strong>{email}</strong>. Paste it below.
+            </p>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-[#64748b] tracking-widest">CODE</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={otpCode}
+                onChange={e => setOtpCode(e.target.value)}
+                className={`${inputClass} tracking-widest`}
+                placeholder="000000"
+                autoFocus
+              />
+            </div>
+            {error && (
+              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+                {error}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'VERIFYING…' : 'SIGN IN'}
+            </button>
+            <p className="text-xs text-[#64748b] text-center">
+              Didn&apos;t arrive?{' '}
+              <button
+                type="button"
+                onClick={() => { setOtpSession(''); setOtpCode(''); setError('') }}
+                className="tt-link"
+              >
+                Try a different email
+              </button>
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleOtpRequest} className="flex flex-col gap-4">
+            <p className="text-xs text-[#64748b]">
+              Enter your email and we&apos;ll send you a one-time code. No password needed.
+            </p>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            {error && (
+              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+                {error}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'SENDING…' : 'SEND CODE'}
+            </button>
+          </form>
+        )
       )}
 
     </div>
