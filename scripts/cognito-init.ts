@@ -71,6 +71,7 @@ async function findOrCreateClient(poolId: string): Promise<string> {
       'ALLOW_USER_PASSWORD_AUTH',
       'ALLOW_ADMIN_USER_PASSWORD_AUTH',
       'ALLOW_REFRESH_TOKEN_AUTH',
+      'ALLOW_CUSTOM_AUTH',
     ],
     PreventUserExistenceErrors: 'ENABLED',
   }))

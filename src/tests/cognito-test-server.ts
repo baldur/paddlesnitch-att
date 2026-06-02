@@ -43,7 +43,6 @@ export async function startCognito(port: number): Promise<TestPoolHandle> {
   const dataDir = await mkdtemp(join(tmpdir(), 'cognito-test-'))
   const endpoint = `http://localhost:${port}`
 
-  // Override IssuerDomain so JWTs claim the test port, matching what aws-jwt-verify expects.
   await mkdir(join(dataDir, '.cognito'), { recursive: true })
   await writeFile(
     join(dataDir, '.cognito', 'config.json'),
@@ -87,6 +86,7 @@ export async function startCognito(port: number): Promise<TestPoolHandle> {
       'ALLOW_USER_PASSWORD_AUTH',
       'ALLOW_ADMIN_USER_PASSWORD_AUTH',
       'ALLOW_REFRESH_TOKEN_AUTH',
+      'ALLOW_CUSTOM_AUTH',
     ],
   }))
   const clientId = poolClient.UserPoolClient!.ClientId!
@@ -101,24 +101,3 @@ export async function stopCognito(handle: TestPoolHandle): Promise<void> {
   await rm(handle.dataDir, { recursive: true, force: true })
 }
 
-// Reads the most recent ConfirmationCode stored on a user in cognito-local's
-// db. Used in tests to simulate "user gets the email and types the code in" —
-// real Cognito never returns the code over the API, but cognito-local persists
-// it as a user attribute so tests can grab it.
-//
-// Returns null if the user has no pending confirmation.
-export async function readResetCode(handle: TestPoolHandle, email: string): Promise<string | null> {
-  const { readFile } = await import('fs/promises')
-  const dbPath = join(handle.dataDir, '.cognito', 'db', `${handle.userPoolId}.json`)
-  let raw: string
-  try { raw = await readFile(dbPath, 'utf8') } catch { return null }
-  const db = JSON.parse(raw) as {
-    Users?: Record<string, { Attributes?: Array<{ Name: string; Value: string }>; ConfirmationCode?: string }>
-  }
-  const users = db.Users ?? {}
-  for (const u of Object.values(users)) {
-    const userEmail = u.Attributes?.find(a => a.Name === 'email')?.Value
-    if (userEmail === email && u.ConfirmationCode) return u.ConfirmationCode
-  }
-  return null
-}

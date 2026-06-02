@@ -5,6 +5,7 @@ import {
   AdminUpdateUserAttributesCommand,
   AdminDeleteUserCommand,
   InitiateAuthCommand,
+  RespondToAuthChallengeCommand,
   RevokeTokenCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
@@ -201,6 +202,56 @@ export async function confirmForgotPassword(
       Password: newPassword,
     }))
     return { ok: true }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// Starts the OTP flow. Cognito invokes our CreateAuthChallenge Lambda which
+// generates the code, emails it, and returns a session token we use in
+// the next step.
+export async function otpRequest(
+  email: string,
+): Promise<{ session: string } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    const res = await client.send(new InitiateAuthCommand({
+      AuthFlow: 'CUSTOM_AUTH',
+      ClientId: CLIENT_ID,
+      AuthParameters: { USERNAME: email },
+    }))
+    if (!res.Session) return { error: 'unknown' }
+    return { session: res.Session }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// Completes the OTP flow. Returns ID + refresh tokens on success.
+export async function otpVerify(
+  email: string,
+  session: string,
+  code: string,
+): Promise<TokenPair | { needsAnotherTry: true; session: string } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    const res = await client.send(new RespondToAuthChallengeCommand({
+      ChallengeName: 'CUSTOM_CHALLENGE',
+      ClientId: CLIENT_ID,
+      Session: session,
+      ChallengeResponses: { USERNAME: email, ANSWER: code },
+    }))
+    if (res.AuthenticationResult?.IdToken && res.AuthenticationResult?.RefreshToken) {
+      return {
+        idToken: res.AuthenticationResult.IdToken,
+        refreshToken: res.AuthenticationResult.RefreshToken,
+      }
+    }
+    // Cognito returned another challenge — the answer was wrong but the
+    // user still has retries left. Hand back the new session so the client
+    // can try again.
+    if (res.Session) return { needsAnotherTry: true, session: res.Session }
+    return { error: 'invalid_code' }
   } catch (err) {
     return { error: classify(err) }
   }
