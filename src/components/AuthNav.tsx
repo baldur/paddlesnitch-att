@@ -17,6 +17,13 @@ export default function AuthNav() {
 
   const logout = async () => {
     await fetch('/att/api/auth/logout', { method: 'POST' })
+    // Three steps because each one fails for different reasons in isolation:
+    //   - setUser(null) flips this Client Component's UI immediately
+    //   - router.refresh() re-renders Server Components so anything
+    //     gated on getAuthUser() reflects the signed-out state
+    //   - router.push('/att') navigates home (no-op if already there)
+    setUser(null)
+    router.refresh()
     router.push('/att')
   }
 
