@@ -1,22 +1,30 @@
 #!/usr/bin/env tsx
 /**
  * One-command dev stack:
- *   1. start cognito-local on :9229 (if not already running)
- *   2. create pool + client + .env.local (idempotent)
- *   3. start `next dev` and stream its output
- *   4. on Ctrl+C, kill both children cleanly
+ *   1. write .cognito/config.json so cognito-local knows about our Lambda
+ *      triggers (needed BEFORE cognito-local starts)
+ *   2. start the lambda-emulator on :9231 so cognito-local can invoke
+ *      Custom Auth triggers
+ *   3. start cognito-local on :9229 (if not already running)
+ *   4. create pool + client + .env.local (idempotent)
+ *   5. start `next dev` and stream its output
+ *   6. on Ctrl+C, kill all children cleanly
  *
  * Usage:  pnpm dev
  */
 import { spawn, ChildProcess } from 'child_process'
 import { createConnection } from 'net'
 import { createRequire } from 'module'
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs'
+import { join } from 'path'
 
 const require = createRequire(import.meta.url)
 const COGNITO_PORT = 9229
+const LAMBDA_PORT = 9231
 
 const COLOURS = {
   cognito: '\x1b[36m',  // cyan
+  lambda: '\x1b[34m',   // blue
   next: '\x1b[35m',     // magenta
   info: '\x1b[33m',     // yellow
   reset: '\x1b[0m',
@@ -75,9 +83,56 @@ function runOnce(cmd: string, args: string[]): Promise<void> {
   })
 }
 
+// Tell cognito-local how to invoke our Custom Auth Lambdas. The TriggerFunctions
+// names match what the CDK stack deploys, and LambdaClient.endpoint points at
+// our local emulator.
+function writeCognitoLocalConfig() {
+  const dir = join(process.cwd(), '.cognito')
+  mkdirSync(dir, { recursive: true })
+  const configPath = join(dir, 'config.json')
+  const desired = {
+    LambdaClient: {
+      endpoint: `http://localhost:${LAMBDA_PORT}`,
+      credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+      region: 'eu-west-1',
+    },
+    TriggerFunctions: {
+      DefineAuthChallenge: 'att-cognito-define-auth-challenge',
+      CreateAuthChallenge: 'att-cognito-create-auth-challenge',
+      VerifyAuthChallengeResponse: 'att-cognito-verify-auth-challenge',
+    },
+  }
+  let existing: Record<string, unknown> = {}
+  if (existsSync(configPath)) {
+    try { existing = JSON.parse(readFileSync(configPath, 'utf8')) } catch {}
+  }
+  writeFileSync(configPath, JSON.stringify({ ...existing, ...desired }, null, 2))
+  log('info', `wrote .cognito/config.json (Lambda triggers)`)
+}
+
 async function main() {
   let cognito: ChildProcess | null = null
+  let lambda: ChildProcess | null = null
 
+  // 1. Config first — cognito-local reads it at start time
+  writeCognitoLocalConfig()
+
+  // 2. Lambda emulator
+  if (await portInUse(LAMBDA_PORT)) {
+    log('info', `lambda-emulator already running on :${LAMBDA_PORT}, reusing it`)
+  } else {
+    log('info', `starting lambda-emulator on :${LAMBDA_PORT}`)
+    lambda = spawn(
+      'npx',
+      ['tsx', 'scripts/lambda-emulator.ts'],
+      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LOCAL_DEV: 'true', LAMBDA_EMULATOR_PORT: String(LAMBDA_PORT) } }
+    )
+    pipeWithTag(lambda.stdout!, 'lambda', process.stdout)
+    pipeWithTag(lambda.stderr!, 'lambda', process.stderr)
+    await waitForLine(lambda, 'Lambda emulator listening')
+  }
+
+  // 3. cognito-local
   if (await portInUse(COGNITO_PORT)) {
     log('info', `cognito-local already running on :${COGNITO_PORT}, reusing it`)
   } else {
@@ -92,14 +147,17 @@ async function main() {
     await waitForLine(cognito, 'Cognito Local running')
   }
 
+  // 4. init pool / client
   log('info', 'initialising pool/client (idempotent)')
   await runOnce('npx', ['tsx', '--env-file-if-exists=.env.local', 'scripts/cognito-init.ts'])
 
+  // 5. next dev
   log('info', 'starting next dev')
   const next = spawn('npx', ['next', 'dev'], { stdio: 'inherit' })
 
   const cleanup = (code: number) => {
     if (cognito && !cognito.killed) cognito.kill('SIGTERM')
+    if (lambda && !lambda.killed) lambda.kill('SIGTERM')
     if (!next.killed) next.kill('SIGTERM')
     process.exit(code)
   }
@@ -108,7 +166,11 @@ async function main() {
   process.on('SIGTERM', () => cleanup(0))
   next.on('exit', code => cleanup(code ?? 0))
   cognito?.on('exit', code => {
-    log('info', `cognito-local exited (${code}), shutting down dev server`)
+    log('info', `cognito-local exited (${code}), shutting down`)
+    cleanup(code ?? 1)
+  })
+  lambda?.on('exit', code => {
+    log('info', `lambda-emulator exited (${code}), shutting down`)
     cleanup(code ?? 1)
   })
 }

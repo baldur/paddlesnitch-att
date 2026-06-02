@@ -1,6 +1,23 @@
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
+// Reads the OTP code the lambda-emulator wrote for a particular email after
+// a Custom Auth challenge was created. Retries a few times to dodge the
+// race between "API returned the session" and "lambda finished writing file."
+export async function readOtpCode(email: string): Promise<string | null> {
+  const dir = process.env.LOCAL_OTP_DIR
+  if (!dir) return null
+  const filename = join(dir, encodeURIComponent(email))
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const raw = await readFile(filename, 'utf8')
+      if (raw.trim()) return raw.trim()
+    } catch {}
+    await new Promise(r => setTimeout(r, 25))
+  }
+  return null
+}
+
 // Reads the most recent ConfirmationCode stored for a user in the test
 // cognito-local db. Real Cognito never returns codes; cognito-local stores
 // them on the user record so tests can simulate "user got the email."
