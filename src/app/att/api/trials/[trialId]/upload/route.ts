@@ -7,7 +7,9 @@ import { processTrace } from '@/lib/geo'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
-import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember } from '@/lib/types'
+import { getActivityStreams, streamsToTrack } from '@/lib/strava'
+import { getValidStravaTokens } from '@/lib/strava-storage'
+import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint } from '@/lib/types'
 
 type StoredEntry = {
   entryId: string
@@ -64,15 +66,29 @@ async function processBuffer(
   raceDate: string,
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
-
   if (!parseResult.ok) {
     return NextResponse.json(
       { error: `Could not parse file: ${parseResult.reason}` },
       { status: 422 }
     )
   }
+  return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, raceDate)
+}
 
-  const result = processTrace(parseResult.track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
+// Shared backend for file uploads, URL fetches, and Strava imports. Takes an
+// already-parsed track plus the raw bytes we want to keep on disk for audit.
+async function processTrack(
+  track: TrackPoint[],
+  rawBlob: Buffer,
+  filename: string,
+  course: CourseMetadata,
+  user: { id: string; displayName: string },
+  trialId: string,
+  boatClass: BoatClass,
+  crew: CrewMember[],
+  raceDate: string,
+): Promise<NextResponse> {
+  const result = processTrace(track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
     return NextResponse.json(
       { error: 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.' },
@@ -82,14 +98,14 @@ async function processBuffer(
 
   // The trace's recorded date is the UTC date of the first track point.
   // If the user-picked race date differs from this, flag a discrepancy.
-  const traceRecordedDate = utcDateString(parseResult.track[0].timestamp)
+  const traceRecordedDate = utcDateString(track[0].timestamp)
   const discrepancy = dateDiscrepancy(raceDate, traceRecordedDate)
 
   const entryId = nanoid()
-  const ext = filename.split('.').pop()?.toLowerCase() ?? 'gpx'
+  const ext = filename.split('.').pop()?.toLowerCase() ?? 'bin'
   const basePath = `trials/${trialId}/entries/${user.id}/${entryId}`
 
-  await putObject(`${basePath}/trace.${ext}`, Buffer.from(arrayBuffer))
+  await putObject(`${basePath}/trace.${ext}`, rawBlob)
 
   const stored: StoredEntry = {
     entryId,
@@ -139,8 +155,10 @@ export async function POST(
 
   if (contentType.includes('application/json')) {
     const body = await req.json()
-    const { url, boatClass, crew: rawCrew, raceDate: rawRaceDate } = body
-    if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 })
+    const { url, stravaActivityId, boatClass, crew: rawCrew, raceDate: rawRaceDate } = body
+    if (!url && !stravaActivityId) {
+      return NextResponse.json({ error: 'No URL or Strava activity provided' }, { status: 400 })
+    }
     if (!isBoatClass(boatClass)) {
       return NextResponse.json({ error: 'Boat class is required' }, { status: 400 })
     }
@@ -150,6 +168,39 @@ export async function POST(
     if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
     const raceDate = normaliseRaceDate(rawRaceDate)
     if (!raceDate) return NextResponse.json({ error: 'Race date is required (YYYY-MM-DD)' }, { status: 400 })
+
+    // Strava-import branch: fetch the user's stored tokens, refresh if needed,
+    // pull the streams, hand them straight to processTrack.
+    if (stravaActivityId) {
+      const idNum = Number(stravaActivityId)
+      if (!Number.isFinite(idNum) || idNum <= 0) {
+        return NextResponse.json({ error: 'Invalid Strava activity ID' }, { status: 400 })
+      }
+      const tokens = await getValidStravaTokens(user.id)
+      if (!tokens) {
+        return NextResponse.json({ error: 'Strava is not connected for this account' }, { status: 409 })
+      }
+      const streams = await getActivityStreams(tokens.accessToken, idNum)
+      if (!streams) {
+        return NextResponse.json(
+          { error: 'Could not load this Strava activity (no GPS data, or you do not have access).' },
+          { status: 422 }
+        )
+      }
+      const track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
+      // Persist a JSON snapshot of what we pulled so the entry has the same
+      // shape as file/URL uploads (raw trace + result).
+      const snapshot = Buffer.from(JSON.stringify({
+        source: 'strava',
+        activityId: idNum,
+        athleteId: tokens.athleteId,
+        startDate: streams.startDate,
+        latlng: streams.latlng,
+        time: streams.time,
+      }))
+      const filename = `strava-${idNum}.json`
+      return processTrack(track, snapshot, filename, course, user, trialId, boatClass, crew, raceDate)
+    }
 
     const resolvedUrl = resolveActivityUrl(url)
     if (!resolvedUrl) {

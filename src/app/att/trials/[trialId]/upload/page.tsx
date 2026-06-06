@@ -3,7 +3,20 @@ import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
-import type { AuthUser, BoatClass, CrewMember } from '@/lib/types'
+import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary } from '@/lib/types'
+
+// Local helpers used only by the Strava picker.
+function formatDistance(metres: number): string {
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
+  return `${Math.round(metres)} m`
+}
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  } catch {
+    return iso.slice(0, 10)
+  }
+}
 
 // These three editors MUST live at module scope. If you nest them inside
 // UploadPage, React sees a new component type on every parent re-render
@@ -133,8 +146,14 @@ export default function UploadPage({
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
   const [error, setError] = useState('')
-  const [inputMode, setInputMode] = useState<'file' | 'url'>('file')
+  const [inputMode, setInputMode] = useState<'file' | 'url' | 'strava'>('file')
   const [activityUrl, setActivityUrl] = useState('')
+  // Strava picker state. `connected` is undefined until status/me come back so
+  // we can keep the loading skeleton off-screen until we know which UI to show.
+  const [stravaConnected, setStravaConnected] = useState<boolean | undefined>(undefined)
+  const [stravaActivities, setStravaActivities] = useState<StravaActivitySummary[] | undefined>(undefined)
+  const [stravaActivityId, setStravaActivityId] = useState<number | null>(null)
+  const [stravaError, setStravaError] = useState('')
   const [boatClass, setBoatClass] = useState<BoatClass | ''>('')
   // Crew is keyed by the boat class. When the class changes we re-initialise
   // crew so seat indexes always match the selected boat.
@@ -148,6 +167,33 @@ export default function UploadPage({
       .then(setAuthUser)
       .catch(() => setAuthUser(null))
   }, [])
+
+  // Strava picker: lazy-load status + activities the first time the tab opens.
+  // We don't fetch on mount — most uploads are still file/URL and there's no
+  // point spending the API quota on users who never click the tab.
+  useEffect(() => {
+    if (inputMode !== 'strava') return
+    if (stravaConnected === undefined) {
+      fetch('/att/api/strava/status')
+        .then(r => (r.ok ? r.json() : { connected: false }))
+        .then(s => setStravaConnected(!!s.connected))
+        .catch(() => setStravaConnected(false))
+    }
+  }, [inputMode, stravaConnected])
+
+  useEffect(() => {
+    if (inputMode !== 'strava' || !stravaConnected || stravaActivities !== undefined) return
+    fetch('/att/api/strava/activities')
+      .then(async r => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body.error ?? 'Could not load activities')
+        }
+        return r.json()
+      })
+      .then((d: { activities: StravaActivitySummary[] }) => setStravaActivities(d.activities))
+      .catch((err: Error) => setStravaError(err.message))
+  }, [inputMode, stravaConnected, stravaActivities])
 
   // Reset / re-template the crew list whenever the boat class changes.
   // Seat 1 (bow) is pre-filled with the signed-in user's display name so the
@@ -199,6 +245,30 @@ export default function UploadPage({
       router.push(`/att/trials/${trialId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
+      setStatus('error')
+    }
+  }
+
+  const handleStravaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!stravaActivityId) return
+    const err = preflight()
+    if (err) { setError(err); setStatus('error'); return }
+
+    setStatus('uploading')
+    setError('')
+
+    try {
+      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stravaActivityId, boatClass, crew, raceDate }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Import failed')
+      router.push(`/att/trials/${trialId}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
       setStatus('error')
     }
   }
@@ -296,9 +366,20 @@ export default function UploadPage({
               >
                 PASTE URL
               </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('strava')}
+                className={`px-4 py-2 text-sm tracking-widest transition-colors ${
+                  inputMode === 'strava'
+                    ? 'border-b-2 border-[#fc4c02] text-[#fc4c02] -mb-px'
+                    : 'text-[#64748b] hover:text-[#0f172a]'
+                }`}
+              >
+                FROM STRAVA
+              </button>
             </div>
 
-            {inputMode === 'file' ? (
+            {inputMode === 'file' && (
               <form onSubmit={handleFileSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-[#64748b] tracking-widest">
@@ -334,7 +415,9 @@ export default function UploadPage({
                   {status === 'uploading' ? 'PROCESSING…' : 'SUBMIT TRACE'}
                 </button>
               </form>
-            ) : (
+            )}
+
+            {inputMode === 'url' && (
               <form onSubmit={handleUrlSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-[#64748b] tracking-widest">
@@ -369,6 +452,100 @@ export default function UploadPage({
                   className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'uploading' ? 'FETCHING…' : 'SUBMIT URL'}
+                </button>
+              </form>
+            )}
+
+            {inputMode === 'strava' && (
+              <form onSubmit={handleStravaSubmit} className="flex flex-col gap-4">
+                {stravaConnected === undefined && (
+                  <p className="text-xs text-[#64748b]">Checking Strava connection…</p>
+                )}
+
+                {stravaConnected === false && (
+                  <div className="flex flex-col gap-3 border border-[#e2e8f0] p-4">
+                    <p className="text-sm text-[#0f172a]">
+                      Connect Strava once and you can import any recent water-sport activity straight into a time trial.
+                    </p>
+                    <a
+                      href={`/att/api/strava/connect`}
+                      className="self-start px-4 py-2 bg-[#fc4c02] text-white text-xs tracking-widest hover:bg-[#e34402] transition-colors"
+                    >
+                      CONNECT STRAVA
+                    </a>
+                    <p className="text-xs text-[#64748b]">
+                      You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
+                      <a href="/att/account" className="tt-link">account page</a>.
+                    </p>
+                  </div>
+                )}
+
+                {stravaConnected && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs text-[#64748b] tracking-widest">
+                      RECENT STRAVA ACTIVITIES
+                    </label>
+                    {stravaError && (
+                      <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
+                        {stravaError}
+                      </div>
+                    )}
+                    {stravaActivities === undefined && !stravaError && (
+                      <p className="text-xs text-[#64748b]">Loading…</p>
+                    )}
+                    {stravaActivities !== undefined && stravaActivities.length === 0 && (
+                      <p className="text-xs text-[#64748b]">
+                        No recent kayak, canoe, rowing, or SUP activities found on your Strava.
+                      </p>
+                    )}
+                    {stravaActivities !== undefined && stravaActivities.length > 0 && (
+                      <ul className="flex flex-col border border-[#e2e8f0] max-h-72 overflow-y-auto">
+                        {stravaActivities.map(a => {
+                          const checked = stravaActivityId === a.id
+                          return (
+                            <li
+                              key={a.id}
+                              className={`border-b border-[#f1f5f9] last:border-b-0 ${checked ? 'bg-[#fff7ed]' : 'hover:bg-[#f8fafc]'}`}
+                            >
+                              <label className="flex items-center gap-3 px-3 py-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="stravaActivity"
+                                  checked={checked}
+                                  onChange={() => setStravaActivityId(a.id)}
+                                  className="accent-[#fc4c02]"
+                                />
+                                <span className="flex-1 min-w-0">
+                                  <span className="block text-sm text-[#0f172a] truncate">{a.name}</span>
+                                  <span className="block text-xs text-[#64748b] tabular">
+                                    {a.sportType} · {formatDate(a.startDate)} · {formatDistance(a.distanceMetres)}
+                                  </span>
+                                </span>
+                              </label>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
+                <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
+                <RaceDatePicker raceDate={raceDate} setRaceDate={setRaceDate} />
+
+                {status === 'error' && (
+                  <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={status === 'uploading' || !stravaConnected || !stravaActivityId}
+                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {status === 'uploading' ? 'IMPORTING…' : 'IMPORT FROM STRAVA'}
                 </button>
               </form>
             )}
