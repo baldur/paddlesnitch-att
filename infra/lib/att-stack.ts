@@ -122,9 +122,16 @@ export class AttStack extends cdk.Stack {
         FROM_EMAIL: 'noreply@paddlesnitch.com',
       },
     })
+    // Resource is `identity/*` rather than the specific paddlesnitch.com
+    // identity ARN because, in SES SANDBOX MODE, SendEmail authorises the
+    // principal against BOTH the FROM identity and the recipient identity.
+    // Limiting to a single identity blows up on any recipient that isn't
+    // paddlesnitch.com (i.e. every real user). The wildcard is scoped to
+    // this account, which is the right blast radius — and once SES drops
+    // out of sandbox the recipient-identity check goes away anyway.
     createAuth.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail'],
-      resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+      resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/*`],
     }))
     const verifyAuth = new lambda.Function(this, 'VerifyAuthChallenge', {
       functionName: 'att-cognito-verify-auth-challenge',
