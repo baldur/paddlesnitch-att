@@ -6,7 +6,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
-import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
@@ -191,10 +190,12 @@ export class AttStack extends cdk.Stack {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
-        // GitHub PAT used by the feedback widget to file issues. Must exist
-        // as an SSM SecureString at /att/github-issues-token before deploy.
+        // GitHub PAT used by the feedback widget to file issues. CFN can't
+        // resolve SSM SecureString parameters at synth time, so we pass the
+        // parameter NAME here and the route fetches+decrypts at runtime.
+        // Must exist as an SSM SecureString at /att/github-issues-token.
         // Fine-grained scope: Issues: read/write on baldur/paddlesnitch-att.
-        GITHUB_ISSUES_TOKEN: ssm.StringParameter.valueForStringParameter(this, '/att/github-issues-token'),
+        GITHUB_ISSUES_TOKEN_PARAM: '/att/github-issues-token',
         GITHUB_REPO: 'baldur/paddlesnitch-att',
       },
     })
@@ -204,6 +205,14 @@ export class AttStack extends cdk.Stack {
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail'],
       resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+    }))
+
+    // The feedback route fetches the GitHub PAT from SSM at runtime (CFN
+    // can't pull SecureString values at synth). Scope narrowly to the one
+    // parameter and decrypt with the default AWS-managed key.
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`],
     }))
 
     // Cognito admin operations the app calls (sign-up confirmation +
