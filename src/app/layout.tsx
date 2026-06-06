@@ -3,6 +3,7 @@ import { IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
+import FeedbackWidget from '@/components/FeedbackWidget'
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <Footer />
         <CookieNotice />
+        <FeedbackWidget />
       </body>
     </html>
   )

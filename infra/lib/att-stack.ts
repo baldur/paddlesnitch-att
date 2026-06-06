@@ -6,6 +6,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
 import * as iam from 'aws-cdk-lib/aws-iam'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
@@ -190,6 +191,11 @@ export class AttStack extends cdk.Stack {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
+        // GitHub PAT used by the feedback widget to file issues. Must exist
+        // as an SSM SecureString at /att/github-issues-token before deploy.
+        // Fine-grained scope: Issues: read/write on baldur/paddlesnitch-att.
+        GITHUB_ISSUES_TOKEN: ssm.StringParameter.valueForStringParameter(this, '/att/github-issues-token'),
+        GITHUB_REPO: 'baldur/paddlesnitch-att',
       },
     })
 
