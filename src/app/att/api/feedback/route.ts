@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 import { getAuthUser } from '@/lib/auth'
 
 // Customer feedback endpoint. Posts a new issue to the GitHub repo with the
 // `customer-reported` and `triage` labels. The submitter doesn't need a
 // GitHub account; we authenticate to GitHub server-side with a fine-grained
-// PAT held in the GITHUB_ISSUES_TOKEN env var (sourced from SSM in CDK).
+// PAT. The PAT lives in SSM Parameter Store as a SecureString — CFN can't
+// resolve SecureString at synth, so the Lambda fetches+decrypts at runtime
+// and caches the result on the warm container.
 //
 // Capturing context is deliberate: every report gets URL, user agent,
 // viewport, signed-in user (if any), and a timestamp. Saves us from
@@ -27,10 +30,32 @@ function asString(value: unknown, max?: number): string {
   return max ? trimmed.slice(0, max) : trimmed
 }
 
+let cachedToken: string | undefined
+
+async function getGitHubToken(): Promise<string | undefined> {
+  // Env override exists for local dev and tests — they can set
+  // GITHUB_ISSUES_TOKEN directly without round-tripping through SSM.
+  const direct = process.env.GITHUB_ISSUES_TOKEN
+  if (direct) return direct
+  if (cachedToken) return cachedToken
+  const paramName = process.env.GITHUB_ISSUES_TOKEN_PARAM
+  if (!paramName) return undefined
+  try {
+    const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
+    const res = await ssm.send(new GetParameterCommand({
+      Name: paramName,
+      WithDecryption: true,
+    }))
+    cachedToken = res.Parameter?.Value
+    return cachedToken
+  } catch (err) {
+    console.error('[feedback] could not fetch GitHub token from SSM:', err)
+    return undefined
+  }
+}
+
 export async function POST(req: NextRequest) {
-  // Env read at call-time, not module-load, so tests can flip the value
-  // in beforeEach without re-importing.
-  const token = process.env.GITHUB_ISSUES_TOKEN
+  const token = await getGitHubToken()
   const repo = process.env.GITHUB_REPO ?? 'baldur/paddlesnitch-att'
   if (!token) {
     // No token configured (e.g. local dev without secrets). Don't 500 the
