@@ -11,6 +11,18 @@ export default function FeedbackWidget() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [error, setError] = useState('')
   const [issueUrl, setIssueUrl] = useState('')
+  // Anti-bot:
+  //   - `website` is a honeypot — visually hidden but present in the DOM.
+  //     Bots that scrape and fill every input will set it; real users won't.
+  //   - `openedAt` is the wall-clock ms when the modal opened. The server
+  //     rejects submissions that arrive too quickly — humans take a few
+  //     seconds to type a description.
+  const [website, setWebsite] = useState('')
+  const [openedAt, setOpenedAt] = useState(0)
+
+  useEffect(() => {
+    if (open) setOpenedAt(Date.now())
+  }, [open])
 
   // Close with Escape
   useEffect(() => {
@@ -26,6 +38,7 @@ export default function FeedbackWidget() {
     setStatus('idle')
     setError('')
     setIssueUrl('')
+    setWebsite('')
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -43,6 +56,8 @@ export default function FeedbackWidget() {
           url: window.location.href,
           userAgent: navigator.userAgent,
           viewport: `${window.innerWidth}x${window.innerHeight}`,
+          website,
+          elapsedMs: openedAt ? Date.now() - openedAt : 0,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -110,6 +125,21 @@ export default function FeedbackWidget() {
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4 px-4 py-4">
+            {/* Honeypot — visually hidden, skipped by keyboard + screen readers.
+                Real users never see or fill this; bots scraping inputs will. */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+              <label>
+                Website
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={e => setWebsite(e.target.value)}
+                />
+              </label>
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-[#64748b] tracking-widest">WHAT WENT WRONG?</label>
               <textarea

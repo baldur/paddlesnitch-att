@@ -53,10 +53,13 @@ function mockAuth(idToken: string) {
   } as ReturnType<typeof cookies> extends Promise<infer T> ? T : never)
 }
 
-function jsonReq(body: unknown) {
+function jsonReq(body: Record<string, unknown>) {
+  // Default to a value above the anti-bot floor so existing tests don't
+  // have to know about it. Per-test overrides still win via spread order.
+  const merged = { elapsedMs: 5000, ...body }
   return new NextRequest('http://x/att/api/feedback', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify(merged),
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -149,5 +152,28 @@ describe('POST /att/api/feedback', () => {
     const huge = 'x'.repeat(10_000)
     await feedback(jsonReq({ description: huge }))
     expect(sentBody().body.length).toBeLessThan(6000)
+  })
+
+  it('silently drops bot submissions that fill the honeypot field', async () => {
+    mockAnonymous()
+    const res = await feedback(jsonReq({
+      description: 'Buy cheap watches at example.com',
+      website: 'http://spam.example',
+    }))
+    // Looks like success to the bot — no signal to retry differently.
+    expect(res.status).toBe(200)
+    expect((await res.json()).ok).toBe(true)
+    expect(githubCalls).toHaveLength(0)
+  })
+
+  it('silently drops bot submissions that come in faster than a human could type', async () => {
+    mockAnonymous()
+    const res = await feedback(jsonReq({
+      description: 'A reasonable-looking report.',
+      elapsedMs: 100,
+    }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).ok).toBe(true)
+    expect(githubCalls).toHaveLength(0)
   })
 })
