@@ -23,14 +23,31 @@ function seatBadge(seat: number | 'C', total: number, hasCox: boolean): string {
   return String(seat)
 }
 
-export default function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+export default function LeaderboardTable({
+  entries,
+  uploadHref,
+}: {
+  entries: LeaderboardEntry[]
+  // If set, the empty state shows an upload CTA. Only pass for open trials.
+  uploadHref?: string
+}) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [classFilter, setClassFilter] = useState<BoatClass | 'all'>('all')
 
   if (entries.length === 0) {
     return (
-      <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
-        No entries yet. Be the first to upload a trace.
+      <div className="border border-[#e2e8f0] p-8 flex flex-col items-center gap-4 text-center text-[#64748b] text-sm">
+        <p>
+          {uploadHref ? 'No entries yet. Be the first to upload a trace.' : 'No entries.'}
+        </p>
+        {uploadHref && (
+          <a
+            href={uploadHref}
+            className="px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
+          >
+            UPLOAD TRACE
+          </a>
+        )}
       </div>
     )
   }
