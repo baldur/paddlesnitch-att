@@ -14,10 +14,20 @@ beforeEach(() => {
   delete process.env.LOCAL_OTP_DIR
 })
 
-function blank() {
+type SessionEntry = { challengeName: string; challengeResult: boolean }
+type ChallengeEvent = {
+  request: {
+    session: SessionEntry[]
+    userAttributes: Record<string, string>
+    privateChallengeParameters: Record<string, string>
+    challengeAnswer: string
+  }
+  response: Record<string, unknown>
+}
+function blank(): ChallengeEvent {
   return {
     request: { session: [], userAttributes: { email: 'alice@example.com' }, privateChallengeParameters: {}, challengeAnswer: '' },
-    response: {} as Record<string, unknown>,
+    response: {},
   }
 }
 
