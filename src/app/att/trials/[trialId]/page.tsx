@@ -112,7 +112,10 @@ export default async function TrialPage({
           <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
             Leaderboard
           </h2>
-          <LeaderboardTable entries={leaderboard ?? []} />
+          <LeaderboardTable
+            entries={leaderboard ?? []}
+            uploadHref={trial.status === 'open' ? `/att/trials/${trialId}/upload` : undefined}
+          />
         </section>
       </div>
     </main>
