@@ -5,6 +5,123 @@ import AuthNav from '@/components/AuthNav'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember } from '@/lib/types'
 
+// These three editors MUST live at module scope. If you nest them inside
+// UploadPage, React sees a new component type on every parent re-render
+// and unmounts/remounts the subtree — input focus is lost after every
+// keystroke. Pass state down as props instead.
+
+const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors w-full'
+
+function seatLabel(seat: number | 'C', total: number): string {
+  if (seat === 'C') return 'Cox'
+  if (seat === 1) return 'Bow (1)'
+  if (seat === total) return `Stroke (${seat})`
+  return `Seat ${seat}`
+}
+
+function CrewEditor({
+  boatClass,
+  crew,
+  updateCrewName,
+}: {
+  boatClass: BoatClass | ''
+  crew: CrewMember[]
+  updateCrewName: (seat: number | 'C', name: string) => void
+}) {
+  if (!boatClass) return null
+  const info = BOAT_CLASS_INFO[boatClass]
+  const total = info.crewSize
+  if (total === 1 && !info.hasCox) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-xs text-[#64748b] tracking-widest">CREW</label>
+      <p className="text-xs text-[#64748b] -mt-1">
+        One row per seat. Seat 1 is bow, {total} is stroke{info.hasCox ? ', C is cox' : ''}.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {crew.map(m => (
+          <div key={String(m.seat)} className="flex items-center gap-2">
+            <span className="text-xs text-[#64748b] tracking-widest w-20 shrink-0 tabular">
+              {seatLabel(m.seat, total)}
+            </span>
+            <input
+              type="text"
+              required
+              placeholder={m.seat === 'C' ? 'Cox name' : 'Crew member name'}
+              value={m.name}
+              onChange={e => updateCrewName(m.seat, e.target.value)}
+              className={inputClass + ' flex-1'}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RaceDatePicker({
+  raceDate,
+  setRaceDate,
+}: {
+  raceDate: string
+  setRaceDate: (v: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs text-[#64748b] tracking-widest">RACE DATE</label>
+      <input
+        type="date"
+        required
+        value={raceDate}
+        onChange={e => setRaceDate(e.target.value)}
+        className={`${inputClass} cursor-pointer`}
+      />
+      <p className="text-xs text-[#64748b]">
+        When did you actually race? Defaults to today. We&apos;ll flag a warning if it
+        doesn&apos;t match the date in your GPS file.
+      </p>
+    </div>
+  )
+}
+
+function BoatClassPicker({
+  boatClass,
+  setBoatClass,
+}: {
+  boatClass: BoatClass | ''
+  setBoatClass: (v: BoatClass | '') => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-xs text-[#64748b] tracking-widest">BOAT CLASS</label>
+      <select
+        required
+        value={boatClass}
+        onChange={e => setBoatClass(e.target.value as BoatClass | '')}
+        className={inputClass}
+      >
+        <option value="">— Select —</option>
+        <optgroup label="Kayak">
+          {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => (
+            <option key={c} value={c}>
+              {c} · {BOAT_CLASS_INFO[c].crewSize} paddler{BOAT_CLASS_INFO[c].crewSize > 1 ? 's' : ''}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Rowing">
+          {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => {
+            const info = BOAT_CLASS_INFO[c]
+            const seats = info.crewSize === 1
+              ? '1 sculler'
+              : `${info.crewSize} rower${info.crewSize > 1 ? 's' : ''}${info.hasCox ? ' + cox' : ''}`
+            return <option key={c} value={c}>{c} · {seats}</option>
+          })}
+        </optgroup>
+      </select>
+    </div>
+  )
+}
+
 export default function UploadPage({
   params,
 }: {
@@ -47,13 +164,6 @@ export default function UploadPage({
 
   function updateCrewName(seat: number | 'C', name: string) {
     setCrew(prev => prev.map(m => m.seat === seat ? { ...m, name } : m))
-  }
-
-  function seatLabel(seat: number | 'C', total: number): string {
-    if (seat === 'C') return 'Cox'
-    if (seat === 1) return 'Bow (1)'
-    if (seat === total) return `Stroke (${seat})`
-    return `Seat ${seat}`
   }
 
   function preflight(): string | null {
@@ -116,95 +226,6 @@ export default function UploadPage({
       setStatus('error')
     }
   }
-
-  // Crew editor — only renders when a multi-person class is selected.
-  // Singles (K1, 1X) auto-populate the single seat from the signed-in user;
-  // the editor is hidden because there's nothing to edit.
-  function CrewEditor() {
-    if (!boatClass) return null
-    const info = BOAT_CLASS_INFO[boatClass]
-    const total = info.crewSize
-    if (total === 1 && !info.hasCox) return null
-    return (
-      <div className="flex flex-col gap-2">
-        <label className="text-xs text-[#64748b] tracking-widest">CREW</label>
-        <p className="text-xs text-[#64748b] -mt-1">
-          One row per seat. Seat 1 is bow, {total} is stroke{info.hasCox ? ', C is cox' : ''}.
-        </p>
-        <div className="flex flex-col gap-1.5">
-          {crew.map(m => (
-            <div key={String(m.seat)} className="flex items-center gap-2">
-              <span className="text-xs text-[#64748b] tracking-widest w-20 shrink-0 tabular">
-                {seatLabel(m.seat, total)}
-              </span>
-              <input
-                type="text"
-                required
-                placeholder={m.seat === 'C' ? 'Cox name' : 'Crew member name'}
-                value={m.name}
-                onChange={e => updateCrewName(m.seat, e.target.value)}
-                className={inputClass + ' flex-1'}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  function RaceDatePicker() {
-    return (
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-[#64748b] tracking-widest">RACE DATE</label>
-        <input
-          type="date"
-          required
-          value={raceDate}
-          onChange={e => setRaceDate(e.target.value)}
-          className={`${inputClass} cursor-pointer`}
-        />
-        <p className="text-xs text-[#64748b]">
-          When did you actually race? Defaults to today. We&apos;ll flag a warning if it
-          doesn&apos;t match the date in your GPS file.
-        </p>
-      </div>
-    )
-  }
-
-  // Render a labelled boat-class dropdown.
-  function BoatClassPicker() {
-    return (
-      <div className="flex flex-col gap-2">
-        <label className="text-xs text-[#64748b] tracking-widest">BOAT CLASS</label>
-        <select
-          required
-          value={boatClass}
-          onChange={e => setBoatClass(e.target.value as BoatClass | '')}
-          className={inputClass}
-        >
-          <option value="">— Select —</option>
-          <optgroup label="Kayak">
-            {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'kayak').map(c => (
-              <option key={c} value={c}>
-                {c} · {BOAT_CLASS_INFO[c].crewSize} paddler{BOAT_CLASS_INFO[c].crewSize > 1 ? 's' : ''}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Rowing">
-            {BOAT_CLASSES.filter(c => BOAT_CLASS_INFO[c].sport === 'rowing').map(c => {
-              const info = BOAT_CLASS_INFO[c]
-              const seats = info.crewSize === 1
-                ? '1 sculler'
-                : `${info.crewSize} rower${info.crewSize > 1 ? 's' : ''}${info.hasCox ? ' + cox' : ''}`
-              return <option key={c} value={c}>{c} · {seats}</option>
-            })}
-          </optgroup>
-        </select>
-      </div>
-    )
-  }
-
-  const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors w-full'
 
   return (
     <main className="flex-1 flex flex-col">
@@ -295,9 +316,9 @@ export default function UploadPage({
                   </p>
                 </div>
 
-                <BoatClassPicker />
-                <CrewEditor />
-                <RaceDatePicker />
+                <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
+                <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
+                <RaceDatePicker raceDate={raceDate} setRaceDate={setRaceDate} />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
@@ -332,9 +353,9 @@ export default function UploadPage({
                   </p>
                 </div>
 
-                <BoatClassPicker />
-                <CrewEditor />
-                <RaceDatePicker />
+                <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
+                <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
+                <RaceDatePicker raceDate={raceDate} setRaceDate={setRaceDate} />
 
                 {status === 'error' && (
                   <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-3 text-[#b91c1c] text-xs">
