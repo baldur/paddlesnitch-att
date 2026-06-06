@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 
 // Customer feedback endpoint. Posts a new issue to the GitHub repo with the
 // `customer-reported` and `triage` labels. The submitter doesn't need a
@@ -12,6 +13,37 @@ import { getAuthUser } from '@/lib/auth'
 
 const MIN_DESCRIPTION_CHARS = 10
 const MAX_DESCRIPTION_CHARS = 5000
+
+// Cached across Lambda invocations within the same execution context. Cold
+// starts pay one SSM round-trip (~50ms); warm invocations are free.
+let cachedToken: string | undefined
+
+// Resolution order:
+//   1. GITHUB_ISSUES_TOKEN env var — direct value (tests, local dev escape)
+//   2. GITHUB_ISSUES_TOKEN_PARAM env var — SSM SecureString name; fetch and decrypt
+//   3. nothing — caller treats as "feedback endpoint not configured"
+async function getGitHubToken(): Promise<string | undefined> {
+  const direct = process.env.GITHUB_ISSUES_TOKEN
+  if (direct) return direct
+
+  if (cachedToken) return cachedToken
+
+  const paramName = process.env.GITHUB_ISSUES_TOKEN_PARAM
+  if (!paramName) return undefined
+
+  try {
+    const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
+    const res = await ssm.send(new GetParameterCommand({
+      Name: paramName,
+      WithDecryption: true,
+    }))
+    cachedToken = res.Parameter?.Value
+    return cachedToken
+  } catch (err) {
+    console.error('[feedback] could not fetch GitHub token from SSM:', err)
+    return undefined
+  }
+}
 
 type FeedbackBody = {
   description?: unknown
@@ -28,9 +60,7 @@ function asString(value: unknown, max?: number): string {
 }
 
 export async function POST(req: NextRequest) {
-  // Env read at call-time, not module-load, so tests can flip the value
-  // in beforeEach without re-importing.
-  const token = process.env.GITHUB_ISSUES_TOKEN
+  const token = await getGitHubToken()
   const repo = process.env.GITHUB_REPO ?? 'baldur/paddlesnitch-att'
   if (!token) {
     // No token configured (e.g. local dev without secrets). Don't 500 the
