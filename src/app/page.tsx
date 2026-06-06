@@ -5,16 +5,14 @@ export const metadata = {
   description: 'A growing suite of software for paddlers, rowers, and river clubs.',
 }
 
-// PRODUCTS is the editable bit. Add / remove / rename freely as the roadmap
-// firms up. The page below renders whatever's here.
-//
-// `available` items get a CTA button and link to their product. `coming-soon`
-// items are inert cards with just a description — keep them honest, no
-// pre-launch fanfare or signup forms.
+// One available product, then a couple of anonymous teaser slots so the
+// homepage reads as a suite-in-progress without committing publicly to
+// what the next two are. Promote a teaser by adding name/short/details/
+// href/cta and flipping status to 'available'.
 type Product = {
-  name: string
-  short: string                              // one-line subtitle
-  details: string                            // 1-2 sentences expanding it
+  name?: string
+  short?: string                             // one-line subtitle
+  details?: string                           // 1-2 sentences expanding it
   status: 'available' | 'coming-soon'
   href?: string                              // only when available
   cta?: string                               // CTA button text
@@ -30,20 +28,8 @@ const PRODUCTS: Product[] = [
     href: '/att',
     cta: 'OPEN ATT',
   },
-  {
-    name: 'River Conditions',
-    short: 'Live water levels, flow, and weather for UK rivers.',
-    details:
-      'Quick check before you drive out: is the river running, is it safe, is it worth it. Aggregated gauge and forecast data, no apps to install.',
-    status: 'coming-soon',
-  },
-  {
-    name: 'Club Hub',
-    short: 'Membership, sessions, and comms for clubs.',
-    details:
-      'Lightweight admin for kayak and rowing clubs — member rolls, session sign-ups, and a shared notice board that doesn’t live on WhatsApp.',
-    status: 'coming-soon',
-  },
+  { status: 'coming-soon' },
+  { status: 'coming-soon' },
 ]
 
 export default function LandingPage() {
@@ -76,35 +62,44 @@ export default function LandingPage() {
           Products
         </h2>
         <div className="flex flex-col gap-4">
-          {PRODUCTS.map(p => (
-            <article
-              key={p.name}
-              className="border border-[#e2e8f0] p-6 flex flex-col gap-3"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="text-lg font-bold text-[#0f172a]">{p.name}</h3>
-                <span
-                  className={`text-[10px] tracking-widest px-2 py-0.5 border whitespace-nowrap shrink-0 ${
-                    p.status === 'available'
-                      ? 'border-[#15803d] text-[#15803d]'
-                      : 'border-[#64748b] text-[#64748b]'
-                  }`}
+          {PRODUCTS.map((p, i) => {
+            if (p.status === 'coming-soon') {
+              return (
+                <article
+                  key={`teaser-${i}`}
+                  className="border border-dashed border-[#e2e8f0] bg-[#f8fafc] p-6 flex items-center justify-end h-24"
+                  aria-label="Coming soon"
                 >
-                  {p.status === 'available' ? 'AVAILABLE NOW' : 'COMING SOON'}
-                </span>
-              </div>
-              <p className="text-sm text-[#0f172a]">{p.short}</p>
-              <p className="text-sm text-[#64748b] leading-relaxed">{p.details}</p>
-              {p.href && p.cta && (
-                <Link
-                  href={p.href}
-                  className="self-start mt-2 px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
-                >
-                  {p.cta}
-                </Link>
-              )}
-            </article>
-          ))}
+                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-[#cbd5e1] text-[#94a3b8] whitespace-nowrap">
+                    COMING SOON
+                  </span>
+                </article>
+              )
+            }
+            return (
+              <article
+                key={p.name}
+                className="border border-[#e2e8f0] p-6 flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <h3 className="text-lg font-bold text-[#0f172a]">{p.name}</h3>
+                  <span className="text-[10px] tracking-widest px-2 py-0.5 border border-[#15803d] text-[#15803d] whitespace-nowrap shrink-0">
+                    AVAILABLE NOW
+                  </span>
+                </div>
+                <p className="text-sm text-[#0f172a]">{p.short}</p>
+                <p className="text-sm text-[#64748b] leading-relaxed">{p.details}</p>
+                {p.href && p.cta && (
+                  <Link
+                    href={p.href}
+                    className="self-start mt-2 px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
+                  >
+                    {p.cta}
+                  </Link>
+                )}
+              </article>
+            )
+          })}
         </div>
 
         <p className="text-xs text-[#64748b] text-center mt-12">
