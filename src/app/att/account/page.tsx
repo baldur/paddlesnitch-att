@@ -1,17 +1,48 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
 import type { AuthUser } from '@/lib/types'
 
+type StravaStatus =
+  | { connected: false }
+  | { connected: true; athlete: { id: number; name: string } }
+
+// Banner copy keyed off the ?strava= query param the callback sets when it
+// finishes. Keeps redirects round-trippable instead of relying on session state.
+const STRAVA_FLASH: Record<string, { tone: 'ok' | 'err'; text: string }> = {
+  connected: { tone: 'ok', text: 'Strava connected.' },
+  denied: { tone: 'err', text: 'Strava connection cancelled.' },
+  state_mismatch: { tone: 'err', text: 'Strava connect failed (state mismatch). Please try again.' },
+  exchange_failed: { tone: 'err', text: 'Strava connect failed during token exchange. Please try again.' },
+  not_configured: { tone: 'err', text: 'Strava is not configured on this server.' },
+}
+
 export default function AccountPage() {
+  // Suspense wrapper required because the inner component reads
+  // useSearchParams (which marks the route as needing CSR bailout in
+  // Next.js 16). The fallback never shows in practice — the page renders
+  // its own "Loading…" state once the auth /me promise resolves.
+  return (
+    <Suspense fallback={null}>
+      <AccountPageInner />
+    </Suspense>
+  )
+}
+
+function AccountPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const stravaFlashKey = searchParams.get('strava')
+  const stravaFlash = stravaFlashKey ? STRAVA_FLASH[stravaFlashKey] : undefined
+
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
-  const [working, setWorking] = useState<'export' | 'delete' | null>(null)
+  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | null>(null)
   const [error, setError] = useState('')
+  const [strava, setStrava] = useState<StravaStatus | undefined>(undefined)
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -19,6 +50,27 @@ export default function AccountPage() {
       .then(setUser)
       .catch(() => setUser(null))
   }, [])
+
+  useEffect(() => {
+    fetch('/att/api/strava/status')
+      .then(r => (r.ok ? r.json() : { connected: false }))
+      .then(setStrava)
+      .catch(() => setStrava({ connected: false }))
+  }, [stravaFlashKey])
+
+  async function disconnectStrava() {
+    setError('')
+    setWorking('strava')
+    try {
+      const res = await fetch('/att/api/strava/disconnect', { method: 'POST' })
+      if (!res.ok) throw new Error('Disconnect failed')
+      setStrava({ connected: false })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Disconnect failed')
+    } finally {
+      setWorking(null)
+    }
+  }
 
   async function downloadExport() {
     setError('')
@@ -108,6 +160,57 @@ export default function AccountPage() {
                 <dt className="text-[#64748b] tracking-widest text-xs uppercase">User ID</dt>
                 <dd className="col-span-2 text-[#64748b] tabular text-xs break-all">{user.id}</dd>
               </dl>
+            </section>
+
+            <section>
+              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+                Strava integration
+              </h2>
+              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+                Connect Strava once and you can import any of your recent water-sport activities directly into a time trial — no need to export GPX files yourself. We only request read access and never post anything to your Strava account.
+              </p>
+
+              {stravaFlash && (
+                <div
+                  className={`mb-4 border px-3 py-2 text-xs ${
+                    stravaFlash.tone === 'ok'
+                      ? 'border-[#15803d] bg-[#f0fdf4] text-[#15803d]'
+                      : 'border-[#b91c1c] bg-[#fef2f2] text-[#b91c1c]'
+                  }`}
+                >
+                  {stravaFlash.text}
+                </div>
+              )}
+
+              {strava === undefined && (
+                <p className="text-xs text-[#64748b]">Checking…</p>
+              )}
+
+              {strava && !strava.connected && (
+                <a
+                  href="/att/api/strava/connect"
+                  className="inline-block px-6 py-2.5 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
+                >
+                  CONNECT STRAVA
+                </a>
+              )}
+
+              {strava && strava.connected && (
+                <div className="flex items-center justify-between gap-4 border border-[#e2e8f0] px-4 py-3">
+                  <div className="text-sm">
+                    <span className="text-[#15803d] tracking-widest text-xs mr-2">CONNECTED</span>
+                    <span className="text-[#0f172a]">{strava.athlete.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={disconnectStrava}
+                    disabled={working === 'strava'}
+                    className="px-4 py-2 border border-[#64748b] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                  >
+                    {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
+                  </button>
+                </div>
+              )}
             </section>
 
             <section>

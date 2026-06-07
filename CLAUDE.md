@@ -274,8 +274,16 @@ courses               GET / POST
 courses/[id]          GET / PATCH
 trials                GET (?courseId=) / POST
 trials/[id]           GET / PATCH (open/close)
-trials/[id]/upload    POST — parse GPX/FIT, process, rebuild leaderboard
+trials/[id]/upload    POST — parse GPX/FIT/CSV (or Strava import via {stravaActivityId}), process, rebuild leaderboard
 trials/[id]/leaderboard GET
+strava/connect        GET  — sets state cookie, 302 to Strava authorize URL
+strava/callback       GET  — verifies state, exchanges code, persists tokens, redirects to /att/account?strava=connected
+strava/status         GET  — { connected, athlete? }
+strava/disconnect     POST — revokes on Strava, deletes local tokens
+strava/activities     GET  — recent water-sport activities, refreshes token if needed
+feedback              POST — files a customer-reported GitHub issue (anti-bot: honeypot + 2s minimum)
+account/export        GET  — JSON archive of the signed-in user's data (GDPR Art. 15)
+account               DELETE — full account erasure (GDPR Art. 17)
 ```
 
 **Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
@@ -387,6 +395,39 @@ User pool is already deployed. Steps when ready:
 3. Add a Cognito domain (`userPool.addDomain(...)`) and callback URL
 4. Add "Sign in with Google" button to `/att/auth` (redirects to hosted UI)
 5. Build `/att/auth/oauth-callback/route.ts` to exchange the code for tokens, set cookie
+
+---
+
+## Strava integration
+
+Users can connect their Strava account once and then import any recent water-sport activity straight into a time trial — no GPX export required. Implementation:
+
+- **Lib**: `src/lib/strava.ts` (OAuth + read-only API wrapper, no SDK) and `src/lib/strava-storage.ts` (per-user token persistence).
+- **Token storage**: `users/{userId}/strava.json` in S3 (or `.local-data/` in dev). `getValidStravaTokens()` refreshes silently when the access token is within 2 minutes of expiry and re-persists.
+- **OAuth scopes**: `read,activity:read_all` — enough to list recent activities and pull lat/lng + time streams. Never `write` — we don't post to anyone's Strava feed.
+- **CSRF**: state cookie `strava_state` (httpOnly, 10 min) set on `/strava/connect`, verified on `/strava/callback`.
+- **Activity filter**: the picker shows only `Kayaking`, `Canoeing`, `Rowing`, `StandUpPaddling`, `VirtualRow` — see `WATER_SPORT_TYPES` in `strava.ts`. Other sports can still be imported via the URL tab.
+- **Streams → TrackPoint**: `streamsToTrack(latlng, time, startDate)` joins parallel arrays + the activity's start date into the same `TrackPoint[]` shape that GPX/FIT/CSV parsers produce, so `processTrack()` is sport-agnostic.
+- **Persisted "raw trace"**: Strava imports save a JSON snapshot (`strava-{id}.json`) instead of a GPX file. Same directory layout (`trials/{trialId}/entries/{userId}/{entryId}/trace.json`), same audit story.
+
+### Env vars
+
+| Var | Where | Notes |
+|---|---|---|
+| `STRAVA_CLIENT_ID` | env (CI / `.env.local`) | Public — appears in every authorize URL. |
+| `STRAVA_CLIENT_SECRET` | env (local dev only) | Direct override for testing without SSM. |
+| `STRAVA_CLIENT_SECRET_PARAM` | env (prod) | Name of SSM SecureString to fetch at runtime, e.g. `/att/strava-client-secret`. |
+
+Set the SSM SecureString once: `aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value '<secret>' --profile paddlesnitch`. The Lambda IAM role has `ssm:GetParameter` scoped to that exact ARN.
+
+### Redirect URIs
+
+| Env | URI |
+|---|---|
+| Local | `http://localhost:3000/att/api/strava/callback` |
+| Prod | `https://paddlesnitch.com/att/api/strava/callback` |
+
+Both must be allow-listed in the Strava API app at https://developers.strava.com.
 
 ---
 

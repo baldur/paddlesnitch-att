@@ -197,6 +197,14 @@ export class AttStack extends cdk.Stack {
         // Fine-grained scope: Issues: read/write on baldur/paddlesnitch-att.
         GITHUB_ISSUES_TOKEN_PARAM: '/att/github-issues-token',
         GITHUB_REPO: 'baldur/paddlesnitch-att',
+        // Strava API credentials. STRAVA_CLIENT_ID is public (it appears in
+        // every authorize URL) and is read from the CI environment at synth.
+        // STRAVA_CLIENT_SECRET must live in SSM as a SecureString — same
+        // pattern as the GitHub PAT. If STRAVA_CLIENT_ID is unset at deploy
+        // time the routes will return a friendly "not configured" error
+        // instead of crashing.
+        STRAVA_CLIENT_ID: process.env.STRAVA_CLIENT_ID ?? '',
+        STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
       },
     })
 
@@ -207,12 +215,15 @@ export class AttStack extends cdk.Stack {
       resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
     }))
 
-    // The feedback route fetches the GitHub PAT from SSM at runtime (CFN
-    // can't pull SecureString values at synth). Scope narrowly to the one
-    // parameter and decrypt with the default AWS-managed key.
+    // Runtime-fetched SSM SecureStrings. CFN can't resolve SecureString
+    // values at synth, so the Lambda decrypts them on first use and caches.
+    // Scope is narrow — one explicit ARN per parameter.
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
-      resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`],
+      resources: [
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`,
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
+      ],
     }))
 
     // Cognito admin operations the app calls (sign-up confirmation +
