@@ -224,6 +224,19 @@ export class AttStack extends cdk.Stack {
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
       ],
     }))
+    // kms:Decrypt is required to actually decrypt SecureString values. Without
+    // it, GetParameter(WithDecryption=true) returns the encrypted ciphertext
+    // blob silently, which is what bit us with the Strava client secret —
+    // Strava saw the ~240-char encrypted base64 as "the secret" and rejected
+    // it as Application/invalid. Restrict the grant to the SSM-service KMS
+    // context so the role can only decrypt parameters fetched through SSM.
+    serverFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['kms:Decrypt'],
+      resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+      conditions: {
+        StringEquals: { 'kms:ViaService': `ssm.${this.region}.amazonaws.com` },
+      },
+    }))
 
     // Cognito admin operations the app calls (sign-up confirmation +
     // mark-email-verified at signup so password reset works, token
