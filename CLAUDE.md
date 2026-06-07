@@ -414,11 +414,17 @@ Users can connect their Strava account once and then import any recent water-spo
 
 | Var | Where | Notes |
 |---|---|---|
-| `STRAVA_CLIENT_ID` | env (CI / `.env.local`) | Public — appears in every authorize URL. |
-| `STRAVA_CLIENT_SECRET` | env (local dev only) | Direct override for testing without SSM. |
-| `STRAVA_CLIENT_SECRET_PARAM` | env (prod) | Name of SSM SecureString to fetch at runtime, e.g. `/att/strava-client-secret`. |
+| `STRAVA_CLIENT_ID` | `.env.local` (dev only) | Direct override for local dev. Public — appears in every authorize URL. |
+| `STRAVA_CLIENT_ID_PARAM` | env (prod, set by CDK) | Name of SSM String parameter to fetch at runtime: `/att/strava-client-id`. |
+| `STRAVA_CLIENT_SECRET` | `.env.local` (dev only) | Direct override for local dev. |
+| `STRAVA_CLIENT_SECRET_PARAM` | env (prod, set by CDK) | Name of SSM SecureString to fetch at runtime: `/att/strava-client-secret`. |
 
-Set the SSM SecureString once: `aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value '<secret>' --profile paddlesnitch`. The Lambda IAM role has `ssm:GetParameter` scoped to that exact ARN.
+Both SSM parameters are set once with the AWS CLI:
+```bash
+aws ssm put-parameter --name /att/strava-client-id --type String --value '<id>' --overwrite --profile paddlesnitch --region eu-west-1
+aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value 'file://<file>' --overwrite --profile paddlesnitch --region eu-west-1
+```
+The Lambda IAM role has `ssm:GetParameter` scoped to those exact ARNs.
 
 ### Redirect URIs
 

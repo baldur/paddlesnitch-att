@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   // so we always build it off the canonical base URL — never req.url, which
   // resolves to the Lambda function URL behind CloudFront.
   const redirectUri = new URL('/att/api/strava/callback', base).toString()
-  const url = authorizeUrl(state, redirectUri)
+  const url = await authorizeUrl(state, redirectUri)
   if (!url) {
     return NextResponse.redirect(new URL('/att/account?strava=not_configured', base))
   }
