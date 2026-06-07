@@ -88,30 +88,41 @@ type TokenResponse = {
 // Exchange an authorization code for an initial token pair. Called once per
 // connect; throws on any failure since there's nothing the caller can do
 // other than show "connect failed, try again".
+//
+// Strava's /oauth/token endpoint expects form-encoded data, not JSON. Sending
+// JSON returns 401 with no useful body. Don't change the encoding without
+// verifying against a real Strava response.
 export async function exchangeCode(code: string): Promise<StravaTokens> {
   const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
 
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    grant_type: 'authorization_code',
+  })
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      grant_type: 'authorization_code',
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
   })
-  if (!res.ok) throw new Error(`strava_exchange_failed_${res.status}`)
-  const body = (await res.json()) as TokenResponse
-  const athlete = body.athlete
+  if (!res.ok) {
+    // Strava's error response carries useful detail (e.g. invalid_grant,
+    // invalid_client). Surface the first ~400 chars in the thrown error so
+    // CloudWatch logs tell us why instead of just the status code.
+    const errBody = await res.text().catch(() => '')
+    throw new Error(`strava_exchange_failed_${res.status}: ${errBody.slice(0, 400)}`)
+  }
+  const tokenBody = (await res.json()) as TokenResponse
+  const athlete = tokenBody.athlete
   const name = [athlete?.firstname, athlete?.lastname].filter(Boolean).join(' ').trim() || 'Strava athlete'
   return {
     athleteId: athlete?.id ?? 0,
     athleteName: name,
-    accessToken: body.access_token,
-    refreshToken: body.refresh_token,
-    expiresAt: body.expires_at,
+    accessToken: tokenBody.access_token,
+    refreshToken: tokenBody.refresh_token,
+    expiresAt: tokenBody.expires_at,
   }
 }
 
@@ -125,23 +136,27 @@ export async function refreshIfExpired(tokens: StravaTokens): Promise<StravaToke
   const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
 
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'refresh_token',
+    refresh_token: tokens.refreshToken,
+  })
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: tokens.refreshToken,
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
   })
-  if (!res.ok) throw new Error(`strava_refresh_failed_${res.status}`)
-  const body = (await res.json()) as TokenResponse
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '')
+    throw new Error(`strava_refresh_failed_${res.status}: ${errBody.slice(0, 400)}`)
+  }
+  const tokenBody = (await res.json()) as TokenResponse
   return {
     ...tokens,
-    accessToken: body.access_token,
-    refreshToken: body.refresh_token,
-    expiresAt: body.expires_at,
+    accessToken: tokenBody.access_token,
+    refreshToken: tokenBody.refresh_token,
+    expiresAt: tokenBody.expires_at,
   }
 }
 

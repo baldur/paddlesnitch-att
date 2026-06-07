@@ -47,13 +47,17 @@ describe('authorizeUrl', () => {
 })
 
 describe('exchangeCode', () => {
-  it('posts to /oauth/token and shapes the response into StravaTokens', async () => {
+  it('posts form-encoded data to /oauth/token and shapes the response into StravaTokens', async () => {
     mockFetch(async (url, init) => {
       expect(url).toBe('https://www.strava.com/oauth/token')
-      const body = JSON.parse(init!.body as string)
-      expect(body.grant_type).toBe('authorization_code')
-      expect(body.code).toBe('THE_CODE')
-      expect(body.client_secret).toBe('secret123')
+      // Strava's /oauth/token expects form-encoded, not JSON.
+      const headers = init!.headers as Record<string, string>
+      expect(headers['Content-Type'] ?? headers['content-type']).toBe('application/x-www-form-urlencoded')
+      const params = new URLSearchParams(init!.body as string)
+      expect(params.get('grant_type')).toBe('authorization_code')
+      expect(params.get('code')).toBe('THE_CODE')
+      expect(params.get('client_id')).toBe('12345')
+      expect(params.get('client_secret')).toBe('secret123')
       return new Response(JSON.stringify({
         access_token: 'acc',
         refresh_token: 'ref',
@@ -70,9 +74,9 @@ describe('exchangeCode', () => {
     expect(tokens.athleteName).toBe('Alice Adams')
   })
 
-  it('throws when Strava returns a non-2xx', async () => {
-    mockFetch(async () => new Response('nope', { status: 400 }))
-    await expect(exchangeCode('bad')).rejects.toThrow(/strava_exchange_failed_400/)
+  it('throws with Strava response body included when non-2xx', async () => {
+    mockFetch(async () => new Response('{"message":"Bad Request"}', { status: 400 }))
+    await expect(exchangeCode('bad')).rejects.toThrow(/strava_exchange_failed_400: \{"message":"Bad Request"\}/)
   })
 })
 
