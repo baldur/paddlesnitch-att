@@ -22,37 +22,50 @@ const WATER_SPORT_TYPES = new Set([
   'Kayaking', 'Canoeing', 'Rowing', 'StandUpPaddling', 'VirtualRow',
 ])
 
+// Both halves of the Strava OAuth app credential live in SSM. Caching is
+// module-level so warm Lambda invocations skip the SSM round-trip; the
+// process.env overrides exist for local dev and tests.
 let cachedSecret: string | undefined
+let cachedClientId: string | undefined
+
+async function fetchSsmParam(paramName: string, decrypt: boolean): Promise<string | undefined> {
+  try {
+    const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
+    const res = await ssm.send(new GetParameterCommand({
+      Name: paramName,
+      WithDecryption: decrypt,
+    }))
+    return res.Parameter?.Value
+  } catch (err) {
+    console.error(`[strava] could not fetch ${paramName} from SSM:`, err)
+    return undefined
+  }
+}
 
 async function getClientSecret(): Promise<string | undefined> {
-  // Direct env override for local dev and tests.
   const direct = process.env.STRAVA_CLIENT_SECRET
   if (direct) return direct
   if (cachedSecret) return cachedSecret
   const paramName = process.env.STRAVA_CLIENT_SECRET_PARAM
   if (!paramName) return undefined
-  try {
-    const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
-    const res = await ssm.send(new GetParameterCommand({
-      Name: paramName,
-      WithDecryption: true,
-    }))
-    cachedSecret = res.Parameter?.Value
-    return cachedSecret
-  } catch (err) {
-    console.error('[strava] could not fetch client secret from SSM:', err)
-    return undefined
-  }
+  cachedSecret = await fetchSsmParam(paramName, true)
+  return cachedSecret
 }
 
-function getClientId(): string | undefined {
-  return process.env.STRAVA_CLIENT_ID
+async function getClientId(): Promise<string | undefined> {
+  const direct = process.env.STRAVA_CLIENT_ID
+  if (direct) return direct
+  if (cachedClientId) return cachedClientId
+  const paramName = process.env.STRAVA_CLIENT_ID_PARAM
+  if (!paramName) return undefined
+  cachedClientId = await fetchSsmParam(paramName, false)
+  return cachedClientId
 }
 
 // Build the Strava authorize URL that the user is sent to. `state` is the
 // CSRF token the caller has stored in a cookie; the callback verifies it.
-export function authorizeUrl(state: string, redirectUri: string): string | null {
-  const clientId = getClientId()
+export async function authorizeUrl(state: string, redirectUri: string): Promise<string | null> {
+  const clientId = await getClientId()
   if (!clientId) return null
   const params = new URLSearchParams({
     client_id: clientId,
@@ -76,8 +89,7 @@ type TokenResponse = {
 // connect; throws on any failure since there's nothing the caller can do
 // other than show "connect failed, try again".
 export async function exchangeCode(code: string): Promise<StravaTokens> {
-  const clientId = getClientId()
-  const clientSecret = await getClientSecret()
+  const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
 
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {
@@ -110,8 +122,7 @@ export async function refreshIfExpired(tokens: StravaTokens): Promise<StravaToke
   const now = Math.floor(Date.now() / 1000)
   if (tokens.expiresAt - now > REFRESH_LEEWAY_SEC) return tokens
 
-  const clientId = getClientId()
-  const clientSecret = await getClientSecret()
+  const [clientId, clientSecret] = await Promise.all([getClientId(), getClientSecret()])
   if (!clientId || !clientSecret) throw new Error('strava_not_configured')
 
   const res = await fetch(`${STRAVA_BASE}/oauth/token`, {

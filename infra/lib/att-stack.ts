@@ -197,13 +197,11 @@ export class AttStack extends cdk.Stack {
         // Fine-grained scope: Issues: read/write on baldur/paddlesnitch-att.
         GITHUB_ISSUES_TOKEN_PARAM: '/att/github-issues-token',
         GITHUB_REPO: 'baldur/paddlesnitch-att',
-        // Strava API credentials. STRAVA_CLIENT_ID is public (it appears in
-        // every authorize URL) and is read from the CI environment at synth.
-        // STRAVA_CLIENT_SECRET must live in SSM as a SecureString — same
-        // pattern as the GitHub PAT. If STRAVA_CLIENT_ID is unset at deploy
-        // time the routes will return a friendly "not configured" error
-        // instead of crashing.
-        STRAVA_CLIENT_ID: process.env.STRAVA_CLIENT_ID ?? '',
+        // Strava API credentials. Both halves live in SSM so deploys never
+        // need GitHub-side variables or secrets — the Lambda fetches them at
+        // runtime via fetchSsmParam() in src/lib/strava.ts. Client ID is a
+        // plain String (it's public); the secret is a SecureString.
+        STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
         STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
       },
     })
@@ -222,6 +220,7 @@ export class AttStack extends cdk.Stack {
       actions: ['ssm:GetParameter'],
       resources: [
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`,
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-id`,
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
       ],
     }))

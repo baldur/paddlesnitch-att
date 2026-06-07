@@ -29,8 +29,8 @@ function mockFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 }
 
 describe('authorizeUrl', () => {
-  it('returns the authorize URL with required params and state', () => {
-    const url = authorizeUrl('csrf-token', 'http://localhost:3000/att/api/strava/callback')!
+  it('returns the authorize URL with required params and state', async () => {
+    const url = (await authorizeUrl('csrf-token', 'http://localhost:3000/att/api/strava/callback'))!
     expect(url).toContain('https://www.strava.com/oauth/authorize')
     expect(url).toContain('client_id=12345')
     expect(url).toContain('response_type=code')
@@ -39,9 +39,10 @@ describe('authorizeUrl', () => {
     expect(url).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fatt%2Fapi%2Fstrava%2Fcallback')
   })
 
-  it('returns null when the client id is not configured', () => {
+  it('returns null when the client id is not configured', async () => {
     delete process.env.STRAVA_CLIENT_ID
-    expect(authorizeUrl('s', 'http://x')).toBeNull()
+    delete process.env.STRAVA_CLIENT_ID_PARAM
+    expect(await authorizeUrl('s', 'http://x')).toBeNull()
   })
 })
 
