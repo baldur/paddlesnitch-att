@@ -351,8 +351,10 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 ### Sign-in flows
 
 1. **Email + password** — Cognito `USER_PASSWORD_AUTH` flow. Cognito enforces the password policy (8+ chars, mixed case, digit).
-2. **Magic link** — server generates a one-time token (stored 15 min), emails it via SES (prod) or console (dev). On click, the verify endpoint looks up the Cognito user by email and issues an ID-token cookie. Uses Cognito's `AdminInitiateAuth` under the hood — no Lambda triggers required.
-3. **Social (Google, Apple)** — not yet wired. When added: Cognito hosted UI handles OAuth, callback lands in `/att/auth/oauth-callback`.
+2. **Email OTP** — Cognito `CUSTOM_AUTH` flow. Our three Lambda triggers generate a 6-digit code, email it via SES, and verify it. See `infra/lambdas/cognito-auth/`.
+3. **Sign in with Strava** — server-driven OAuth. Routes: `/att/api/auth/strava/init` sets a CSRF state cookie and 302s to `strava.com/oauth/authorize` with `scope=read,activity:read_all,profile:read_all`. `/att/api/auth/strava/callback` exchanges the code, fetches the authenticated athlete's profile (`/api/v3/athlete` — gives the verified email, which token exchange does not), then resolves the Cognito user by trying in order: (a) `strava-athletes/{athleteId}.json` index, (b) `cognito ListUsers` with `email = ...` (auto-link to an existing email account), (c) `AdminCreateUser` with a random unused password. Sign-in goes through the existing `CUSTOM_AUTH` flow with a server-generated one-time token passed via `ClientMetadata.preset_otp` — the `CreateAuthChallenge` Lambda detects it, stashes it as the expected answer, and skips sending an email. Only the server can do both halves of that dance, so the path is server-trusted.
+4. **Magic link** — server generates a one-time token (stored 15 min), emails it via SES (prod) or console (dev). On click, the verify endpoint looks up the Cognito user by email and issues an ID-token cookie. Uses Cognito's `AdminInitiateAuth` under the hood — no Lambda triggers required.
+5. **Social (Google, Apple)** — not yet wired. When added: Cognito hosted UI handles OAuth, callback lands in `/att/auth/oauth-callback`.
 
 ### Session mechanics
 
@@ -378,6 +380,8 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 - `POST /att/api/auth/login` — Cognito `InitiateAuth` (USER_PASSWORD_AUTH), sets `tt_id` + `tt_refresh`
 - `POST /att/api/auth/logout` — clears both cookies, calls Cognito `RevokeToken`
 - `GET  /att/api/auth/me` — verifies JWT (and silent-refreshes if expired), returns user claims or 401
+- `GET  /att/api/auth/strava/init` — Strava sign-in: state cookie + redirect to Strava with `profile:read_all`
+- `GET  /att/api/auth/strava/callback` — finds/creates Cognito user, runs `CUSTOM_AUTH` with preset token, sets `tt_id` + `tt_refresh`, redirects to `next`
 - `POST /att/api/auth/magic-request` — disabled in v1 (returns 501 with friendly message)
 - `GET  /att/api/auth/magic-verify` — disabled in v1 (redirects to `/att/auth?error=magic_disabled`)
 

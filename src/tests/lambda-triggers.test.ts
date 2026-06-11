@@ -21,6 +21,7 @@ type ChallengeEvent = {
     userAttributes: Record<string, string>
     privateChallengeParameters: Record<string, string>
     challengeAnswer: string
+    clientMetadata?: Record<string, string>
   }
   response: Record<string, unknown>
 }
@@ -82,6 +83,15 @@ describe('CreateAuthChallenge', () => {
     const event = blank()
     event.request.userAttributes = {}
     await expect(createAuth(event)).rejects.toThrow(/email/i)
+  })
+
+  it('uses clientMetadata.preset_otp as the answer and skips sending email', async () => {
+    const event = blank()
+    event.request.clientMetadata = { preset_otp: 'deadbeef-server-token' }
+    const out = await createAuth(event)
+    const priv = out.response.privateChallengeParameters as { otp: string }
+    expect(priv.otp).toBe('deadbeef-server-token')
+    expect(out.response.challengeMetadata).toBe('PRESET_TOKEN')
   })
 })
 

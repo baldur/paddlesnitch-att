@@ -62,6 +62,18 @@ export const handler = async (event) => {
     throw new Error('CreateAuthChallenge: user has no email attribute')
   }
 
+  // Server-trusted sign-in path (Strava): the caller pre-generates a one-time
+  // token, passes it through ClientMetadata.preset_otp, and uses the same
+  // value as the challenge answer. Skip sending an email — only our backend
+  // can do both halves of the dance, so there's nothing to leak via email.
+  const preset = event.request.clientMetadata?.preset_otp
+  if (preset) {
+    event.response.publicChallengeParameters = { email }
+    event.response.privateChallengeParameters = { otp: String(preset) }
+    event.response.challengeMetadata = 'PRESET_TOKEN'
+    return event
+  }
+
   const code = generateCode()
   await sendCode(email, code)
 

@@ -4,6 +4,9 @@ import {
   AdminConfirmSignUpCommand,
   AdminUpdateUserAttributesCommand,
   AdminDeleteUserCommand,
+  AdminCreateUserCommand,
+  AdminSetUserPasswordCommand,
+  ListUsersCommand,
   InitiateAuthCommand,
   RespondToAuthChallengeCommand,
   RevokeTokenCommand,
@@ -16,6 +19,7 @@ import {
   UserNotFoundException,
   InvalidPasswordException,
 } from '@aws-sdk/client-cognito-identity-provider'
+import { randomBytes } from 'crypto'
 import { JwtRsaVerifier } from 'aws-jwt-verify'
 import { SimpleJwksCache } from 'aws-jwt-verify/jwk'
 import type { AuthUser } from './types'
@@ -277,6 +281,104 @@ export async function deleteUser(email: string): Promise<void> {
     UserPoolId: USER_POOL_ID,
     Username: email,
   }))
+}
+
+// Look up an existing user by their verified email. Returns null when the
+// email isn't present. Used by the Strava sign-in flow to auto-link a
+// Strava login to a pre-existing email/password account.
+export async function findUserByEmail(email: string): Promise<{ sub: string; email: string; displayName: string } | null> {
+  const client = makeClient()
+  // ListUsers with a filter expression is the supported way to search by
+  // attribute. We limit to 1 — emails are alias-unique so there's never
+  // more than one match in a well-formed pool.
+  const res = await client.send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `email = "${email.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  const user = res.Users?.[0]
+  if (!user) return null
+  const attr = (name: string) => user.Attributes?.find(a => a.Name === name)?.Value ?? ''
+  return {
+    sub: attr('sub'),
+    email: attr('email'),
+    displayName: attr('name') || (attr('email').split('@')[0]),
+  }
+}
+
+// Create a Cognito user for a Strava sign-in where no pre-existing account
+// was found. We never want the user to see Cognito's invitation email
+// (MessageAction=SUPPRESS) and we set a random permanent password they
+// will never use — sign-in goes through CUSTOM_AUTH instead. Email is
+// marked verified because Strava already verified it.
+export async function adminCreateUserForStrava(
+  email: string,
+  displayName: string,
+): Promise<{ sub: string } | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    const res = await client.send(new AdminCreateUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      MessageAction: 'SUPPRESS',
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+        { Name: 'name', Value: displayName },
+      ],
+    }))
+    // Set a permanent, never-used password so the account isn't stuck in
+    // FORCE_CHANGE_PASSWORD state (which would block CUSTOM_AUTH).
+    const random = randomBytes(32).toString('base64') + 'A1!a'
+    await client.send(new AdminSetUserPasswordCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      Password: random,
+      Permanent: true,
+    }))
+    const sub = res.User?.Attributes?.find(a => a.Name === 'sub')?.Value
+    if (!sub) return { error: 'unknown' }
+    return { sub }
+  } catch (err) {
+    return { error: classify(err) }
+  }
+}
+
+// Sign in via the Custom Auth flow, bypassing the password. The Strava
+// sign-in callback uses this after it has verified the user's identity
+// against Strava. The flow is:
+//   1. InitiateAuth(CUSTOM_AUTH) with `presetToken` passed in
+//      ClientMetadata.preset_otp. The CreateAuthChallenge Lambda reads it
+//      and stores it as the expected answer.
+//   2. RespondToAuthChallenge with the same token as the answer.
+//   3. VerifyAuthChallenge confirms; tokens are issued.
+// Only our server can do both halves, so only our server can trigger this
+// sign-in path.
+export async function customAuthSignIn(
+  email: string,
+  presetToken: string,
+): Promise<TokenPair | { error: CognitoError }> {
+  const client = makeClient()
+  try {
+    const init = await client.send(new InitiateAuthCommand({
+      AuthFlow: 'CUSTOM_AUTH',
+      ClientId: CLIENT_ID,
+      AuthParameters: { USERNAME: email },
+      ClientMetadata: { preset_otp: presetToken },
+    }))
+    if (!init.Session) return { error: 'unknown' }
+    const resp = await client.send(new RespondToAuthChallengeCommand({
+      ChallengeName: 'CUSTOM_CHALLENGE',
+      ClientId: CLIENT_ID,
+      Session: init.Session,
+      ChallengeResponses: { USERNAME: email, ANSWER: presetToken },
+    }))
+    const auth = resp.AuthenticationResult
+    if (!auth?.IdToken || !auth?.RefreshToken) return { error: 'unknown' }
+    return { idToken: auth.IdToken, refreshToken: auth.RefreshToken }
+  } catch (err) {
+    return { error: classify(err) }
+  }
 }
 
 export async function verifyIdToken(idToken: string): Promise<AuthUser | null> {
