@@ -28,3 +28,22 @@ export async function getValidStravaTokens(userId: string): Promise<StravaTokens
   }
   return fresh
 }
+
+// Reverse index: Strava athlete id -> Cognito user id. The sign-in flow needs
+// to find an existing account by athlete id (set at link or first sign-in).
+// We use S3 as the index instead of scanning users/ because S3 list ops are
+// slow and expensive; a direct GET by athlete id is O(1).
+const athleteKey = (athleteId: number) => `strava-athletes/${athleteId}.json`
+
+export async function getUserIdByAthleteId(athleteId: number): Promise<string | null> {
+  const rec = await getJson<{ userId: string }>(athleteKey(athleteId))
+  return rec?.userId ?? null
+}
+
+export async function putAthleteIndex(athleteId: number, userId: string): Promise<void> {
+  await putJson(athleteKey(athleteId), { userId })
+}
+
+export async function deleteAthleteIndex(athleteId: number): Promise<void> {
+  await deleteObject(athleteKey(athleteId))
+}

@@ -79,6 +79,11 @@ async function getClientId(): Promise<string | undefined> {
 
 // Build the Strava authorize URL that the user is sent to. `state` is the
 // CSRF token the caller has stored in a cookie; the callback verifies it.
+//
+// We always request `profile:read_all` so we can read the user's verified
+// Strava email via /api/v3/athlete. The link flow doesn't strictly need
+// it, but the sign-in flow does, and asking for the wider scope once is
+// cleaner than maintaining two consent screens for the same user.
 export async function authorizeUrl(state: string, redirectUri: string): Promise<string | null> {
   const clientId = await getClientId()
   if (!clientId) return null
@@ -87,7 +92,7 @@ export async function authorizeUrl(state: string, redirectUri: string): Promise<
     response_type: 'code',
     redirect_uri: redirectUri,
     approval_prompt: 'auto',
-    scope: 'read,activity:read_all',
+    scope: 'read,activity:read_all,profile:read_all',
     state,
   })
   return `${STRAVA_BASE}/oauth/authorize?${params.toString()}`
@@ -172,6 +177,40 @@ export async function refreshIfExpired(tokens: StravaTokens): Promise<StravaToke
     accessToken: tokenBody.access_token,
     refreshToken: tokenBody.refresh_token,
     expiresAt: tokenBody.expires_at,
+  }
+}
+
+// Fetch the authenticated athlete's verified profile. Token exchange returns
+// athlete data but NOT the email — that requires a separate /api/v3/athlete
+// call with the profile:read_all scope. Used by the sign-in flow to find or
+// create the matching Cognito user. Returns null if anything goes wrong;
+// the caller decides whether to surface an error.
+export type StravaAthleteProfile = {
+  id: number
+  email: string                // may be empty if Strava hasn't surfaced one
+  firstname: string
+  lastname: string
+}
+
+export async function getAthleteProfile(accessToken: string): Promise<StravaAthleteProfile | null> {
+  try {
+    const res = await fetch(`${API_BASE}/athlete`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) {
+      console.error(`[strava] getAthleteProfile failed: HTTP ${res.status}`)
+      return null
+    }
+    const body = (await res.json()) as { id: number; email?: string; firstname?: string; lastname?: string }
+    return {
+      id: body.id,
+      email: body.email ?? '',
+      firstname: body.firstname ?? '',
+      lastname: body.lastname ?? '',
+    }
+  } catch (err) {
+    console.error('[strava] getAthleteProfile threw:', err)
+    return null
   }
 }
 

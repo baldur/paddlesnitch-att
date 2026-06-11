@@ -19,11 +19,22 @@ function AuthForm() {
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(
-    searchParams.get('error') === 'magic_disabled'
-      ? 'Magic link sign-in is temporarily unavailable. Please use email and password.'
-      : ''
-  )
+  // ?error= comes back from server-driven flows (Strava OAuth callback,
+  // legacy magic-link). Map known keys to user-friendly messages once.
+  const initialError = (() => {
+    const e = searchParams.get('error')
+    if (e === 'magic_disabled') return 'Magic link sign-in is temporarily unavailable. Please use email and password.'
+    if (e === 'strava_denied') return 'You cancelled the Strava sign-in.'
+    if (e === 'strava_state_mismatch') return 'Strava sign-in failed (state mismatch). Please try again.'
+    if (e === 'strava_exchange_failed') return 'Strava sign-in failed during token exchange. Please try again.'
+    if (e === 'strava_profile_failed') return 'Could not load your Strava profile. Please try again.'
+    if (e === 'strava_no_email') return 'Your Strava account does not have a verified email. Please sign up with email and password instead.'
+    if (e === 'strava_user_create_failed') return 'Could not create an account from your Strava profile. Please try email sign-up.'
+    if (e === 'strava_signin_failed') return 'Could not complete Strava sign-in. Please try again.'
+    if (e === 'strava_not_configured') return 'Strava sign-in is not configured on this server.'
+    return ''
+  })()
+  const [error, setError] = useState(initialError)
   const [loading, setLoading] = useState(false)
   // OTP flow state. `session` is non-empty once the user has requested a code
   // and we're waiting for them to type it in.
@@ -130,8 +141,25 @@ function AuthForm() {
         : 'text-[#64748b] hover:text-[#0f172a]'
     }`
 
+  // Sign in / sign up via Strava goes through a server-driven OAuth round
+  // trip; the button is a plain <a> rather than a form submit because the
+  // /init endpoint sets a CSRF state cookie and 302s to Strava.
+  const stravaHref = `/att/api/auth/strava/init?next=${encodeURIComponent(next)}`
+
   return (
     <div className="w-full max-w-sm">
+      <a
+        href={stravaHref}
+        className="flex items-center justify-center gap-2 px-6 py-2.5 mb-6 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
+      >
+        CONTINUE WITH STRAVA
+      </a>
+      <div className="flex items-center gap-3 mb-6 text-xs text-[#94a3b8] tracking-widest">
+        <span className="flex-1 h-px bg-[#e2e8f0]" />
+        OR
+        <span className="flex-1 h-px bg-[#e2e8f0]" />
+      </div>
+
       <div className="flex border-b border-[#e2e8f0] mb-8">
         <button type="button" onClick={() => { setTab('signin'); setError('') }} className={tabClass('signin')}>
           SIGN IN

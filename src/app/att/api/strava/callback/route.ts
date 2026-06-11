@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getAuthUser } from '@/lib/auth'
 import { exchangeCode } from '@/lib/strava'
-import { putStravaTokens } from '@/lib/strava-storage'
+import { putStravaTokens, putAthleteIndex } from '@/lib/strava-storage'
 import { canonicalBaseUrl } from '@/lib/url'
 
 // Strava redirects here after the user approves (or denies). Verify the state
@@ -40,6 +40,10 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await exchangeCode(code)
     await putStravaTokens(user.id, tokens)
+    // Index the athlete id -> user mapping so future "Sign in with Strava"
+    // round-trips for this user land on this account instead of creating
+    // a duplicate.
+    if (tokens.athleteId) await putAthleteIndex(tokens.athleteId, user.id)
   } catch (err) {
     console.error('[strava callback] exchange failed', err)
     return clearStateCookie(NextResponse.redirect(new URL('/att/account?strava=exchange_failed', base)))

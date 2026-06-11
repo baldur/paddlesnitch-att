@@ -6,6 +6,7 @@ import {
   listActivities,
   getActivityStreams,
   streamsToTrack,
+  getAthleteProfile,
 } from './strava'
 
 const originalFetch = global.fetch
@@ -164,6 +165,41 @@ describe('getActivityStreams', () => {
     expect(out!.latlng).toHaveLength(2)
     expect(out!.time).toEqual([0, 60])
     expect(out!.startDate).toBe('2026-01-01T08:00:00Z')
+  })
+})
+
+describe('getAthleteProfile', () => {
+  it('returns trimmed profile when Strava responds 200', async () => {
+    mockFetch(async (url) => {
+      expect(url).toBe('https://www.strava.com/api/v3/athlete')
+      return new Response(JSON.stringify({
+        id: 151600,
+        email: 'baldur@example.com',
+        firstname: 'Baldur',
+        lastname: 'Gudbjornsson',
+        bio: 'should be dropped',
+      }), { status: 200 })
+    })
+    const profile = await getAthleteProfile('access-token')
+    expect(profile).toEqual({
+      id: 151600,
+      email: 'baldur@example.com',
+      firstname: 'Baldur',
+      lastname: 'Gudbjornsson',
+    })
+  })
+
+  it('returns null on non-2xx so the sign-in flow surfaces a friendly error', async () => {
+    mockFetch(async () => new Response('forbidden', { status: 403 }))
+    expect(await getAthleteProfile('access-token')).toBeNull()
+  })
+
+  it('returns empty string for missing email so the caller can route to a noEmail error', async () => {
+    mockFetch(async () => new Response(JSON.stringify({
+      id: 1, firstname: 'X', lastname: 'Y',
+    }), { status: 200 }))
+    const profile = await getAthleteProfile('access-token')
+    expect(profile?.email).toBe('')
   })
 })
 
