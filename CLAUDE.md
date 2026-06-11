@@ -422,9 +422,20 @@ Users can connect their Strava account once and then import any recent water-spo
 Both SSM parameters are set once with the AWS CLI:
 ```bash
 aws ssm put-parameter --name /att/strava-client-id --type String --value '<id>' --overwrite --profile paddlesnitch --region eu-west-1
-aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value 'file://<file>' --overwrite --profile paddlesnitch --region eu-west-1
+
+# IMPORTANT: write the secret to a tempfile with `printf '%s'` so there is
+# NO trailing newline. `grep ... > file` or `echo ... > file` both append
+# a \n, which AWS CLI stores verbatim via `file://`. The Lambda then ships
+# a 41-char "secret" to Strava and gets back 401 Application/""/invalid.
+# Bash $(...) strips trailing newlines on read, so length checks via
+# ${#VAL} will lie. Verify with `wc -c < file`.
+SECRET_FILE=$(mktemp)
+printf '%s' '<the 40-char hex secret>' > "$SECRET_FILE"
+aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value "file://$SECRET_FILE" --overwrite --profile paddlesnitch --region eu-west-1
+rm "$SECRET_FILE"
 ```
-The Lambda IAM role has `ssm:GetParameter` scoped to those exact ARNs.
+
+The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
 
 ### Redirect URIs
 
