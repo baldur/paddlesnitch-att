@@ -42,13 +42,28 @@ async function fetchSsmParam(paramName: string, decrypt: boolean): Promise<strin
   }
 }
 
+// Strava client secret is 40 lowercase hex chars. SSM SecureString fetches
+// without kms:Decrypt permission silently return a ~240-char base64 KMS
+// blob starting with "AQICAH" — same shape, very different value. Validate
+// so we don't ship that to Strava and so we don't poison the cache.
+const STRAVA_SECRET_FORMAT = /^[0-9a-f]{40}$/
+
 async function getClientSecret(): Promise<string | undefined> {
   const direct = process.env.STRAVA_CLIENT_SECRET
   if (direct) return direct
   if (cachedSecret) return cachedSecret
   const paramName = process.env.STRAVA_CLIENT_SECRET_PARAM
   if (!paramName) return undefined
-  cachedSecret = await fetchSsmParam(paramName, true)
+  const value = await fetchSsmParam(paramName, true)
+  if (value && !STRAVA_SECRET_FORMAT.test(value)) {
+    // The blob shape ("AQICAH..." 240+ chars) is the standard tell that SSM
+    // returned undecrypted ciphertext. Don't cache it — next call retries
+    // and a transient IAM fix takes effect immediately.
+    const looksLikeCiphertext = value.startsWith('AQICAH') && value.length > 100
+    console.error(`[strava] SSM returned a value that does not look like a Strava secret (len=${value.length}, ciphertext-shaped=${looksLikeCiphertext}). Refusing to cache.`)
+    return undefined
+  }
+  cachedSecret = value
   return cachedSecret
 }
 
