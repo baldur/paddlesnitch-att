@@ -3,10 +3,14 @@ import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, listKeys } from '@/lib/storage'
 import { canViewCourse, isListedForViewer } from '@/lib/permissions'
-import type { TrialMetadata, CourseMetadata, Visibility } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
 
 function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private'
+}
+
+function isParticipation(v: unknown): v is Participation {
+  return v === 'open' || v === 'invitational'
 }
 
 export async function GET(req: NextRequest) {
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { courseId, name, date, visibility } = body
+  const { courseId, name, date, visibility, participation } = body
   if (!courseId || !name || !date) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -60,6 +64,8 @@ export async function POST(req: NextRequest) {
     status: 'open',
     adminUserId: user.id,
     visibility: clampedVisibility,
+    participation: isParticipation(participation) ? participation : 'open',
+    invitedUserIds: [],
     createdAt: new Date().toISOString(),
   }
   await putJson(`trials/${id}/metadata.json`, trial)

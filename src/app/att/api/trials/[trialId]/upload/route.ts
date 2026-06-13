@@ -9,7 +9,7 @@ import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
-import { canViewTrial } from '@/lib/permissions'
+import { canSubmitToTrial } from '@/lib/permissions'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint } from '@/lib/types'
 
 type StoredEntry = {
@@ -146,9 +146,11 @@ export async function POST(
   const { trialId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
-  // Submission requires view access. Phase 1: private trial → owner only.
-  // Phase 2 will widen this for invitational trials.
-  if (!canViewTrial(trial, user)) {
+  // Submission gate: combines visibility AND participation. A 404 covers
+  // both "can't see" and "can see but not invited" so the route doesn't
+  // distinguish — invitational trials don't leak their guest list through
+  // a 403 vs 404 split.
+  if (!canSubmitToTrial(trial, user)) {
     return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
   }
   if (trial.status !== 'open')

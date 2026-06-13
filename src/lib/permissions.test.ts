@@ -4,6 +4,7 @@ import {
   canViewTrial,
   canManageCourse,
   canManageTrial,
+  canSubmitToTrial,
   isListedForViewer,
 } from './permissions'
 import type { CourseMetadata, TrialMetadata, AuthUser } from './types'
@@ -30,7 +31,11 @@ function makeCourse(visibility: 'public' | 'private'): CourseMetadata {
   }
 }
 
-function makeTrial(visibility: 'public' | 'private'): TrialMetadata {
+function makeTrial(
+  visibility: 'public' | 'private',
+  participation: 'open' | 'invitational' = 'open',
+  invitedUserIds: string[] = [],
+): TrialMetadata {
   return {
     id: 't1',
     courseId: 'c1',
@@ -39,6 +44,8 @@ function makeTrial(visibility: 'public' | 'private'): TrialMetadata {
     status: 'open',
     adminUserId: owner.id,
     visibility,
+    participation,
+    invitedUserIds,
     createdAt: '2026-01-01T00:00:00Z',
   }
 }
@@ -120,6 +127,68 @@ describe('managing a trial', () => {
   it('a non-owner cannot manage any trial', () => {
     expect(canManageTrial(makeTrial('public'), other)).toBe(false)
     expect(canManageTrial(makeTrial('private'), other)).toBe(false)
+  })
+})
+
+describe('submitting to an open trial', () => {
+  it('any signed-in viewer can submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'open'), other)).toBe(true)
+  })
+  it('the owner can submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'open'), owner)).toBe(true)
+  })
+  it('an unauthenticated visitor cannot submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'open'), null)).toBe(false)
+  })
+  it('a non-owner cannot submit to a private open trial they cannot see', () => {
+    expect(canSubmitToTrial(makeTrial('private', 'open'), other)).toBe(false)
+  })
+})
+
+describe('submitting to an invitational trial', () => {
+  it('an invited user can submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'invitational', [other.id]), other)).toBe(true)
+  })
+  it('the owner can submit even when not in invitedUserIds', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'invitational', []), owner)).toBe(true)
+  })
+  it('a non-invited signed-in user cannot submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'invitational', []), other)).toBe(false)
+  })
+  it('an unauthenticated visitor cannot submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'invitational', []), null)).toBe(false)
+  })
+  it('a private invitational trial: the owner and invitees can submit', () => {
+    const invited = { id: 'invited-1', email: 'i@x', displayName: 'I' }
+    const trial = makeTrial('private', 'invitational', [invited.id])
+    expect(canSubmitToTrial(trial, invited)).toBe(true)
+    expect(canSubmitToTrial(trial, owner)).toBe(true)
+  })
+
+  it('a private invitational trial: a non-invited signed-in user is still blocked', () => {
+    const trial = makeTrial('private', 'invitational', [])
+    expect(canSubmitToTrial(trial, other)).toBe(false)
+  })
+})
+
+describe('an invitee of a private invitational trial', () => {
+  // canViewTrial was widened in phase 2 so invitees see the leaderboard of
+  // private trials they're racing on. This bracket pins that down.
+  const invited: AuthUser = { id: 'invited-2', email: 'inv@x', displayName: 'Inv' }
+
+  it('can see the trial detail', () => {
+    const trial = makeTrial('private', 'invitational', [invited.id])
+    expect(canViewTrial(trial, invited)).toBe(true)
+  })
+
+  it('still cannot manage the trial', () => {
+    const trial = makeTrial('private', 'invitational', [invited.id])
+    expect(canManageTrial(trial, invited)).toBe(false)
+  })
+
+  it('a non-invited signed-in user still gets a flat no', () => {
+    const trial = makeTrial('private', 'invitational', [])
+    expect(canViewTrial(trial, other)).toBe(false)
   })
 })
 
