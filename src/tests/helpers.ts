@@ -106,6 +106,22 @@ export function makeGpxBuffer(points: Array<[number, number, string]>): ArrayBuf
   return new TextEncoder().encode(gpx).buffer as ArrayBuffer
 }
 
+// Plants a result.json under a trial so courseHasEntries() sees the trial
+// as "raced on" without going through the full upload pipeline.
+export async function plantEntry(trialId: string, userId: string): Promise<void> {
+  const entryId = nanoid()
+  await putJson(`trials/${trialId}/entries/${userId}/${entryId}/result.json`, {
+    entryId, userId, displayName: 'planted',
+    submittedAt: new Date().toISOString(),
+    filename: 'planted.gpx',
+    raceDate: '2024-06-01',
+    traceRecordedDate: '2024-06-01',
+    boatClass: 'K1',
+    crew: [{ seat: 1, name: 'planted' }],
+    result: { startTimestamp: '2024-06-01T10:00:00Z', finishTimestamp: '2024-06-01T10:01:00Z', totalElapsedSeconds: 60, splits: [] },
+  })
+}
+
 export function makeTestTrack(): Array<[number, number, string]> {
   return Array.from({ length: 11 }, (_, i) => [
     parseFloat((51.50 + i * 0.01).toFixed(4)),
