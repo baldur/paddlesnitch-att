@@ -5,6 +5,8 @@ import AuthNav from '@/components/AuthNav'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry } from '@/lib/types'
 import { formatTime } from '@/lib/geo'
 
+type Invitee = { sub: string; email: string; displayName: string }
+
 export default function TrialAdminPage({
   params,
 }: {
@@ -15,6 +17,10 @@ export default function TrialAdminPage({
   const [course, setCourse] = useState<CourseMetadata | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [toggling, setToggling] = useState(false)
+  const [invitees, setInvitees] = useState<Invitee[]>([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState('')
 
   const load = async () => {
     const t = await fetch(`/att/api/trials/${trialId}`).then(r => r.json())
@@ -25,6 +31,12 @@ export default function TrialAdminPage({
     ])
     setCourse(c)
     setLeaderboard(lb)
+    if (t.participation === 'invitational') loadInvitees()
+  }
+
+  const loadInvitees = async () => {
+    const res = await fetch(`/att/api/trials/${trialId}/invitations`)
+    if (res.ok) setInvitees((await res.json()).invitees)
   }
 
   useEffect(() => { load() }, [trialId])
@@ -51,6 +63,47 @@ export default function TrialAdminPage({
       body: JSON.stringify({ visibility: next }),
     }).then(r => r.json())
     setTrial(updated)
+  }
+
+  const toggleParticipation = async () => {
+    if (!trial) return
+    const next = trial.participation === 'open' ? 'invitational' : 'open'
+    const updated = await fetch(`/att/api/trials/${trialId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participation: next }),
+    }).then(r => r.json())
+    setTrial(updated)
+    if (updated.participation === 'invitational') loadInvitees()
+  }
+
+  const submitInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inviteEmail.trim()) return
+    setInviting(true)
+    setInviteError('')
+    try {
+      const res = await fetch(`/att/api/trials/${trialId}/invitations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Could not invite')
+      }
+      setInviteEmail('')
+      await loadInvitees()
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Could not invite')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const uninvite = async (sub: string) => {
+    await fetch(`/att/api/trials/${trialId}/invitations/${sub}`, { method: 'DELETE' })
+    setInvitees(prev => prev.filter(i => i.sub !== sub))
   }
 
   if (!trial || !course) {
@@ -133,8 +186,87 @@ export default function TrialAdminPage({
             >
               {trial.visibility === 'public' ? 'PUBLIC ↔ PRIVATE' : 'PRIVATE ↔ PUBLIC'}
             </button>
+            <span
+              className={`text-xs px-2 py-0.5 border ${
+                trial.participation === 'open'
+                  ? 'border-[#15803d] text-[#15803d]'
+                  : 'border-[#0369a1] text-[#0369a1]'
+              }`}
+            >
+              {trial.participation.toUpperCase()}
+            </span>
+            <button
+              type="button"
+              onClick={toggleParticipation}
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+            >
+              {trial.participation === 'open' ? 'MAKE INVITATIONAL' : 'MAKE OPEN'}
+            </button>
           </div>
         </section>
+
+        {/* Invitee management — only meaningful when participation is invitational.
+            Open trials hide the section so we don't suggest the data is there. */}
+        {trial.participation === 'invitational' && (
+          <section>
+            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">
+              Invitees ({invitees.length})
+            </h2>
+
+            <form onSubmit={submitInvite} className="flex flex-col sm:flex-row gap-2 mb-4">
+              <input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="email of someone with an account"
+                className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors flex-1"
+              />
+              <button
+                type="submit"
+                disabled={inviting || !inviteEmail.trim()}
+                className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {inviting ? 'INVITING…' : 'INVITE'}
+              </button>
+            </form>
+
+            {inviteError && (
+              <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs mb-4">
+                {inviteError}
+              </div>
+            )}
+
+            {invitees.length === 0 ? (
+              <p className="text-xs text-[#64748b]">
+                No one is invited yet. Only you can submit until you invite someone.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {invitees.map(i => (
+                  <div
+                    key={i.sub}
+                    className="flex items-center justify-between border border-[#e2e8f0] px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[#0f172a] truncate">{i.displayName}</div>
+                      {i.email && (
+                        <div className="text-xs text-[#64748b] truncate">{i.email}</div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => uninvite(i.sub)}
+                      className="text-xs text-[#64748b] hover:text-[#b91c1c] tracking-widest"
+                    >
+                      REMOVE
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         <section>
           <div className="flex items-center justify-between mb-4">
