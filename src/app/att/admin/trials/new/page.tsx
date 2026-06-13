@@ -16,6 +16,7 @@ function NewTrialForm() {
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [visibility, setVisibility] = useState<'public' | 'private'>('public')
+  const [participation, setParticipation] = useState<'open' | 'invitational'>('open')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
@@ -37,7 +38,7 @@ function NewTrialForm() {
       const res = await fetch('/att/api/trials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, name: name.trim(), date, visibility }),
+        body: JSON.stringify({ courseId, name: name.trim(), date, visibility, participation }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -167,6 +168,33 @@ function NewTrialForm() {
               : visibility === 'public'
                 ? 'The leaderboard will be visible to anyone.'
                 : 'Only you can see this trial and its leaderboard.'}
+          </p>
+        </div>
+
+        {/* Participation. Open = any viewer can submit; invitational = only
+            users you invite can submit. The owner can always submit. */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs text-[#64748b] tracking-widest">WHO CAN SUBMIT</label>
+          <div className="flex gap-2">
+            {(['open', 'invitational'] as const).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setParticipation(v)}
+                className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
+                  participation === v
+                    ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
+                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                }`}
+              >
+                {v.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-[#64748b]">
+            {participation === 'open'
+              ? 'Anyone who can see the trial can submit a trace.'
+              : 'You will choose who can submit after the trial is created.'}
           </p>
         </div>
 

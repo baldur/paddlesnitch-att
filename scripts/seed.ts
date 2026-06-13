@@ -219,6 +219,8 @@ async function main() {
     date: '2025-04-12', status: 'closed',
     adminUserId: admin.id,
     visibility: 'public',
+    participation: 'open',
+    invitedUserIds: [],
     createdAt: '2025-04-01T08:00:00.000Z',
   }
   await write(`trials/${t1Id}/metadata.json`, trial1)
@@ -230,6 +232,8 @@ async function main() {
     date: '2025-07-19', status: 'closed',
     adminUserId: admin.id,
     visibility: 'public',
+    participation: 'open',
+    invitedUserIds: [],
     createdAt: '2025-07-01T08:00:00.000Z',
   }
   await write(`trials/${t2Id}/metadata.json`, trial2)
@@ -241,6 +245,8 @@ async function main() {
     date: '2025-06-07', status: 'open',
     adminUserId: admin.id,
     visibility: 'public',
+    participation: 'open',
+    invitedUserIds: [],
     createdAt: '2025-05-20T08:00:00.000Z',
   }
   await write(`trials/${t3Id}/metadata.json`, trial3)

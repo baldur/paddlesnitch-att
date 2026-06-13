@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
-import type { TrialMetadata, CourseMetadata, Visibility } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
 
 type Params = { params: Promise<{ trialId: string }> }
 
 function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private'
+}
+
+function isParticipation(v: unknown): v is Participation {
+  return v === 'open' || v === 'invitational'
 }
 
 export async function GET(_: NextRequest, { params }: Params) {
@@ -48,6 +52,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.status === 'open' || body.status === 'closed') next.status = body.status
   if (isVisibility(body.visibility)) {
     next.visibility = course?.visibility === 'private' ? 'private' : body.visibility
+  }
+  if (isParticipation(body.participation)) {
+    // Flipping from invitational to open keeps the invitee list intact —
+    // it's just ignored. Flipping back doesn't surprise the owner.
+    next.participation = body.participation
   }
   await putJson(`trials/${trialId}/metadata.json`, next)
   return NextResponse.json(next)

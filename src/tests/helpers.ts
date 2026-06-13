@@ -76,7 +76,11 @@ export async function makeTrial(
   courseId: string,
   adminUserId: string,
   status: 'open' | 'closed' = 'open',
-  opts: { visibility?: 'public' | 'private' } = {},
+  opts: {
+    visibility?: 'public' | 'private'
+    participation?: 'open' | 'invitational'
+    invitedUserIds?: string[]
+  } = {},
 ): Promise<TrialMetadata> {
   const trial: TrialMetadata = {
     id: nanoid(),
@@ -86,6 +90,8 @@ export async function makeTrial(
     status,
     adminUserId,
     visibility: opts.visibility ?? 'public',
+    participation: opts.participation ?? 'open',
+    invitedUserIds: opts.invitedUserIds ?? [],
     createdAt: new Date().toISOString(),
   }
   await putJson(`trials/${trial.id}/metadata.json`, trial)

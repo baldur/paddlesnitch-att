@@ -283,10 +283,21 @@ export async function deleteUser(email: string): Promise<void> {
   }))
 }
 
+type UserSummary = { sub: string; email: string; displayName: string }
+
+function userSummaryFromAttributes(user: { Attributes?: Array<{ Name?: string; Value?: string }> }): UserSummary {
+  const attr = (name: string) => user.Attributes?.find(a => a.Name === name)?.Value ?? ''
+  return {
+    sub: attr('sub'),
+    email: attr('email'),
+    displayName: attr('name') || (attr('email').split('@')[0]),
+  }
+}
+
 // Look up an existing user by their verified email. Returns null when the
 // email isn't present. Used by the Strava sign-in flow to auto-link a
 // Strava login to a pre-existing email/password account.
-export async function findUserByEmail(email: string): Promise<{ sub: string; email: string; displayName: string } | null> {
+export async function findUserByEmail(email: string): Promise<UserSummary | null> {
   const client = makeClient()
   // ListUsers with a filter expression is the supported way to search by
   // attribute. We limit to 1 — emails are alias-unique so there's never
@@ -298,11 +309,29 @@ export async function findUserByEmail(email: string): Promise<{ sub: string; ema
   }))
   const user = res.Users?.[0]
   if (!user) return null
-  const attr = (name: string) => user.Attributes?.find(a => a.Name === name)?.Value ?? ''
-  return {
-    sub: attr('sub'),
-    email: attr('email'),
-    displayName: attr('name') || (attr('email').split('@')[0]),
+  return userSummaryFromAttributes(user)
+}
+
+// Look up a user by their Cognito sub. Used by the trial-invitation UI
+// to enrich a list of invitedUserIds with friendly email + display name.
+// Skips the Cognito round-trip entirely on the dev path if cognito-local
+// doesn't support sub-filter; callers should treat null as "not found".
+export async function findUserBySub(sub: string): Promise<UserSummary | null> {
+  const client = makeClient()
+  try {
+    const res = await client.send(new ListUsersCommand({
+      UserPoolId: USER_POOL_ID,
+      Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+      Limit: 1,
+    }))
+    const user = res.Users?.[0]
+    if (!user) return null
+    return userSummaryFromAttributes(user)
+  } catch (err) {
+    // cognito-local may not implement the `sub` filter; degrade gracefully
+    // so the trial admin page can still render — names just go blank.
+    console.warn('[cognito] findUserBySub failed', err)
+    return null
   }
 }
 

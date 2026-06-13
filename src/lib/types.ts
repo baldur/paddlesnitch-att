@@ -55,6 +55,11 @@ export type CourseMetadata = {
   createdAt: string
 }
 
+// `participation` controls WHO can submit a trace once they can view the
+// trial. `open` is anyone who can view it; `invitational` requires the
+// submitter to be in `invitedUserIds` (or be the owner).
+export type Participation = 'open' | 'invitational'
+
 export type TrialMetadata = {
   id: string
   courseId: string
@@ -63,6 +68,9 @@ export type TrialMetadata = {
   status: 'open' | 'closed'
   adminUserId: string
   visibility: Visibility
+  participation: Participation
+  // Cognito subs of invited users. Empty (or absent) for `open` trials.
+  invitedUserIds: string[]
   createdAt: string
 }
 

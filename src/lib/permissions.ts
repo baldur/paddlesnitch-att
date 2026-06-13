@@ -16,7 +16,16 @@ export function canViewCourse(course: CourseMetadata, viewer: AuthUser | null): 
 
 export function canViewTrial(trial: TrialMetadata, viewer: AuthUser | null): boolean {
   if (trial.visibility === 'public') return true
-  return !!viewer && viewer.id === trial.adminUserId
+  if (!viewer) return false
+  if (viewer.id === trial.adminUserId) return true
+  // A private invitational trial would be useless if invitees couldn't see
+  // the leaderboard they're racing on. Widening view to invitees on private
+  // trials matches the expectation that "you got invited" implies "you can
+  // watch it run."
+  if (trial.participation === 'invitational' && trial.invitedUserIds.includes(viewer.id)) {
+    return true
+  }
+  return false
 }
 
 // Course / trial mutations are owner-only at this phase. Club admin
@@ -27,6 +36,20 @@ export function canManageCourse(course: CourseMetadata, viewer: AuthUser | null)
 
 export function canManageTrial(trial: TrialMetadata, viewer: AuthUser | null): boolean {
   return !!viewer && viewer.id === trial.adminUserId
+}
+
+// Can `viewer` submit a trace to this trial?
+//   - You must be able to see the trial.
+//   - Open participation: any viewer who can see it.
+//   - Invitational: viewer must be in invitedUserIds (or be the owner).
+// The trial-open/closed status is separately enforced inside the upload
+// route — this helper deals purely with WHO is allowed, not WHEN.
+export function canSubmitToTrial(trial: TrialMetadata, viewer: AuthUser | null): boolean {
+  if (!viewer) return false
+  if (!canViewTrial(trial, viewer)) return false
+  if (trial.participation === 'open') return true
+  if (viewer.id === trial.adminUserId) return true
+  return trial.invitedUserIds.includes(viewer.id)
 }
 
 // Whether a logged-out viewer should see this course/trial appear in a

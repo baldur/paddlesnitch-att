@@ -527,21 +527,24 @@ Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces th
 
 Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:
 
-| Action | Public course / trial | Private course / trial |
-|---|---|---|
-| View | Anyone (even unauthenticated) | Owner only |
-| Listed in catalogue / home | Yes, for everyone | Yes, but only for the owner |
-| Edit / delete course or trial | Owner only | Owner only |
-| Create a trial on it | Any signed-in user | Owner only |
-| Submit a trace | Any signed-in user (open trials) | Owner only |
-| View leaderboard | Anyone (even unauthenticated) | Owner only |
+| Action | Public | Private | Open trial | Invitational trial |
+|---|---|---|---|---|
+| View | Anyone | Owner only | — | Owner + invitees |
+| Listed in catalogue / home | Yes, for everyone | Yes, but only for the owner | — | — |
+| Edit / delete course or trial | Owner only | Owner only | — | — |
+| Create a trial on it | Any signed-in user | Owner only | — | — |
+| Submit a trace | Any viewer (on an open trial) | Owner only | Any viewer | Owner + invitees |
+| Invite / uninvite | — | — | — | Owner only |
+| View leaderboard | Anyone | Owner only | — | Owner + invitees |
+
+A private invitational trial is visible to its invitees so they can see the leaderboard they're racing on; owners can still flip it to public if they want.
 
 Enforced in three layers:
 1. `src/proxy.ts` — rejects unauthenticated **mutations** at the edge (cookie check only). GETs always pass through; gating happens deeper.
-2. `src/lib/permissions.ts` — single source of truth for `canViewCourse`, `canViewTrial`, `canManageCourse`, `canManageTrial`, `isListedForViewer`. All API routes + server pages call into these. **Never re-implement these checks inline.**
-3. API route handlers + Server Components — call `getAuthUser()`, then a permissions helper. Private resources return **404 (not 403)** to non-owners so existence isn't leaked.
+2. `src/lib/permissions.ts` — single source of truth for `canViewCourse`, `canViewTrial`, `canManageCourse`, `canManageTrial`, `canSubmitToTrial`, `isListedForViewer`. All API routes + server pages call into these. **Never re-implement these checks inline.**
+3. API route handlers + Server Components — call `getAuthUser()`, then a permissions helper. Private resources return **404 (not 403)** to non-owners so existence isn't leaked; invitational trials likewise return 404 (not 403) to non-invitees on upload so the guest list isn't leaked.
 
-Story-style permission tests at `src/lib/permissions.test.ts`, `src/tests/courses.test.ts`, `src/tests/trial-visibility.test.ts` are the regression net. Test titles mirror the matrix rows; any new permission check gets a paired story.
+Story-style permission tests at `src/lib/permissions.test.ts`, `src/tests/courses.test.ts`, `src/tests/trial-visibility.test.ts`, and `src/tests/invitations.test.ts` are the regression net. Test titles mirror the matrix rows; any new permission check gets a paired story.
 
 ---
 
