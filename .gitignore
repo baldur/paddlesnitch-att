@@ -58,3 +58,8 @@ infra/dist/
 infra/node_modules/
 .open-next/
 cdk.out/
+
+# Playwright artifacts
+playwright-report/
+test-results/
+/playwright/.cache/
