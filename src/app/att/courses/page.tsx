@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
+import { getUserClubIds } from '@/lib/clubs'
 import AuthNav from '@/components/AuthNav'
 import type { CourseMetadata, TrialMetadata, AuthUser } from '@/lib/types'
 
@@ -15,13 +16,14 @@ type CourseWithCounts = {
 }
 
 async function getCoursesWithCounts(viewer: AuthUser | null): Promise<CourseWithCounts[]> {
+  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : undefined
   const keys = await listKeys('courses/')
   const metaKeys = keys.filter(k => k.endsWith('metadata.json'))
   const courses = (
     await Promise.all(metaKeys.map(k => getJson<CourseMetadata>(k)))
   )
     .filter((c): c is CourseMetadata => c !== null)
-    .filter(c => isListedForViewer(c, viewer))
+    .filter(c => isListedForViewer(c, viewer, viewerClubIds))
 
   // Fetch trials once and group by courseId — cheaper than N queries.
   // Counts only include trials the viewer is allowed to see so a public
@@ -34,7 +36,7 @@ async function getCoursesWithCounts(viewer: AuthUser | null): Promise<CourseWith
     await Promise.all(trialMetaKeys.map(k => getJson<TrialMetadata>(k)))
   )
     .filter((t): t is TrialMetadata => t !== null)
-    .filter(t => isListedForViewer(t, viewer))
+    .filter(t => isListedForViewer(t, viewer, viewerClubIds))
 
   return courses
     .map(course => {

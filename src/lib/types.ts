@@ -35,9 +35,10 @@ export type CourseType =
   | 'point_to_point' | 'loop' | 'gate'
   | 'one_way' | 'out_and_back' | 'lap' | 'figure_eight' // legacy
 
-// Visibility scope. Phase 1 supports public / private only; phase 4 adds
-// `club` (visibility tied to a club's members). The enum is forward-compatible.
-export type Visibility = 'public' | 'private'
+// Visibility scope. Phase 1 added public / private; phase 4 added `club`
+// (visibility tied to a club's members + admins + owner). `visibleToClubId`
+// MUST be set when visibility === 'club' and absent otherwise.
+export type Visibility = 'public' | 'private' | 'club'
 
 export type CourseMetadata = {
   id: string
@@ -52,6 +53,7 @@ export type CourseMetadata = {
   gates?: Array<{ line: Line; direction: 1 | -1 }>  // gate type: ordered checkpoints
   adminUserId: string
   visibility: Visibility
+  visibleToClubId?: string // present iff visibility === 'club'
   createdAt: string
 }
 
@@ -68,6 +70,7 @@ export type TrialMetadata = {
   status: 'open' | 'closed'
   adminUserId: string
   visibility: Visibility
+  visibleToClubId?: string  // present iff visibility === 'club'
   participation: Participation
   // Cognito subs of invited users. Empty (or absent) for `open` trials.
   invitedUserIds: string[]
@@ -185,4 +188,49 @@ export type StravaActivitySummary = {
   startDate: string             // ISO 8601, includes zone
   distanceMetres: number
   movingSeconds: number
+}
+
+// ---------------------------------------------------------------------------
+// Clubs (phase 4)
+// ---------------------------------------------------------------------------
+//
+// A club is an org / community / team that can scope a course or trial's
+// visibility to its members. Ownership semantics:
+//   - exactly one owner (the creator until explicit transfer)
+//   - zero or more admins (can manage on behalf of the club, can NOT
+//     transfer ownership or delete)
+//   - zero or more members (can see club-visibility resources, can submit
+//     to club-scoped trials, can NOT manage anything)
+//
+// Stored at clubs/{clubId}/metadata.json. Reverse index per user lives at
+// users/{userId}/clubs.json — see src/lib/clubs.ts.
+
+export type ClubMetadata = {
+  id: string
+  name: string
+  description: string           // free-form, optional in the UI but always present as a string
+  ownerId: string               // Cognito sub
+  adminUserIds: string[]
+  memberUserIds: string[]
+  createdAt: string
+}
+
+// Stored at clubs/{clubId}/invitations/{invitationId}.json (resolved invites
+// for users who already have an account) and at
+// pending-invitations/clubs/{emailHash}/{invitationId}.json (unresolved
+// invites that fire on signup).
+//
+// Pre-signup invites resolve themselves when the matching email signs up.
+export type ClubInvitation = {
+  id: string
+  clubId: string
+  role: 'admin' | 'member'
+  invitedBy: string             // Cognito sub of the inviter
+  // Exactly one of these is set. toUserId for resolved invites; toEmail
+  // for invites that landed before the recipient had an account.
+  toUserId?: string
+  toEmail?: string
+  createdAt: string
+  expiresAt: string             // ISO; default +30 days
+  status: 'pending' | 'accepted' | 'declined' | 'expired'
 }

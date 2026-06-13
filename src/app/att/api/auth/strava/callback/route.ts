@@ -108,6 +108,13 @@ export async function GET(req: NextRequest) {
       }
       cognitoEmail = profile.email
       await putAthleteIndex(profile.id, created.sub)
+      // Pull in any club invitations queued for this email before signup.
+      try {
+        const { applyPendingInvitations } = await import('@/lib/pending-invitations')
+        await applyPendingInvitations(profile.email, created.sub)
+      } catch (err) {
+        console.error('[strava signin] applyPendingInvitations failed', err)
+      }
     }
   }
 
