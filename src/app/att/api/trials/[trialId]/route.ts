@@ -62,6 +62,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (typeof body.date === 'string') next.date = body.date
   if (body.status === 'open' || body.status === 'closed') next.status = body.status
   if (isVisibility(body.visibility)) {
+    // Phase 4 — clamp to the parent course's scope. A trial's visibility
+    // can never be wider than its course; private course → private trial;
+    // club course → trial inherits the club; otherwise the trial gets
+    // whatever was asked for (still subject to club-scope permission).
     let requested: Visibility = body.visibility
     let requestedClubId = typeof body.visibleToClubId === 'string' ? body.visibleToClubId : next.visibleToClubId
 
@@ -79,6 +83,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (!requestedClubId) {
         requested = 'private'
       }
+    }
+
+    // Phase 5 — make-public acknowledgement: a flip TO public (after
+    // clamping) requires the owner to explicitly tick the
+    // "I understand performance times will become public" box. Club /
+    // private widening doesn't trigger this — only the public flip does.
+    // The check uses the RESOLVED `requested` value so a request for
+    // public that gets clamped to private (because the course is
+    // private) doesn't force an unnecessary ack.
+    const flippingToPublic = trial.visibility !== 'public' && requested === 'public'
+    if (flippingToPublic && body.acknowledged !== true) {
+      return NextResponse.json(
+        {
+          error: 'Making a trial public requires an explicit acknowledgement that participants’ performance times will become visible to anyone.',
+          code: 'make_public_ack_required',
+        },
+        { status: 422 }
+      )
     }
 
     next.visibility = requested

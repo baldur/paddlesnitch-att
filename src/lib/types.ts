@@ -234,3 +234,19 @@ export type ClubInvitation = {
   expiresAt: string             // ISO; default +30 days
   status: 'pending' | 'accepted' | 'declined' | 'expired'
 }
+
+// ---------------------------------------------------------------------------
+// Terms of Service (phase 5)
+// ---------------------------------------------------------------------------
+
+// Bumped manually when legal/tos-{version}.md gets a material change.
+// Signed-in users see a re-accept gate on their next request until they
+// accept the new version.
+export const CURRENT_TOS_VERSION = '001'
+
+// Persisted per-user at users/{userId}/tos-consent.json. A user with no
+// record at all has never accepted any ToS version (a pre-existing
+// account from before phase 5 ships, for example).
+export type TosConsent = {
+  acceptances: Array<{ version: string; acceptedAt: string }>
+}

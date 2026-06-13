@@ -19,6 +19,10 @@ function AuthForm() {
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
+  // ToS acceptance is mandatory on signup; the checkbox lives just above
+  // the submit button. The version sent on POST is hard-coded to '001'
+  // for now — when CURRENT_TOS_VERSION bumps, this string bumps with it.
+  const [tosAccepted, setTosAccepted] = useState(false)
   // ?error= comes back from server-driven flows (Strava OAuth callback,
   // legacy magic-link). Map known keys to user-friendly messages once.
   const initialError = (() => {
@@ -67,12 +71,16 @@ function AuthForm() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (!tosAccepted) {
+      setError('You must agree to the Terms of Service to create an account.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/att/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, displayName, password }),
+        body: JSON.stringify({ email, displayName, password, acceptedTosVersion: '001' }),
       })
       if (res.ok) {
         router.push(next)
@@ -263,6 +271,27 @@ function AuthForm() {
             />
             <p className="text-xs text-[#64748b]">Minimum 8 characters</p>
           </div>
+          {/* ToS acceptance — required for account creation. The checkbox
+              has to be ticked AND the server side checks the version on
+              POST, so a stale rendering won't accept a future version. */}
+          <label className="flex items-start gap-2 text-xs text-[#64748b]">
+            <input
+              type="checkbox"
+              checked={tosAccepted}
+              onChange={e => setTosAccepted(e.target.checked)}
+              className="mt-0.5 accent-[#0369a1]"
+            />
+            <span>
+              I have read and agree to the{' '}
+              <Link href="/att/tos" target="_blank" className="tt-link">
+                Terms of Service
+              </Link>
+              {' '}and{' '}
+              <Link href="/att/privacy" target="_blank" className="tt-link">
+                Privacy Policy
+              </Link>.
+            </span>
+          </label>
           {error && (
             <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs">
               {error}
