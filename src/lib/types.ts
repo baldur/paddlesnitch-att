@@ -35,6 +35,10 @@ export type CourseType =
   | 'point_to_point' | 'loop' | 'gate'
   | 'one_way' | 'out_and_back' | 'lap' | 'figure_eight' // legacy
 
+// Visibility scope. Phase 1 supports public / private only; phase 4 adds
+// `club` (visibility tied to a club's members). The enum is forward-compatible.
+export type Visibility = 'public' | 'private'
+
 export type CourseMetadata = {
   id: string
   name: string
@@ -47,6 +51,7 @@ export type CourseMetadata = {
   gateDirection?: 1 | -1  // legacy single-gate: derived from gates[0].direction
   gates?: Array<{ line: Line; direction: 1 | -1 }>  // gate type: ordered checkpoints
   adminUserId: string
+  visibility: Visibility
   createdAt: string
 }
 
@@ -57,6 +62,7 @@ export type TrialMetadata = {
   date: string // ISO date
   status: 'open' | 'closed'
   adminUserId: string
+  visibility: Visibility
   createdAt: string
 }
 

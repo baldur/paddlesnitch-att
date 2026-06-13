@@ -1,14 +1,16 @@
 import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
+import { getAuthUser } from '@/lib/auth'
+import { isListedForViewer } from '@/lib/permissions'
 import AuthNav from '@/components/AuthNav'
-import type { TrialMetadata, CourseMetadata } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
 
 // Reads live trial state from storage on every request — never prerender.
 // Without this, `next build` tries to fetch from S3 at build time and fails
 // when AWS credentials / bucket aren't available in CI.
 export const dynamic = 'force-dynamic'
 
-async function getOpenTrials() {
+async function getOpenTrials(viewer: AuthUser | null) {
   const keys = await listKeys('trials/')
   const metaKeys = keys.filter(
     k => k.endsWith('metadata.json') && !k.includes('/entries/')
@@ -16,6 +18,7 @@ async function getOpenTrials() {
   const trials = (
     await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k)))
   ).filter((t): t is TrialMetadata => t !== null && t.status === 'open')
+    .filter(t => isListedForViewer(t, viewer))
 
   return Promise.all(
     trials.map(async trial => {
@@ -28,7 +31,8 @@ async function getOpenTrials() {
 }
 
 export default async function Home() {
-  const openTrials = await getOpenTrials()
+  const viewer = await getAuthUser()
+  const openTrials = await getOpenTrials(viewer)
 
   return (
     <main className="flex-1 flex flex-col">

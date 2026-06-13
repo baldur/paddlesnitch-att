@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getJson } from '@/lib/storage'
-import type { LeaderboardEntry } from '@/lib/types'
+import { getAuthUser } from '@/lib/auth'
+import { canViewTrial } from '@/lib/permissions'
+import type { LeaderboardEntry, TrialMetadata } from '@/lib/types'
 
 export async function GET(
   _: NextRequest,
   { params }: { params: Promise<{ trialId: string }> }
 ) {
   const { trialId } = await params
+  const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
+  if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const viewer = await getAuthUser()
+  if (!canViewTrial(trial, viewer)) {
+    // Same not-found camouflage as the trial detail route: don't leak
+    // existence of a private trial through its leaderboard endpoint.
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   const leaderboard = await getJson<LeaderboardEntry[]>(
     `trials/${trialId}/leaderboard.json`
   )

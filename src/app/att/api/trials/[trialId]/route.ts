@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
-import type { TrialMetadata, CourseMetadata } from '@/lib/types'
+import { canViewTrial, canManageTrial } from '@/lib/permissions'
+import type { TrialMetadata, CourseMetadata, Visibility } from '@/lib/types'
 
 type Params = { params: Promise<{ trialId: string }> }
+
+function isVisibility(v: unknown): v is Visibility {
+  return v === 'public' || v === 'private'
+}
 
 export async function GET(_: NextRequest, { params }: Params) {
   const { trialId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const viewer = await getAuthUser()
+  if (!canViewTrial(trial, viewer)) {
+    // Hide existence of private trials from non-owners.
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   return NextResponse.json(trial)
 }
 
@@ -20,20 +30,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const course = await getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`)
-  const isTrialAdmin = trial.adminUserId === user.id
-  const isCourseAdmin = course?.adminUserId === user.id
-  if (!isTrialAdmin && !isCourseAdmin)
+  // Course admin used to be able to PATCH trials on their course. With
+  // visibility we tighten this to trial-owner-only — the course owner can
+  // still see and manage their own course; trials belong to their organiser.
+  if (!canManageTrial(trial, user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // A trial's visibility cannot exceed its parent course's. If the parent
+  // course is private, the trial is forced private regardless of the patch.
+  const course = await getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`)
 
   const body = await req.json()
-  const updated: TrialMetadata = {
-    ...trial,
-    ...body,
-    id: trial.id,
-    courseId: trial.courseId,
-    createdAt: trial.createdAt,
+  const next: TrialMetadata = { ...trial }
+  if (typeof body.name === 'string') next.name = body.name
+  if (typeof body.date === 'string') next.date = body.date
+  if (body.status === 'open' || body.status === 'closed') next.status = body.status
+  if (isVisibility(body.visibility)) {
+    next.visibility = course?.visibility === 'private' ? 'private' : body.visibility
   }
-  await putJson(`trials/${trialId}/metadata.json`, updated)
-  return NextResponse.json(updated)
+  await putJson(`trials/${trialId}/metadata.json`, next)
+  return NextResponse.json(next)
 }
