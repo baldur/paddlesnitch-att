@@ -523,6 +523,34 @@ Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces th
 
 ---
 
+## Clubs
+
+A **club** is an organisation / community / team. Stored at `clubs/{clubId}/metadata.json`. Has:
+
+- `ownerId` (exactly one; cannot be removed without explicit transfer)
+- `adminUserIds` — manage on behalf of the club; cannot delete or transfer ownership
+- `memberUserIds` — see club-visibility resources
+
+Reverse index at `users/{userId}/clubs.json` keeps membership checks O(1) without scanning every club. Updated on join + leave + accept-invitation + club-delete.
+
+### Invitations
+
+Two paths:
+- **Resolved** (recipient has an account) — stored at `clubs/{clubId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
+- **Pending email** (recipient doesn't yet) — stored at `pending-invitations/clubs/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each club, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
+
+### Club-scoped visibility on courses + trials
+
+`Visibility` is now `'public' | 'private' | 'club'`. When `visibility === 'club'`, the resource carries a `visibleToClubId` and is visible to that club's members + admins + owner (plus the resource's own admin). The server validates that the editor is an owner / admin of the target club before applying — plain members get silently downgraded to `private` rather than 403'd, so a random member can't broadcast their content to the whole club.
+
+Trials inherit their course's scope when it's tighter than what was requested:
+- Course `private` → trial forced `private`.
+- Course `club` → trial forced `club` with the course's `visibleToClubId`.
+
+Permission helpers (`canViewCourse`, `canViewTrial`, `canSubmitToTrial`, `isListedForViewer`) take an optional `viewerClubIds: Set<string>` argument; callers fetch it once at the request boundary via `getUserClubIds()` and pass it down. Undefined behaves like "in no clubs."
+
+---
+
 ## Roles & Permissions
 
 Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:

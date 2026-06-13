@@ -47,6 +47,9 @@ export default async function Home() {
           <Link href="/att/courses" className="tt-nav-link">
             COURSES
           </Link>
+          <Link href="/att/clubs" className="tt-nav-link">
+            CLUBS
+          </Link>
           <Link href="/att/admin/trials/new" className="tt-nav-link">
             + NEW TRIAL
           </Link>
