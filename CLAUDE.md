@@ -172,6 +172,12 @@ A named stretch of water with:
 - Owned by the user who created it (the **course admin**)
 - **Visibility** — `public` | `private` (phase 1). Public courses appear in the catalogue and on detail pages for any visitor; private courses are owner-only. `club` visibility (scoped to a specific club's members) arrives in phase 4. Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
 
+#### Modify-creates-copy
+
+If a course has at least one entry on it (across any trial), editing its **geometry** — `type`, `startLine`, `finishLine`, `gates`, `gateDirection`, `distanceMetres`, `minValidSeconds` — does not mutate. The PATCH route clones the course with the new geometry, assigns the editor as the admin of the clone, and returns it with `cloned: true` and `clonedFrom: <originalId>`. The original is left untouched so historical leaderboards stay interpretable. Name + visibility edits still mutate in place — they don't invalidate any race result.
+
+Detection lives in `src/lib/course-entries.ts` (`courseHasEntries`, `geometryChanged`, `GEOMETRY_FIELDS`). PATCH logic lives in `src/app/att/api/courses/[courseId]/route.ts`.
+
 ### Course Types
 
 Three canonical types surfaced in the UI:
@@ -520,6 +526,34 @@ Comma-separated. Flexible column detection (case-insensitive, ignores spaces/und
 
 ### Unknown formats
 Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces this as a 422 to the user. Future formats can be added to `src/lib/parse.ts` without touching any other file.
+
+---
+
+## Clubs
+
+A **club** is an organisation / community / team. Stored at `clubs/{clubId}/metadata.json`. Has:
+
+- `ownerId` (exactly one; cannot be removed without explicit transfer)
+- `adminUserIds` — manage on behalf of the club; cannot delete or transfer ownership
+- `memberUserIds` — see club-visibility resources
+
+Reverse index at `users/{userId}/clubs.json` keeps membership checks O(1) without scanning every club. Updated on join + leave + accept-invitation + club-delete.
+
+### Invitations
+
+Two paths:
+- **Resolved** (recipient has an account) — stored at `clubs/{clubId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
+- **Pending email** (recipient doesn't yet) — stored at `pending-invitations/clubs/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each club, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
+
+### Club-scoped visibility on courses + trials
+
+`Visibility` is now `'public' | 'private' | 'club'`. When `visibility === 'club'`, the resource carries a `visibleToClubId` and is visible to that club's members + admins + owner (plus the resource's own admin). The server validates that the editor is an owner / admin of the target club before applying — plain members get silently downgraded to `private` rather than 403'd, so a random member can't broadcast their content to the whole club.
+
+Trials inherit their course's scope when it's tighter than what was requested:
+- Course `private` → trial forced `private`.
+- Course `club` → trial forced `club` with the course's `visibleToClubId`.
+
+Permission helpers (`canViewCourse`, `canViewTrial`, `canSubmitToTrial`, `isListedForViewer`) take an optional `viewerClubIds: Set<string>` argument; callers fetch it once at the request boundary via `getUserClubIds()` and pass it down. Undefined behaves like "in no clubs."
 
 ---
 

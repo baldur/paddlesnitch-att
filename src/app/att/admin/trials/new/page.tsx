@@ -15,7 +15,9 @@ function NewTrialForm() {
   const [courseId, setCourseId] = useState(presetCourseId)
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [visibility, setVisibility] = useState<'public' | 'private'>('public')
+  const [visibility, setVisibility] = useState<'public' | 'private' | 'club'>('public')
+  const [visibleToClubId, setVisibleToClubId] = useState<string>('')
+  const [manageableClubs, setManageableClubs] = useState<Array<{ id: string; name: string }> | null>(null)
   const [participation, setParticipation] = useState<'open' | 'invitational'>('open')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +40,14 @@ function NewTrialForm() {
       const res = await fetch('/att/api/trials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, name: name.trim(), date, visibility, participation }),
+        body: JSON.stringify({
+          courseId,
+          name: name.trim(),
+          date,
+          visibility,
+          ...(visibility === 'club' && visibleToClubId ? { visibleToClubId } : {}),
+          participation,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -136,21 +145,35 @@ function NewTrialForm() {
           <p className="text-xs text-[#64748b]">When the trial takes place. Defaults to today.</p>
         </div>
 
-        {/* Visibility. Public is only offered when the course itself is public —
-            otherwise the trial would leak the course's geometry to anyone with
-            the link. The server clamps anyway; the UI explains why. */}
+        {/* Visibility. The trial's scope can't exceed its course's: club
+            courses force club; private courses force private. The server
+            clamps anyway, but we visually disable to make it obvious. */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
           <div className="flex gap-2">
-            {(['public', 'private'] as const).map(v => {
-              const disabled = v === 'public' && selectedCourse?.visibility === 'private'
-              const active = (selectedCourse?.visibility === 'private' ? 'private' : visibility) === v
+            {(['public', 'private', 'club'] as const).map(v => {
+              const courseLocksTo =
+                selectedCourse?.visibility === 'private' ? 'private'
+                : selectedCourse?.visibility === 'club' ? 'club'
+                : null
+              const disabled = !!courseLocksTo && v !== courseLocksTo
+              const active = (courseLocksTo ?? visibility) === v
               return (
                 <button
                   key={v}
                   type="button"
                   disabled={disabled}
-                  onClick={() => !disabled && setVisibility(v)}
+                  onClick={async () => {
+                    if (disabled) return
+                    setVisibility(v)
+                    if (v === 'club' && manageableClubs === null) {
+                      const res = await fetch('/att/api/clubs')
+                      if (res.ok) {
+                        const data = await res.json()
+                        setManageableClubs(data.clubs)
+                      }
+                    }
+                  }}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     active
                       ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
@@ -162,12 +185,39 @@ function NewTrialForm() {
               )
             })}
           </div>
+          {visibility === 'club' && selectedCourse?.visibility !== 'club' && (
+            <div className="flex flex-col gap-2 mt-2">
+              {manageableClubs === null ? (
+                <p className="text-xs text-[#64748b]">Loading clubs…</p>
+              ) : manageableClubs.length === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  You&apos;re not in any clubs yet.{' '}
+                  <Link href="/att/clubs" className="tt-link">Create one</Link>.
+                </p>
+              ) : (
+                <select
+                  value={visibleToClubId}
+                  onChange={e => setVisibleToClubId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">— Pick a club —</option>
+                  {manageableClubs.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           <p className="text-xs text-[#64748b]">
             {selectedCourse?.visibility === 'private'
               ? 'This course is private, so any trial on it must be private too.'
-              : visibility === 'public'
-                ? 'The leaderboard will be visible to anyone.'
-                : 'Only you can see this trial and its leaderboard.'}
+              : selectedCourse?.visibility === 'club'
+                ? 'This course is scoped to a club, so the trial is too.'
+                : visibility === 'public'
+                  ? 'The leaderboard will be visible to anyone.'
+                  : visibility === 'club'
+                    ? 'Only this club’s members can see the trial.'
+                    : 'Only you can see this trial and its leaderboard.'}
           </p>
         </div>
 

@@ -3,6 +3,7 @@ import { signUp, signIn } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
 import { recordAcceptance } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
+import { applyPendingInvitations } from '@/lib/pending-invitations'
 
 export async function POST(req: NextRequest) {
   const { email, displayName, password, acceptedTosVersion } = await req.json()
@@ -54,6 +55,17 @@ export async function POST(req: NextRequest) {
     await recordAcceptance(created.sub, CURRENT_TOS_VERSION)
   } catch (err) {
     console.error('[signup] recordAcceptance failed', err)
+  }
+
+  // Pull in any club invitations queued for this email before signup. Done
+  // before we return the cookie so the next request the user makes already
+  // shows the clubs they were invited to.
+  try {
+    await applyPendingInvitations(normalised, created.sub)
+  } catch (err) {
+    // Don't fail the signup over a pending-invite hiccup — the user can
+    // still be re-invited later. Log so we notice in CloudWatch.
+    console.error('[signup] applyPendingInvitations failed', err)
   }
 
   const res = NextResponse.json(

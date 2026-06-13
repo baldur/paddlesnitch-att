@@ -10,6 +10,7 @@ import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
 import { canSubmitToTrial } from '@/lib/permissions'
+import { getUserClubIds } from '@/lib/clubs'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint } from '@/lib/types'
 
 type StoredEntry = {
@@ -150,7 +151,8 @@ export async function POST(
   // both "can't see" and "can see but not invited" so the route doesn't
   // distinguish — invitational trials don't leak their guest list through
   // a 403 vs 404 split.
-  if (!canSubmitToTrial(trial, user)) {
+  const viewerClubIds = new Set(await getUserClubIds(user.id))
+  if (!canSubmitToTrial(trial, user, viewerClubIds)) {
     return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
   }
   if (trial.status !== 'open')

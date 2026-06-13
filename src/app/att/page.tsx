@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
+import { getUserClubIds } from '@/lib/clubs'
 import AuthNav from '@/components/AuthNav'
 import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
 
@@ -11,6 +12,7 @@ import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
 export const dynamic = 'force-dynamic'
 
 async function getOpenTrials(viewer: AuthUser | null) {
+  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : undefined
   const keys = await listKeys('trials/')
   const metaKeys = keys.filter(
     k => k.endsWith('metadata.json') && !k.includes('/entries/')
@@ -18,7 +20,7 @@ async function getOpenTrials(viewer: AuthUser | null) {
   const trials = (
     await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k)))
   ).filter((t): t is TrialMetadata => t !== null && t.status === 'open')
-    .filter(t => isListedForViewer(t, viewer))
+    .filter(t => isListedForViewer(t, viewer, viewerClubIds))
 
   return Promise.all(
     trials.map(async trial => {
@@ -44,6 +46,9 @@ export default async function Home() {
         <nav className="flex gap-4 text-sm text-[#64748b] items-center">
           <Link href="/att/courses" className="tt-nav-link">
             COURSES
+          </Link>
+          <Link href="/att/clubs" className="tt-nav-link">
+            CLUBS
           </Link>
           <Link href="/att/admin/trials/new" className="tt-nav-link">
             + NEW TRIAL
