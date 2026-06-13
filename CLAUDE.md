@@ -156,6 +156,7 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 
 Active specs live under `docs/features/`. Currently:
 - [`courses-and-entries.md`](docs/features/courses-and-entries.md) — make courses a shared catalogue, distinguish organiser/paddler UX, strip personal data from entries, add boat class + crew, add pace variants + date picker. Four-phase plan; each phase is its own PR.
+- [`visibility-clubs-tos.md`](docs/features/visibility-clubs-tos.md) — public/private visibility, club entity with delegated admins, invitational trials, make-public acknowledgement, versioned Terms of Service. Five-phase plan; each phase is its own PR.
 
 ---
 
@@ -169,6 +170,7 @@ A named stretch of water with:
 - **Distance** — auto-calculated from start/finish midpoints (`point_to_point`) or entered manually for single-line types
 - **Sport** — `kayak` | `rowing` | `both`
 - Owned by the user who created it (the **course admin**)
+- **Visibility** — `public` | `private` (phase 1). Public courses appear in the catalogue and on detail pages for any visitor; private courses are owner-only. `club` visibility (scoped to a specific club's members) arrives in phase 4. Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
 
 ### Course Types
 
@@ -523,20 +525,23 @@ Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces th
 
 ## Roles & Permissions
 
-| Action | Who |
-|---|---|
-| Access any page | Any signed-in user |
-| Create a course | Any signed-in user |
-| Edit/delete a course | Course admin (creator) only |
-| Create a time trial on a course | Course admin only |
-| Open / close a time trial | Course admin only |
-| Upload a trace | Any signed-in user (when trial is open) |
-| View leaderboard | Any signed-in user |
-| View other participants' raw traces | Course admin only (not yet surfaced in UI) |
+Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:
 
-Enforced in two layers:
-1. `src/proxy.ts` — rejects unauthenticated requests at the edge (cookie check only)
-2. API route handlers — call `getAuthUser()` and check `adminUserId` for write operations
+| Action | Public course / trial | Private course / trial |
+|---|---|---|
+| View | Anyone (even unauthenticated) | Owner only |
+| Listed in catalogue / home | Yes, for everyone | Yes, but only for the owner |
+| Edit / delete course or trial | Owner only | Owner only |
+| Create a trial on it | Any signed-in user | Owner only |
+| Submit a trace | Any signed-in user (open trials) | Owner only |
+| View leaderboard | Anyone (even unauthenticated) | Owner only |
+
+Enforced in three layers:
+1. `src/proxy.ts` — rejects unauthenticated **mutations** at the edge (cookie check only). GETs always pass through; gating happens deeper.
+2. `src/lib/permissions.ts` — single source of truth for `canViewCourse`, `canViewTrial`, `canManageCourse`, `canManageTrial`, `isListedForViewer`. All API routes + server pages call into these. **Never re-implement these checks inline.**
+3. API route handlers + Server Components — call `getAuthUser()`, then a permissions helper. Private resources return **404 (not 403)** to non-owners so existence isn't leaked.
+
+Story-style permission tests at `src/lib/permissions.test.ts`, `src/tests/courses.test.ts`, `src/tests/trial-visibility.test.ts` are the regression net. Test titles mirror the matrix rows; any new permission check gets a paired story.
 
 ---
 
