@@ -9,6 +9,7 @@ import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
+import { canViewTrial } from '@/lib/permissions'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint } from '@/lib/types'
 
 type StoredEntry = {
@@ -145,6 +146,11 @@ export async function POST(
   const { trialId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
+  // Submission requires view access. Phase 1: private trial → owner only.
+  // Phase 2 will widen this for invitational trials.
+  if (!canViewTrial(trial, user)) {
+    return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
+  }
   if (trial.status !== 'open')
     return NextResponse.json({ error: 'Trial is closed' }, { status: 400 })
 

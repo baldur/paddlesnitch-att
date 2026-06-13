@@ -4,6 +4,7 @@ import { getJson, listKeys } from '@/lib/storage'
 import AuthNav from '@/components/AuthNav'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
+import { canViewCourse, isListedForViewer } from '@/lib/permissions'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,10 @@ export default async function CourseDetailPage({
 
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
   if (!course) notFound()
+  const user = await getAuthUser()
+  // Private courses 404 to non-owners, indistinguishable from a missing
+  // course. Phase 4 will widen this for club-visible courses.
+  if (!canViewCourse(course, user)) notFound()
 
   const trialKeys = await listKeys('trials/')
   const trialMetaKeys = trialKeys.filter(
@@ -25,12 +30,15 @@ export default async function CourseDetailPage({
   const trials = (
     await Promise.all(trialMetaKeys.map(k => getJson<TrialMetadata>(k)))
   ).filter((t): t is TrialMetadata => t !== null && t.courseId === courseId)
+    // Only surface trials the viewer is allowed to see — so a private
+    // trial on a public course doesn't leak through the course detail
+    // page.
+    .filter(t => isListedForViewer(t, user))
 
   const sortedTrials = [...trials].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const user = await getAuthUser()
   const isOwner = user?.id === course.adminUserId
 
   return (

@@ -119,3 +119,175 @@ describe('Course edits are owner-only', () => {
     expect(res.status).toBe(401)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 1 visibility — story-style permission tests. Story titles mirror
+// rows of the permission matrix in docs/features/visibility-clubs-tos.md.
+// ---------------------------------------------------------------------------
+
+async function buildPrivateCourse(ownerIdToken: string, name = 'Private Course') {
+  mockAuth(ownerIdToken)
+  const res = await createCourse(jsonReq('http://x/att/api/courses', 'POST', {
+    name,
+    sport: 'kayak',
+    type: 'point_to_point',
+    startLine: [[51.5, -0.9], [51.5, -0.89]],
+    finishLine: [[51.55, -0.9], [51.55, -0.89]],
+    distanceMetres: 5000,
+    visibility: 'private',
+  }))
+  return await res.json()
+}
+
+describe('a public course', () => {
+  it('is visible to an unauthenticated visitor', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildCourse(owner.idToken, 'Public C')
+    mockAuth(null)
+    const res = await getCourse(new NextRequest('http://x'),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+  })
+
+  it('is visible to any signed-in non-owner', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await buildCourse(owner.idToken)
+    mockAuth(stranger.idToken)
+    const res = await getCourse(new NextRequest('http://x'),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+  })
+
+  it('appears in the catalogue for an unauthenticated visitor', async () => {
+    const owner = await makeUser('Owner')
+    await buildCourse(owner.idToken, 'Listed')
+    mockAuth(null)
+    const list = await (await listCourses()).json()
+    expect(list.map((c: { name: string }) => c.name)).toContain('Listed')
+  })
+})
+
+describe('a private course', () => {
+  it('returns 404 to an unauthenticated visitor (no existence leak)', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildPrivateCourse(owner.idToken)
+    mockAuth(null)
+    const res = await getCourse(new NextRequest('http://x'),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 to a signed-in non-owner', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await buildPrivateCourse(owner.idToken)
+    mockAuth(stranger.idToken)
+    const res = await getCourse(new NextRequest('http://x'),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('is visible to its owner', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildPrivateCourse(owner.idToken)
+    mockAuth(owner.idToken)
+    const res = await getCourse(new NextRequest('http://x'),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.name).toBe('Private Course')
+  })
+
+  it('does NOT appear in the catalogue for an unauthenticated visitor', async () => {
+    const owner = await makeUser('Owner')
+    await buildPrivateCourse(owner.idToken, 'Hidden')
+    mockAuth(null)
+    const list = await (await listCourses()).json()
+    expect(list.map((c: { name: string }) => c.name)).not.toContain('Hidden')
+  })
+
+  it('does NOT appear in the catalogue for a signed-in non-owner', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    await buildPrivateCourse(owner.idToken, 'Hidden')
+    mockAuth(stranger.idToken)
+    const list = await (await listCourses()).json()
+    expect(list.map((c: { name: string }) => c.name)).not.toContain('Hidden')
+  })
+
+  it('DOES appear in the catalogue for its own owner', async () => {
+    const owner = await makeUser('Owner')
+    await buildPrivateCourse(owner.idToken, 'Mine')
+    mockAuth(owner.idToken)
+    const list = await (await listCourses()).json()
+    expect(list.map((c: { name: string }) => c.name)).toContain('Mine')
+  })
+})
+
+describe('toggling visibility', () => {
+  it('the owner can flip a course from public to private', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildCourse(owner.idToken)
+    mockAuth(owner.idToken)
+    const res = await patchCourse(jsonReq(`http://x/att/api/courses/${course.id}`, 'PATCH', { visibility: 'private' }),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.visibility).toBe('private')
+  })
+
+  it('a non-owner cannot flip visibility', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await buildCourse(owner.idToken)
+    mockAuth(stranger.idToken)
+    const res = await patchCourse(jsonReq(`http://x/att/api/courses/${course.id}`, 'PATCH', { visibility: 'private' }),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(403)
+  })
+
+  it('PATCH cannot reassign ownership by sneaking adminUserId through', async () => {
+    const owner = await makeUser('Owner')
+    const attacker = await makeUser('Attacker')
+    const course = await buildCourse(owner.idToken)
+    mockAuth(owner.idToken)
+    const res = await patchCourse(
+      jsonReq(`http://x/att/api/courses/${course.id}`, 'PATCH', { name: 'OK', adminUserId: attacker.id }),
+      { params: Promise.resolve({ courseId: course.id }) }
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.adminUserId).toBe(owner.id)
+  })
+})
+
+describe('creating a trial on a private course', () => {
+  it('a non-owner gets 404 (private course is hidden from trial-creation)', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await buildPrivateCourse(owner.idToken)
+    mockAuth(stranger.idToken)
+    const res = await createTrial(jsonReq('http://x/att/api/trials', 'POST', {
+      courseId: course.id,
+      name: 'Sneaky',
+      date: '2026-05-01',
+    }))
+    expect(res.status).toBe(404)
+  })
+
+  it('the owner can create a trial, which is forced to private', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildPrivateCourse(owner.idToken)
+    mockAuth(owner.idToken)
+    const res = await createTrial(jsonReq('http://x/att/api/trials', 'POST', {
+      courseId: course.id,
+      name: 'Mine',
+      date: '2026-05-01',
+      visibility: 'public',     // owner asks for public…
+    }))
+    expect(res.status).toBe(201)
+    const trial = await res.json()
+    expect(trial.visibility).toBe('private')   // …server clamps to private.
+  })
+})

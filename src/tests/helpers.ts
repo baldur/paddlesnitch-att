@@ -52,7 +52,10 @@ export async function makeUser(displayName = 'Test User'): Promise<TestUser> {
   }
 }
 
-export async function makeCourse(adminUserId: string): Promise<CourseMetadata> {
+export async function makeCourse(
+  adminUserId: string,
+  opts: { visibility?: 'public' | 'private' } = {},
+): Promise<CourseMetadata> {
   const course: CourseMetadata = {
     id: nanoid(),
     name: 'Test Course',
@@ -62,6 +65,7 @@ export async function makeCourse(adminUserId: string): Promise<CourseMetadata> {
     startLine: [[51.525, -0.91], [51.525, -0.89]],
     finishLine: [[51.575, -0.91], [51.575, -0.89]],
     distanceMetres: 556,
+    visibility: opts.visibility ?? 'public',
     createdAt: new Date().toISOString(),
   }
   await putJson(`courses/${course.id}/metadata.json`, course)
@@ -72,6 +76,7 @@ export async function makeTrial(
   courseId: string,
   adminUserId: string,
   status: 'open' | 'closed' = 'open',
+  opts: { visibility?: 'public' | 'private' } = {},
 ): Promise<TrialMetadata> {
   const trial: TrialMetadata = {
     id: nanoid(),
@@ -80,6 +85,7 @@ export async function makeTrial(
     date: '2024-06-01',
     status,
     adminUserId,
+    visibility: opts.visibility ?? 'public',
     createdAt: new Date().toISOString(),
   }
   await putJson(`trials/${trial.id}/metadata.json`, trial)

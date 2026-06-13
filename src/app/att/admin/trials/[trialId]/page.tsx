@@ -42,6 +42,17 @@ export default function TrialAdminPage({
     setToggling(false)
   }
 
+  const toggleVisibility = async () => {
+    if (!trial) return
+    const next = trial.visibility === 'public' ? 'private' : 'public'
+    const updated = await fetch(`/att/api/trials/${trialId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility: next }),
+    }).then(r => r.json())
+    setTrial(updated)
+  }
+
   if (!trial || !course) {
     return (
       <main className="flex-1 flex items-center justify-center text-[#64748b] text-sm">
@@ -106,6 +117,21 @@ export default function TrialAdminPage({
                 : trial.status === 'open'
                 ? 'CLOSE TRIAL'
                 : 'REOPEN TRIAL'}
+            </button>
+            {/* Visibility flip. Server clamps to private when the parent
+                course is private, so the user can still click but it might
+                end up clamped — the next load reflects what was stored. */}
+            <button
+              type="button"
+              onClick={toggleVisibility}
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+              title={
+                course.visibility === 'private'
+                  ? 'Course is private, so this trial is private too.'
+                  : 'Toggle who can see this trial.'
+              }
+            >
+              {trial.visibility === 'public' ? 'PUBLIC ↔ PRIVATE' : 'PRIVATE ↔ PUBLIC'}
             </button>
           </div>
         </section>

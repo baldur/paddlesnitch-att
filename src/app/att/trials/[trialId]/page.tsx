@@ -1,5 +1,8 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { getJson } from '@/lib/storage'
+import { getAuthUser } from '@/lib/auth'
+import { canViewTrial } from '@/lib/permissions'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import AuthNav from '@/components/AuthNav'
@@ -14,13 +17,12 @@ export default async function TrialPage({
 }) {
   const { trialId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
-  if (!trial) {
-    return (
-      <main className="flex-1 flex items-center justify-center text-[#64748b] text-sm">
-        Trial not found.
-      </main>
-    )
-  }
+  if (!trial) notFound()
+  // Hide existence of private trials. Anyone who can't view gets the same
+  // 404 as a missing trial — no leakage of "this trial exists but you can't
+  // see it" through differing copy.
+  const viewer = await getAuthUser()
+  if (!canViewTrial(trial, viewer)) notFound()
 
   const [course, leaderboard] = await Promise.all([
     getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`),

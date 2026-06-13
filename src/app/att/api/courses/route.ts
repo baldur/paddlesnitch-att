@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, listKeys } from '@/lib/storage'
-import type { CourseMetadata } from '@/lib/types'
+import { isListedForViewer } from '@/lib/permissions'
+import type { CourseMetadata, Visibility } from '@/lib/types'
+
+function isVisibility(v: unknown): v is Visibility {
+  return v === 'public' || v === 'private'
+}
 
 export async function GET() {
+  const viewer = await getAuthUser()
   const keys = await listKeys('courses/')
   const metaKeys = keys.filter(k => k.endsWith('metadata.json'))
   const courses = (
     await Promise.all(metaKeys.map(k => getJson<CourseMetadata>(k)))
-  ).filter(Boolean)
-  return NextResponse.json(courses)
+  ).filter((c): c is CourseMetadata => !!c)
+  return NextResponse.json(courses.filter(c => isListedForViewer(c, viewer)))
 }
 
 export async function POST(req: NextRequest) {
@@ -18,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { name, sport, type = 'point_to_point', startLine, finishLine, distanceMetres, minValidSeconds, gateDirection, gates } = body
+  const { name, sport, type = 'point_to_point', startLine, finishLine, distanceMetres, minValidSeconds, gateDirection, gates, visibility } = body
   const hasGates = type === 'gate' && Array.isArray(gates) && gates.length >= 2
   if (!name || !sport || (!startLine && !hasGates)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -48,6 +54,9 @@ export async function POST(req: NextRequest) {
     ...(resolvedGateDirection != null ? { gateDirection: Number(resolvedGateDirection) as 1 | -1 } : {}),
     ...(type === 'gate' && gates ? { gates } : {}),
     adminUserId: user.id,
+    // Default to public — unspecified or malformed values fall through to the
+    // safer-for-discovery option. Owners explicitly opt into private.
+    visibility: isVisibility(visibility) ? visibility : 'public',
     createdAt: new Date().toISOString(),
   }
   await putJson(`courses/${id}/metadata.json`, course)

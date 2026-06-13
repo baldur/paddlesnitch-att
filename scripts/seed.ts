@@ -189,6 +189,7 @@ async function main() {
     finishLine: C1_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C1_START), midpoint(C1_FINISH))),
     adminUserId: admin.id,
+    visibility: 'public',
     createdAt: '2025-03-01T09:00:00.000Z',
   }
   await write(`courses/${c1Id}/metadata.json`, c1)
@@ -204,6 +205,7 @@ async function main() {
     finishLine: C2_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C2_START), midpoint(C2_FINISH))),
     adminUserId: admin.id,
+    visibility: 'public',
     createdAt: '2025-03-15T09:00:00.000Z',
   }
   await write(`courses/${c2Id}/metadata.json`, c2)
@@ -216,6 +218,7 @@ async function main() {
     name: 'Spring Sprint 2025',
     date: '2025-04-12', status: 'closed',
     adminUserId: admin.id,
+    visibility: 'public',
     createdAt: '2025-04-01T08:00:00.000Z',
   }
   await write(`trials/${t1Id}/metadata.json`, trial1)
@@ -226,6 +229,7 @@ async function main() {
     name: 'Summer Championships 2025',
     date: '2025-07-19', status: 'closed',
     adminUserId: admin.id,
+    visibility: 'public',
     createdAt: '2025-07-01T08:00:00.000Z',
   }
   await write(`trials/${t2Id}/metadata.json`, trial2)
@@ -236,6 +240,7 @@ async function main() {
     name: 'Harbour Race 2025',
     date: '2025-06-07', status: 'open',
     adminUserId: admin.id,
+    visibility: 'public',
     createdAt: '2025-05-20T08:00:00.000Z',
   }
   await write(`trials/${t3Id}/metadata.json`, trial3)

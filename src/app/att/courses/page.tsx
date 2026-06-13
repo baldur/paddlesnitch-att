@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
+import { getAuthUser } from '@/lib/auth'
+import { isListedForViewer } from '@/lib/permissions'
 import AuthNav from '@/components/AuthNav'
-import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+import type { CourseMetadata, TrialMetadata, AuthUser } from '@/lib/types'
 
 // Reads live course state from storage on every request — never prerender.
 export const dynamic = 'force-dynamic'
@@ -12,21 +14,27 @@ type CourseWithCounts = {
   openCount: number
 }
 
-async function getCoursesWithCounts(): Promise<CourseWithCounts[]> {
+async function getCoursesWithCounts(viewer: AuthUser | null): Promise<CourseWithCounts[]> {
   const keys = await listKeys('courses/')
   const metaKeys = keys.filter(k => k.endsWith('metadata.json'))
   const courses = (
     await Promise.all(metaKeys.map(k => getJson<CourseMetadata>(k)))
-  ).filter((c): c is CourseMetadata => c !== null)
+  )
+    .filter((c): c is CourseMetadata => c !== null)
+    .filter(c => isListedForViewer(c, viewer))
 
   // Fetch trials once and group by courseId — cheaper than N queries.
+  // Counts only include trials the viewer is allowed to see so a public
+  // course doesn't surface "5 trials" when 4 are private to another user.
   const trialKeys = await listKeys('trials/')
   const trialMetaKeys = trialKeys.filter(
     k => k.endsWith('metadata.json') && !k.includes('/entries/')
   )
   const trials = (
     await Promise.all(trialMetaKeys.map(k => getJson<TrialMetadata>(k)))
-  ).filter((t): t is TrialMetadata => t !== null)
+  )
+    .filter((t): t is TrialMetadata => t !== null)
+    .filter(t => isListedForViewer(t, viewer))
 
   return courses
     .map(course => {
@@ -48,7 +56,8 @@ function courseTypeLabel(course: CourseMetadata): string {
 }
 
 export default async function CoursesCataloguePage() {
-  const courses = await getCoursesWithCounts()
+  const viewer = await getAuthUser()
+  const courses = await getCoursesWithCounts(viewer)
 
   return (
     <main className="flex-1 flex flex-col">

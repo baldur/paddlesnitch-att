@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
-import type { CourseMetadata } from '@/lib/types'
+import { canViewCourse, canManageCourse } from '@/lib/permissions'
+import type { CourseMetadata, Visibility } from '@/lib/types'
 
 type Params = { params: Promise<{ courseId: string }> }
+
+function isVisibility(v: unknown): v is Visibility {
+  return v === 'public' || v === 'private'
+}
 
 export async function GET(_: NextRequest, { params }: Params) {
   const { courseId } = await params
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
+  // Single 404 for both missing and not-allowed so we don't leak existence
+  // of private resources.
   if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const viewer = await getAuthUser()
+  if (!canViewCourse(course, viewer)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   return NextResponse.json(course)
 }
 
@@ -19,11 +30,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { courseId } = await params
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
   if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (course.adminUserId !== user.id)
+  if (!canManageCourse(course, user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await req.json()
-  const updated = { ...course, ...body, id: course.id, adminUserId: course.adminUserId }
-  await putJson(`courses/${courseId}/metadata.json`, updated)
-  return NextResponse.json(updated)
+  // Whitelist mutable fields rather than spreading body, so a client can't
+  // sneak in adminUserId / id overrides via a PATCH.
+  const next: CourseMetadata = { ...course }
+  if (typeof body.name === 'string') next.name = body.name
+  if (isVisibility(body.visibility)) next.visibility = body.visibility
+  // (Geometry edits get the modify-creates-copy treatment in phase 3.)
+  await putJson(`courses/${courseId}/metadata.json`, next)
+  return NextResponse.json(next)
 }
