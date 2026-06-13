@@ -607,6 +607,37 @@ Story-style permission tests at `src/lib/permissions.test.ts`, `src/tests/course
 
 ---
 
+## Test pyramid
+
+Two tiers. Don't blur them — they catch different bugs and the cost profiles are very different.
+
+| Tier | Lives in | What it catches | Cost |
+|---|---|---|---|
+| **Unit + integration** (vitest) | `src/lib/*.test.ts`, `src/tests/*.test.ts` | Pure-function correctness, route-handler behaviour, every row of the permission matrix as a story-style test name | ~2 s for the whole suite |
+| **E2E critical paths** (Playwright) | `e2e/critical/*.spec.ts` | Real-browser cookie flows, form-to-route-to-page round trips, redirect chains, multi-page navigations | ~30 s per scenario; 3–5 scenarios target |
+
+### Run
+
+```bash
+pnpm test          # vitest (302 tests, ~2 s)
+pnpm e2e           # headless Playwright (runs pnpm dev under the hood)
+pnpm e2e:ui        # Playwright UI mode — for debugging failing tests
+pnpm e2e:install   # one-time install of the chromium browser
+```
+
+CI runs both: vitest in `deploy.yml`, Playwright in `e2e.yml`. The Playwright workflow caches `~/.cache/ms-playwright` keyed by the package version, so cold runs only pay the ~90 MB Chromium download on a version bump.
+
+### Discipline
+
+- **Permission rules belong in vitest, not Playwright.** Every "X can/cannot do Y" check is cheaper, more deterministic, and more readable as a story-style unit test. E2E is for flows that span multiple pages or rely on real browser behaviour (cookies, redirects, client-side navigation).
+- **One critical path per spec file.** Keep specs focused so a failure points directly at one broken flow.
+- **No shared state between specs.** Each test creates its own user via `signUpFlow()` (in `e2e/helpers.ts`) with a unique email. Don't seed shared data across runs.
+- **When a vitest story would suffice, write the vitest story.** Reserve Playwright for things vitest physically can't reach.
+
+Failure artifacts (trace, screenshot, video) upload as `playwright-report` on a failed CI run; viewable inline in the Actions UI. Locally: `pnpm exec playwright show-report` after a failed run.
+
+---
+
 ## Map Notes
 
 - **Drawing**: `DrawingMap.tsx` uses click-to-place. Click "SET START LINE", click 2 points across the river, line is drawn. Repeat for finish. Lines can be reset. No Leaflet.draw dependency.
