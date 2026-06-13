@@ -15,6 +15,7 @@ function NewTrialForm() {
   const [courseId, setCourseId] = useState(presetCourseId)
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
@@ -36,7 +37,7 @@ function NewTrialForm() {
       const res = await fetch('/att/api/trials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, name: name.trim(), date }),
+        body: JSON.stringify({ courseId, name: name.trim(), date, visibility }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -132,6 +133,41 @@ function NewTrialForm() {
             className={`${inputClass} cursor-pointer`}
           />
           <p className="text-xs text-[#64748b]">When the trial takes place. Defaults to today.</p>
+        </div>
+
+        {/* Visibility. Public is only offered when the course itself is public —
+            otherwise the trial would leak the course's geometry to anyone with
+            the link. The server clamps anyway; the UI explains why. */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
+          <div className="flex gap-2">
+            {(['public', 'private'] as const).map(v => {
+              const disabled = v === 'public' && selectedCourse?.visibility === 'private'
+              const active = (selectedCourse?.visibility === 'private' ? 'private' : visibility) === v
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setVisibility(v)}
+                  className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
+                    active
+                      ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
+                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                  } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  {v.toUpperCase()}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-[#64748b]">
+            {selectedCourse?.visibility === 'private'
+              ? 'This course is private, so any trial on it must be private too.'
+              : visibility === 'public'
+                ? 'The leaderboard will be visible to anyone.'
+                : 'Only you can see this trial and its leaderboard.'}
+          </p>
         </div>
 
         {error && (

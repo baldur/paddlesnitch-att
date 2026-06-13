@@ -31,6 +31,17 @@ export default function CourseAdminPage({
       .then(setTrials)
   }, [courseId])
 
+  const toggleVisibility = async () => {
+    if (!course) return
+    const next = course.visibility === 'public' ? 'private' : 'public'
+    const updated = await fetch(`/att/api/courses/${courseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility: next }),
+    }).then(r => r.json())
+    setCourse(updated)
+  }
+
   const createTrial = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -84,9 +95,29 @@ export default function CourseAdminPage({
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section>
-          <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-1">
-            {course.name.toUpperCase()}
-          </h1>
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+              {course.name.toUpperCase()}
+            </h1>
+            <div className="flex flex-col items-end gap-2">
+              <span
+                className={`text-xs px-2 py-0.5 border ${
+                  course.visibility === 'public'
+                    ? 'border-[#15803d] text-[#15803d]'
+                    : 'border-[#64748b] text-[#64748b]'
+                }`}
+              >
+                {course.visibility.toUpperCase()}
+              </span>
+              <button
+                type="button"
+                onClick={toggleVisibility}
+                className="px-3 py-1 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+              >
+                {course.visibility === 'public' ? '→ MAKE PRIVATE' : '→ MAKE PUBLIC'}
+              </button>
+            </div>
+          </div>
           <p className="text-xs text-[#64748b] mb-4">
             {course.sport.toUpperCase()} · {course.distanceMetres.toLocaleString()} M
             {course.type === 'loop' && ' · LOOP'}

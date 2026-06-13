@@ -53,6 +53,7 @@ export default function NewCoursePage() {
   const [finishLine, setFinishLine] = useState<Line | undefined>()
   const [gates, setGates] = useState<GateData | undefined>()
   const [distanceMetres, setDistanceMetres] = useState<number | null>(null)
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -129,6 +130,7 @@ export default function NewCoursePage() {
           ...(isP2P ? { finishLine } : {}),
           distanceMetres: dist,
           minValidSeconds: minValidSecondsRef.current?.value ? parseInt(minValidSecondsRef.current.value, 10) : undefined,
+          visibility,
         }),
       })
       if (!res.ok) {
@@ -264,6 +266,32 @@ export default function NewCoursePage() {
             <input ref={minValidSecondsRef} type="number" min={0} placeholder="e.g. 300" className={inputClass} />
             <p className="text-xs text-[#64748b]">
               Ignore results shorter than this. Useful for loop courses where warmup crossings could be mistaken for a race.
+            </p>
+          </div>
+
+          {/* Visibility */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
+            <div className="flex gap-2">
+              {(['public', 'private'] as const).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setVisibility(v)}
+                  className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
+                    visibility === v
+                      ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
+                      : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
+                  }`}
+                >
+                  {v.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[#64748b]">
+              {visibility === 'public'
+                ? 'Anyone can find this course. Anyone can open a time trial on it.'
+                : 'Only you can see this course and the trials on it. You can change this later.'}
             </p>
           </div>
 
