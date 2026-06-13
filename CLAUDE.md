@@ -172,6 +172,12 @@ A named stretch of water with:
 - Owned by the user who created it (the **course admin**)
 - **Visibility** — `public` | `private` (phase 1). Public courses appear in the catalogue and on detail pages for any visitor; private courses are owner-only. `club` visibility (scoped to a specific club's members) arrives in phase 4. Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
 
+#### Modify-creates-copy
+
+If a course has at least one entry on it (across any trial), editing its **geometry** — `type`, `startLine`, `finishLine`, `gates`, `gateDirection`, `distanceMetres`, `minValidSeconds` — does not mutate. The PATCH route clones the course with the new geometry, assigns the editor as the admin of the clone, and returns it with `cloned: true` and `clonedFrom: <originalId>`. The original is left untouched so historical leaderboards stay interpretable. Name + visibility edits still mutate in place — they don't invalidate any race result.
+
+Detection lives in `src/lib/course-entries.ts` (`courseHasEntries`, `geometryChanged`, `GEOMETRY_FIELDS`). PATCH logic lives in `src/app/att/api/courses/[courseId]/route.ts`.
+
 ### Course Types
 
 Three canonical types surfaced in the UI:
