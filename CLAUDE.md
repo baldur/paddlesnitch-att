@@ -523,6 +523,31 @@ Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces th
 
 ---
 
+## Terms of Service
+
+Versioned markdown at `legal/tos-{version}.md`. The current version constant is `CURRENT_TOS_VERSION` in `src/lib/types.ts` — bump it when the document changes materially.
+
+### Acceptance flow
+
+- **Signup** requires `acceptedTosVersion: CURRENT_TOS_VERSION` in the request body. The signup form on `/att/auth` ships the constant; an out-of-date client gets 422 instead of silently signing the user up.
+- The signup hook records `{ version, acceptedAt }` at `users/{userId}/tos-consent.json` so a re-accept gate on the next bump can tell who's already up to date.
+- `GET /att/api/account/tos` returns `{ currentVersion, accepted, acceptances[] }` for the authenticated viewer.
+- `POST /att/api/account/tos { version }` records an acceptance. Refuses anything other than `CURRENT_TOS_VERSION` (no future-version land-grab).
+- Public ToS page at `/att/tos` rendered from the markdown source.
+
+### Bumping a version
+
+1. Copy `legal/tos-{prev}.md` to `legal/tos-{new}.md`. Edit.
+2. Set `CURRENT_TOS_VERSION` in `src/lib/types.ts` to the new string.
+3. Update the signup form's hard-coded `acceptedTosVersion: '...'` (in `src/app/att/auth/page.tsx`) to match.
+4. (Future) wire a re-accept gate on the next authenticated request.
+
+## Make-public acknowledgement
+
+Flipping a trial from `private` (or `club`) to `public` via PATCH requires `acknowledged: true` in the request body. Without it, the route returns 422 with `{ code: 'make_public_ack_required' }`. The owner has to explicitly tick a box; the ToS warns participants that performance times may become public, so we don't chase individual consents at the moment of the flip. Public → private and public → public are exempt — the gate only fires when widening visibility.
+
+---
+
 ## Roles & Permissions
 
 Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:

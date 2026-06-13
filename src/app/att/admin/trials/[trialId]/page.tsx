@@ -57,11 +57,28 @@ export default function TrialAdminPage({
   const toggleVisibility = async () => {
     if (!trial) return
     const next = trial.visibility === 'public' ? 'private' : 'public'
-    const updated = await fetch(`/att/api/trials/${trialId}`, {
+    // Make-public acknowledgement gate. Server enforces too; the client
+    // confirm makes the trade-off explicit so we're not silently flipping
+    // someone's performance time into a public leaderboard.
+    if (next === 'public' && trial.visibility !== 'public') {
+      const ok = window.confirm(
+        'Make this trial public?\n\n' +
+        'Everyone’s name and time on the leaderboard will become visible to anyone on the internet. ' +
+        'Participants were told in the Terms of Service that this could happen, but it cannot be undone for results that get cached or shared.\n\n' +
+        'Continue?'
+      )
+      if (!ok) return
+    }
+    const res = await fetch(`/att/api/trials/${trialId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visibility: next }),
-    }).then(r => r.json())
+      body: JSON.stringify({ visibility: next, acknowledged: next === 'public' }),
+    })
+    const updated = await res.json()
+    if (!res.ok) {
+      alert(updated.error ?? 'Could not change visibility')
+      return
+    }
     setTrial(updated)
   }
 

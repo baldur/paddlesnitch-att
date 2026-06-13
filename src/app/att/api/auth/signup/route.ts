@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signUp, signIn } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
+import { recordAcceptance } from '@/lib/tos'
+import { CURRENT_TOS_VERSION } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
-  const { email, displayName, password } = await req.json()
+  const { email, displayName, password, acceptedTosVersion } = await req.json()
 
   if (!email || !displayName || !password) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -12,6 +14,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'Password must be at least 8 characters' },
       { status: 400 }
+    )
+  }
+  // ToS acceptance is mandatory on signup. The client must echo the
+  // current version it rendered so we don't accidentally accept a stale
+  // version the user never saw.
+  if (acceptedTosVersion !== CURRENT_TOS_VERSION) {
+    return NextResponse.json(
+      { error: `You must accept the Terms of Service (version ${CURRENT_TOS_VERSION}) to create an account.` },
+      { status: 422 }
     )
   }
 
@@ -33,6 +44,16 @@ export async function POST(req: NextRequest) {
   const tokens = await signIn(normalised, password)
   if ('error' in tokens) {
     return NextResponse.json({ error: 'Signed up but auto-login failed — please sign in.' }, { status: 500 })
+  }
+
+  // Record acceptance before we hand back the cookie so the user lands on
+  // an authenticated request with the consent in place. Failure here is
+  // logged but doesn't block signup — the re-accept gate would fire on
+  // the next request.
+  try {
+    await recordAcceptance(created.sub, CURRENT_TOS_VERSION)
+  } catch (err) {
+    console.error('[signup] recordAcceptance failed', err)
   }
 
   const res = NextResponse.json(
