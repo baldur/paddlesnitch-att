@@ -32,7 +32,7 @@ function AuthForm() {
     if (e === 'strava_state_mismatch') return 'Strava sign-in failed (state mismatch). Please try again.'
     if (e === 'strava_exchange_failed') return 'Strava sign-in failed during token exchange. Please try again.'
     if (e === 'strava_profile_failed') return 'Could not load your Strava profile. Please try again.'
-    if (e === 'strava_no_email') return 'Your Strava account does not have a verified email. Please sign up with email and password instead.'
+    if (e === 'strava_no_email') return 'Strava did not share your email. On the Strava consent screen, make sure "View your full profile, including your email address" is allowed. If it was, your email may be marked private on Strava — sign up with email and password instead.'
     if (e === 'strava_user_create_failed') return 'Could not create an account from your Strava profile. Please try email sign-up.'
     if (e === 'strava_signin_failed') return 'Could not complete Strava sign-in. Please try again.'
     if (e === 'strava_not_configured') return 'Strava sign-in is not configured on this server.'

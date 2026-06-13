@@ -7,7 +7,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    exclude: ['**/node_modules/**', '**/infra/**', '**/.open-next/**', '**/.next/**'],
+    // Exclude `e2e/` — those are Playwright specs, not vitest. Their
+    // `test()` import comes from @playwright/test and throws when picked
+    // up by vitest's runner.
+    exclude: ['**/node_modules/**', '**/infra/**', '**/.open-next/**', '**/.next/**', 'e2e/**'],
     globalSetup: ['./src/tests/global-setup.ts'],
     testTimeout: 15000,
   },

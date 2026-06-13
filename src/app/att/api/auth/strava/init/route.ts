@@ -15,7 +15,12 @@ export async function GET(req: NextRequest) {
 
   const state = randomBytes(24).toString('hex')
   const redirectUri = new URL('/att/api/auth/strava/callback', base).toString()
-  const url = await authorizeUrl(state, redirectUri)
+  // `force` makes Strava show the consent screen even if the user has
+  // previously authorized us. Without this, users who first authorized
+  // before the profile:read_all scope was added get a new token issued
+  // silently with their OLD scopes — and /api/v3/athlete returns no email.
+  // The sign-in flow can't recover from that without re-consent.
+  const url = await authorizeUrl(state, redirectUri, 'force')
   if (!url) {
     return NextResponse.redirect(new URL(`/att/auth?error=strava_not_configured`, base))
   }

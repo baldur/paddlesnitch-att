@@ -84,14 +84,31 @@ async function getClientId(): Promise<string | undefined> {
 // Strava email via /api/v3/athlete. The link flow doesn't strictly need
 // it, but the sign-in flow does, and asking for the wider scope once is
 // cleaner than maintaining two consent screens for the same user.
-export async function authorizeUrl(state: string, redirectUri: string): Promise<string | null> {
+//
+// `prompt` controls Strava's `approval_prompt` query param:
+//   - 'auto'  — skip the consent screen if the user has already authorized
+//               the app. Smooth UX but BROKEN if the previously-approved
+//               scopes are a subset of what we ask for now: Strava issues
+//               a new token with the *old* (narrower) scopes silently.
+//   - 'force' — always show the consent screen. One extra click per call,
+//               but the token always reflects the current scope set.
+//
+// Sign-in needs 'force' so a user whose existing token lacks
+// `profile:read_all` gets re-prompted and the new token includes the
+// email-bearing scope. Link can keep 'auto' since it doesn't depend on
+// the email field.
+export async function authorizeUrl(
+  state: string,
+  redirectUri: string,
+  prompt: 'auto' | 'force' = 'auto',
+): Promise<string | null> {
   const clientId = await getClientId()
   if (!clientId) return null
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
     redirect_uri: redirectUri,
-    approval_prompt: 'auto',
+    approval_prompt: prompt,
     scope: 'read,activity:read_all,profile:read_all',
     state,
   })
