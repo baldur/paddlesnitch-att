@@ -9,6 +9,10 @@ import {
   putPendingInvitation,
 } from '@/lib/clubs'
 import { canManageClub } from '@/lib/permissions'
+import { sendEmail } from '@/lib/email'
+import { pendingInviteEmail, existingAccountInviteEmail } from '@/lib/invitation-email'
+import { canonicalBaseUrl } from '@/lib/url'
+import { isSyntheticStravaEmail } from '@/lib/strava-account'
 
 type Params = { params: Promise<{ clubId: string }> }
 
@@ -54,6 +58,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   const role = body.role === 'admin' ? 'admin' : 'member'
 
+  const baseUrl = canonicalBaseUrl(req)
+  const inviterName = user.displayName || user.email
+  // Synthetic Strava emails are non-routable placeholders — they live on
+  // noreply.paddlesnitch.com and have no inbox. Skip the send rather than
+  // bouncing a real address (the local part is strava-{athleteId} which
+  // could collide with a real recipient by accident).
+  const inboxIsReal = !isSyntheticStravaEmail(email)
+
   const matched = await findUserByEmail(email)
   if (matched) {
     // Already-an-account invite. Stored resolved under the club so the
@@ -65,6 +77,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       toUserId: matched.sub,
     })
     await putInvitation(invitation)
+    if (inboxIsReal) {
+      const { subject, text } = existingAccountInviteEmail({ club, inviterName, baseUrl, role })
+      await sendEmail({ to: email, subject, text })
+    }
     return NextResponse.json({ invitation, resolved: true }, { status: 201 })
   }
 
@@ -77,5 +93,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     toEmail: email,
   })
   await putPendingInvitation(invitation)
+  // Without this email the recipient has no idea they were invited — the
+  // whole point of the pending-invitation feature breaks (see #53).
+  if (inboxIsReal) {
+    const { subject, text } = pendingInviteEmail({ club, inviterName, baseUrl, role })
+    await sendEmail({ to: email, subject, text })
+  }
   return NextResponse.json({ invitation, resolved: false }, { status: 201 })
 }
