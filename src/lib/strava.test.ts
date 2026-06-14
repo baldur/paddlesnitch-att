@@ -40,6 +40,20 @@ describe('authorizeUrl', () => {
     expect(url).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fatt%2Fapi%2Fstrava%2Fcallback')
   })
 
+  it('defaults approval_prompt to auto when no prompt is passed', async () => {
+    const url = (await authorizeUrl('s', 'http://x'))!
+    expect(url).toContain('approval_prompt=auto')
+  })
+
+  it('passes approval_prompt=force when explicitly requested', async () => {
+    // Sign-in path needs this so existing users get re-prompted and the
+    // new token reflects the current (wider) scope set. See the comment
+    // in src/lib/strava.ts and /att/api/auth/strava/init/route.ts.
+    const url = (await authorizeUrl('s', 'http://x', 'force'))!
+    expect(url).toContain('approval_prompt=force')
+    expect(url).not.toContain('approval_prompt=auto')
+  })
+
   it('returns null when the client id is not configured', async () => {
     delete process.env.STRAVA_CLIENT_ID
     delete process.env.STRAVA_CLIENT_ID_PARAM
