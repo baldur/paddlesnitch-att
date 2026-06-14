@@ -10,6 +10,8 @@ import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as route53 from 'aws-cdk-lib/aws-route53'
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets'
+import * as ses from 'aws-cdk-lib/aws-ses'
+import * as sesActions from 'aws-cdk-lib/aws-ses-actions'
 import { Construct } from 'constructs'
 
 export class AttStack extends cdk.Stack {
@@ -348,6 +350,106 @@ export class AttStack extends cdk.Stack {
       zone: hostedZone,
       recordName: 'www',
       target: route53.RecordTarget.fromAlias(new route53targets.CloudFrontTarget(distribution)),
+    })
+
+    // ---------------------------------------------------------------------------
+    // Inbound email — privacy@paddlesnitch.com forwarder
+    // ---------------------------------------------------------------------------
+    // SES receives mail addressed to privacy@paddlesnitch.com, stores the
+    // raw MIME under inbound-email/privacy/{messageId} in the data bucket,
+    // and invokes a Lambda that re-sends the message to the human inbox.
+    //
+    // NOTE: SES allows ONE active receipt rule set per region. After the
+    // first deploy that creates the rule set, run:
+    //   aws ses set-active-receipt-rule-set --rule-set-name <name> --region eu-west-1
+    // The rule set name is exported below as ReceiptRuleSetName.
+    // We could automate this via an AwsCustomResource, but that risks
+    // clobbering an active rule set someone set manually in the future,
+    // so we keep activation as a one-time human step.
+
+    const inboundEmailBucket = dataBucket
+    const inboundEmailPrefix = 'inbound-email/privacy/'
+
+    // SES needs PutObject on the prefix to deliver mail to S3. The bucket
+    // policy must explicitly allow the SES service principal scoped to
+    // this account + region; without the SourceAccount + SourceArn
+    // conditions, the action would 403.
+    inboundEmailBucket.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowSesInboundPut',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
+      actions: ['s3:PutObject'],
+      resources: [`${inboundEmailBucket.bucketArn}/${inboundEmailPrefix}*`],
+      conditions: {
+        StringEquals: {
+          'AWS:SourceAccount': this.account,
+        },
+        StringLike: {
+          'AWS:SourceArn': `arn:aws:ses:${this.region}:${this.account}:receipt-rule-set/*`,
+        },
+      },
+    }))
+
+    const forwarderFn = new lambda.Function(this, 'EmailForwarderFn', {
+      functionName: 'att-email-forwarder',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/email-forwarder')),
+      timeout: cdk.Duration.seconds(20),
+      memorySize: 256,
+      environment: {
+        INBOUND_BUCKET: inboundEmailBucket.bucketName,
+        INBOUND_PREFIX: inboundEmailPrefix,
+        FROM_EMAIL: 'noreply@paddlesnitch.com',
+        // Hard-coded for now — the only privacy contact today. When we
+        // need more sophisticated routing (per-team aliases, on-call
+        // rotation) this becomes a Parameter Store lookup.
+        FORWARD_TO: 'baldur.gudbjornsson@gmail.com',
+        SUBJECT_PREFIX: '[paddlesnitch]',
+      },
+    })
+
+    forwarderFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [`${inboundEmailBucket.bucketArn}/${inboundEmailPrefix}*`],
+    }))
+    forwarderFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendRawEmail'],
+      resources: [`arn:aws:ses:${this.region}:${this.account}:identity/paddlesnitch.com`],
+    }))
+
+    const ruleSet = new ses.ReceiptRuleSet(this, 'InboundRules', {
+      receiptRuleSetName: 'paddlesnitch-inbound',
+    })
+
+    ruleSet.addRule('PrivacyAlias', {
+      recipients: ['privacy@paddlesnitch.com'],
+      scanEnabled: true,    // spam / virus marker headers added to S3 object
+      tlsPolicy: ses.TlsPolicy.OPTIONAL,
+      actions: [
+        new sesActions.S3({
+          bucket: inboundEmailBucket,
+          objectKeyPrefix: inboundEmailPrefix,
+        }),
+        new sesActions.Lambda({
+          function: forwarderFn,
+          invocationType: sesActions.LambdaInvocationType.EVENT,
+        }),
+      ],
+    })
+
+    // MX record so the world knows where to send paddlesnitch.com mail.
+    // priority 10 is conventional for a single MX target.
+    new route53.MxRecord(this, 'InboundMx', {
+      zone: hostedZone,
+      recordName: 'paddlesnitch.com.',
+      values: [{ priority: 10, hostName: `inbound-smtp.${this.region}.amazonaws.com` }],
+      ttl: cdk.Duration.minutes(30),
+    })
+
+    new cdk.CfnOutput(this, 'ReceiptRuleSetName', {
+      value: ruleSet.receiptRuleSetName,
+      description: 'Run `aws ses set-active-receipt-rule-set --rule-set-name <this> --region eu-west-1` once to activate.',
     })
 
     // ---------------------------------------------------------------------------

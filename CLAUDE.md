@@ -582,6 +582,40 @@ Flipping a trial from `private` (or `club`) to `public` via PATCH requires `ackn
 
 ---
 
+## Inbound email — privacy@paddlesnitch.com
+
+Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded to the human inbox by the `att-email-forwarder` Lambda.
+
+### Pipeline
+
+1. **MX record** on `paddlesnitch.com` → `inbound-smtp.eu-west-1.amazonaws.com` (priority 10).
+2. **SES receipt rule** `PrivacyAlias` in rule set `paddlesnitch-inbound`. Recipients: `privacy@paddlesnitch.com`. Actions in order:
+   - **S3** — stores raw MIME at `s3://paddlesnitch-data-prod/inbound-email/privacy/{messageId}` for audit. Spam + virus scan headers are added by SES (`scanEnabled: true`).
+   - **Lambda** — invokes `att-email-forwarder` (event-style, fire-and-forget).
+3. **Lambda forwarder** (`infra/lambdas/email-forwarder/index.mjs`) reads the raw MIME, parses headers, builds a fresh MIME with `From: noreply@paddlesnitch.com` + `Reply-To: <original sender>`, and `SendRawEmail`s it to `FORWARD_TO` (currently `baldur.gudbjornsson@gmail.com`).
+
+### One-time activation
+
+SES allows ONE active receipt rule set per region. After the first deploy that creates the rule set, run **once**:
+
+```bash
+aws ses set-active-receipt-rule-set --rule-set-name paddlesnitch-inbound --region eu-west-1 --profile paddlesnitch
+```
+
+CDK does NOT automate this — an AwsCustomResource that flips the active set would risk clobbering a manually-set production rule set during routine deploys.
+
+### Adding a new alias
+
+1. Add a new `addRule` call to the `InboundRules` rule set in `infra/lib/att-stack.ts` with a different recipient address and (optionally) a different S3 prefix.
+2. If the forwarder should handle the new alias the same way, no Lambda change needed — the existing forwarder treats every record uniformly.
+3. If the new alias should go to a different person, either parameterise `FORWARD_TO` per-alias (read from S3 prefix or rule name) or deploy a second Lambda.
+
+### Tests
+
+- `src/tests/email-forwarder.test.ts` — pure-helper coverage for the MIME parser + builder (header unfolding, case-insensitive headers, From/Reply-To fallback, subject prefix). The SES + S3 round trip is manual smoke after deploy.
+
+---
+
 ## Roles & Permissions
 
 Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:
