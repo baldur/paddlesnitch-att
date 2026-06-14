@@ -70,12 +70,16 @@ export default function FeedbackWidget() {
     }
   }
 
+  // z-[1100] / z-[1500] below: Leaflet renders its panes between z-200
+  // and z-800; our map-control buttons are at z-[1001]. The trigger
+  // needs to clear them both; the modal needs to clear the trigger as
+  // well as everything underneath. Reported in #57.
   if (!open) {
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-40 border border-[#e2e8f0] bg-white shadow-md px-3 py-2 text-xs text-[#64748b] tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
+        className="fixed bottom-4 right-4 z-[1100] border border-[#e2e8f0] bg-white shadow-md px-3 py-2 text-xs text-[#64748b] tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
         aria-label="Report an issue"
       >
         REPORT AN ISSUE
@@ -85,7 +89,7 @@ export default function FeedbackWidget() {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[1500] bg-black/30 flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={() => setOpen(false)}
     >
       <div

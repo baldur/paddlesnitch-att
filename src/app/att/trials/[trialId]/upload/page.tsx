@@ -25,8 +25,17 @@ function formatDate(iso: string): string {
 
 const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors w-full'
 
-function seatLabel(seat: number | 'C', total: number): string {
+// Kayaks use "Front" / "Back"; rowing uses "Bow" / "Stroke". Middle seats
+// in either sport are just the seat number. Cox (rowing only) shows as
+// "Cox". Reported in #56 — the form used to call K2 seats "Bow"/"Stroke",
+// which is rowing terminology that doesn't apply to kayaks.
+function seatLabel(seat: number | 'C', total: number, sport: 'kayak' | 'rowing'): string {
   if (seat === 'C') return 'Cox'
+  if (sport === 'kayak') {
+    if (seat === 1) return 'Front (1)'
+    if (seat === total) return `Back (${seat})`
+    return `Seat ${seat}`
+  }
   if (seat === 1) return 'Bow (1)'
   if (seat === total) return `Stroke (${seat})`
   return `Seat ${seat}`
@@ -45,17 +54,20 @@ function CrewEditor({
   const info = BOAT_CLASS_INFO[boatClass]
   const total = info.crewSize
   if (total === 1 && !info.hasCox) return null
+  const helperText = info.sport === 'kayak'
+    ? `One row per paddler. Seat 1 is the front, ${total} is the back.`
+    : `One row per seat. Seat 1 is bow, ${total} is stroke${info.hasCox ? ', C is cox' : ''}.`
   return (
     <div className="flex flex-col gap-2">
       <label className="text-xs text-[#64748b] tracking-widest">CREW</label>
       <p className="text-xs text-[#64748b] -mt-1">
-        One row per seat. Seat 1 is bow, {total} is stroke{info.hasCox ? ', C is cox' : ''}.
+        {helperText}
       </p>
       <div className="flex flex-col gap-1.5">
         {crew.map(m => (
           <div key={String(m.seat)} className="flex items-center gap-2">
             <span className="text-xs text-[#64748b] tracking-widest w-20 shrink-0 tabular">
-              {seatLabel(m.seat, total)}
+              {seatLabel(m.seat, total, info.sport)}
             </span>
             <input
               type="text"

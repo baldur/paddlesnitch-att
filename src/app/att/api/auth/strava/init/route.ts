@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { authorizeUrl } from '@/lib/strava'
 import { canonicalBaseUrl } from '@/lib/url'
+import { getAuthUser } from '@/lib/auth'
 
 // Sign in with Strava. Differs from /att/api/strava/connect (which requires
 // an existing session) in two ways: this route is callable without auth, and
@@ -12,6 +13,17 @@ export async function GET(req: NextRequest) {
   // Preserve the `next` query param so we can bounce the user back to where
   // they were trying to go after sign-in.
   const next = req.nextUrl.searchParams.get('next') ?? '/att'
+
+  // If the visitor is already signed in, the Strava OAuth round-trip is
+  // useless and prone to failure (an expired or single-use authorization
+  // code at this point would surface as a token-exchange error even though
+  // they're already authenticated — reported in #55). Just bounce them to
+  // `next`. Users who want to LINK Strava to their account should use the
+  // connect button on /att/account, which has its own flow.
+  const existingUser = await getAuthUser()
+  if (existingUser) {
+    return NextResponse.redirect(new URL(next.startsWith('/') ? next : '/att', base))
+  }
 
   const state = randomBytes(24).toString('hex')
   const redirectUri = new URL('/att/api/auth/strava/callback', base).toString()

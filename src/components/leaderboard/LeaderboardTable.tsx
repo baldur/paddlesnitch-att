@@ -2,7 +2,7 @@
 import React, { useState } from 'react'
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
-import { BOAT_CLASSES } from '@/lib/types'
+import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
 import type { LeaderboardEntry, BoatClass, CrewMember } from '@/lib/types'
 
 // Sort crew so bow comes first, stroke last, cox last of all.
@@ -13,13 +13,24 @@ function seatSort(a: CrewMember, b: CrewMember): number {
 }
 
 // Short prefix used on each crew member in the expanded view.
-// hasCox is needed because the rowing convention puts cox last but it isn't
-// a numbered seat.
-function seatBadge(seat: number | 'C', total: number, hasCox: boolean): string {
+// Sport matters: rowing uses Bow / Stroke, kayak uses Front / Back. hasCox
+// is needed because the rowing convention puts cox last but it isn't a
+// numbered seat. Reported in #56.
+function seatBadge(
+  seat: number | 'C',
+  total: number,
+  hasCox: boolean,
+  sport: 'kayak' | 'rowing',
+): string {
   if (seat === 'C') return 'C'
-  const rowerCount = hasCox ? total - 1 : total
+  const seatCount = hasCox ? total - 1 : total
+  if (sport === 'kayak') {
+    if (seat === 1) return 'F'         // Front
+    if (seat === seatCount) return 'Bk' // Back (avoid colliding with rowing 'B')
+    return String(seat)
+  }
   if (seat === 1) return 'B'           // Bow
-  if (seat === rowerCount) return 'S'  // Stroke
+  if (seat === seatCount) return 'S'   // Stroke
   return String(seat)
 }
 
@@ -134,7 +145,7 @@ export default function LeaderboardTable({
                             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
                               {[...entry.crew].sort(seatSort).map(m => (
                                 <span key={String(m.seat)}>
-                                  <span className="text-[#64748b] mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'))}</span>
+                                  <span className="text-[#64748b] mr-1 tabular">{seatBadge(m.seat, entry.crew.length, !!entry.crew.find(c => c.seat === 'C'), BOAT_CLASS_INFO[entry.boatClass].sport)}</span>
                                   <span className="text-[#0f172a]">{m.name}</span>
                                 </span>
                               ))}
