@@ -13,6 +13,10 @@ function isVisibility(v: unknown): v is Visibility {
   return v === 'public' || v === 'private' || v === 'club'
 }
 
+function isSport(v: unknown): v is CourseMetadata['sport'] {
+  return v === 'kayak' || v === 'rowing' || v === 'both'
+}
+
 async function userCanScopeToClub(userId: string, clubId: string): Promise<boolean> {
   const club = await getClub(clubId)
   if (!club) return false
@@ -93,6 +97,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       adminUserId: user.id,
       // Non-geometry edits carry over from the patch too.
       name: typeof body.name === 'string' ? body.name : course.name,
+      sport: isSport(body.sport) ? body.sport : course.sport,
       createdAt: new Date().toISOString(),
     }
     // Visibility (incl. club-scope validation) runs on the clone like any
@@ -109,6 +114,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // so a client can't sneak in adminUserId / id overrides via a PATCH.
   const next: CourseMetadata = { ...course }
   if (typeof body.name === 'string') next.name = body.name
+  if (isSport(body.sport)) next.sport = body.sport
   await applyVisibility(next, course, body, user.id)
   // Geometry edits on a course WITHOUT entries are also allowed in place —
   // there's nothing to preserve. Whitelist-merge to keep PATCH safe.

@@ -1,7 +1,7 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, Polyline, CircleMarker, useMapEvents, useMap } from 'react-leaflet'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import type { LatLng, Line } from '@/lib/types'
 import RiverLayer from './RiverLayer'
@@ -35,6 +35,13 @@ type Props = {
   onChange: (state: MapState) => void
   defaultCenter?: LatLng
   courseType?: CourseTypeInput
+  // Initial geometry — only used on first mount, so the consumer can
+  // hand us an existing course to edit. Subsequent prop changes don't
+  // overwrite user edits (DrawingMap is the source of truth once
+  // mounted). Used by the edit-course admin page (#58).
+  initialStartLine?: Line
+  initialFinishLine?: Line
+  initialGates?: Array<{ line: Line; direction: 1 | -1 }>
 }
 
 function ClickHandler({ onMapClick }: { onMapClick: (pt: LatLng) => void }) {
@@ -44,15 +51,16 @@ function ClickHandler({ onMapClick }: { onMapClick: (pt: LatLng) => void }) {
 
 const READING: LatLng = [51.4543, -0.9781]
 
-function GeolocateCenter() {
+function GeolocateCenter({ disabled }: { disabled?: boolean }) {
   const map = useMap()
   useEffect(() => {
+    if (disabled) return
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       pos => map.setView([pos.coords.latitude, pos.coords.longitude], 14),
       () => {}
     )
-  }, [map])
+  }, [map, disabled])
   return null
 }
 
@@ -97,20 +105,32 @@ export default function DrawingMap({
   onChange,
   defaultCenter = READING,
   courseType = 'point_to_point',
+  initialStartLine,
+  initialFinishLine,
+  initialGates,
 }: Props) {
   const [mode, setMode] = useState<'start' | 'finish' | number | null>(null)
-  const [startPts, setStartPts] = useState<LatLng[]>([])
-  const [finishPts, setFinishPts] = useState<LatLng[]>([])
-  const [gateEntries, setGateEntries] = useState<GateEntry[]>([
-    { pts: [], direction: 1 },
-    { pts: [], direction: 1 },
-  ])
+  const [startPts, setStartPts] = useState<LatLng[]>(initialStartLine ? [...initialStartLine] : [])
+  const [finishPts, setFinishPts] = useState<LatLng[]>(initialFinishLine ? [...initialFinishLine] : [])
+  const [gateEntries, setGateEntries] = useState<GateEntry[]>(
+    initialGates && initialGates.length >= 2
+      ? initialGates.map(g => ({ pts: [...g.line], direction: g.direction }))
+      : [{ pts: [], direction: 1 }, { pts: [], direction: 1 }]
+  )
   const [mounted, setMounted] = useState(false)
   const [dark, setDark] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
+  // When the user explicitly switches course type from the picker, wipe
+  // the working state. Skipped on the very first render so initial lines
+  // passed by the parent (edit mode) survive the mount.
+  const firstTypeRender = useRef(true)
   useEffect(() => {
+    if (firstTypeRender.current) {
+      firstTypeRender.current = false
+      return
+    }
     setStartPts([]); setFinishPts([])
     setGateEntries([{ pts: [], direction: 1 }, { pts: [], direction: 1 }])
     setMode(null)
@@ -136,6 +156,21 @@ export default function DrawingMap({
     const gates = entries.map(g => ({ line: g.pts as Line, direction: g.direction }))
     onChange({ gates })
   }
+
+  // On mount, push initial geometry up so the parent's form picks up
+  // the existing course's lines without the user having to touch the
+  // map. Skipped if no initial geometry was provided. eslint complains
+  // about the missing onChange / state deps; intentional — we really
+  // do only want this to fire once on mount, before the state-change
+  // emitters take over.
+  useEffect(() => {
+    if (initialGates && initialGates.length >= 2) {
+      emitGates(gateEntries)
+    } else if (initialStartLine || initialFinishLine) {
+      emitSimple(startPts, finishPts)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── click handler ─────────────────────────────────────────────────────────────
 
@@ -332,7 +367,9 @@ export default function DrawingMap({
         <MapContainer center={defaultCenter} zoom={14} style={{ height: 400, width: '100%' }}>
           <TileLayer url={TILES[dark ? 'dark' : 'light']} attribution={ATTRIBUTION} maxZoom={19} />
           <RiverLayer dark={dark} />
-          <GeolocateCenter />
+          {/* Skip auto-geolocate when editing — we want to stay centred
+              on the existing course, not jump to wherever the browser is. */}
+          <GeolocateCenter disabled={!!(initialStartLine || initialGates)} />
           <ClickHandler onMapClick={handleClick} />
 
           {/* Gate lines */}
