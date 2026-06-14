@@ -100,7 +100,7 @@ Run this checklist in order. If anything fails, fix it first.
 
 **Automated:**
 ```bash
-pnpm test         # 145 tests: parsers + Cognito auth + upload + courses + crew + pace/date + GDPR + password-reset + OTP + Lambda triggers + feedback widget
+pnpm test         # 348 tests: parsers + Cognito auth + upload + courses + crew + pace/date + GDPR + password-reset + OTP + Lambda triggers + feedback widget + invitation email
 pnpm build        # TypeScript — catches type regressions
 ```
 
@@ -545,6 +545,8 @@ Reverse index at `users/{userId}/clubs.json` keeps membership checks O(1) withou
 Two paths:
 - **Resolved** (recipient has an account) — stored at `clubs/{clubId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
 - **Pending email** (recipient doesn't yet) — stored at `pending-invitations/clubs/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each club, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
+
+Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/att/auth?next=/att/clubs/{id}` so the recipient lands on the club after signup; resolved invitations link straight to the club page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
 
 ### Club-scoped visibility on courses + trials
 
