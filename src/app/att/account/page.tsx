@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
+import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 
 type StravaStatus =
@@ -40,9 +41,12 @@ function AccountPageInner() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
-  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | null>(null)
+  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | 'contact' | null>(null)
   const [error, setError] = useState('')
   const [strava, setStrava] = useState<StravaStatus | undefined>(undefined)
+  const [contactEmail, setContactEmail] = useState<string>('')
+  const [contactSaved, setContactSaved] = useState<string | null>(null)
+  const [contactMsg, setContactMsg] = useState('')
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -57,6 +61,57 @@ function AccountPageInner() {
       .then(setStrava)
       .catch(() => setStrava({ connected: false }))
   }, [stravaFlashKey])
+
+  useEffect(() => {
+    // Only fetch when we know we have a user — saves an unnecessary
+    // round-trip on signed-out renders.
+    if (!user) return
+    fetch('/att/api/account/contact')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const saved = d?.contact?.email ?? null
+        setContactSaved(saved)
+        setContactEmail(saved ?? '')
+      })
+      .catch(() => { /* leave defaults */ })
+  }, [user])
+
+  async function saveContactEmail(e: React.FormEvent) {
+    e.preventDefault()
+    setContactMsg('')
+    setWorking('contact')
+    try {
+      const res = await fetch('/att/api/account/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: contactEmail.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not save email')
+      setContactSaved(body.contact.email)
+      setContactMsg('Saved.')
+    } catch (err) {
+      setContactMsg(err instanceof Error ? err.message : 'Could not save email')
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function clearContactEmail() {
+    setContactMsg('')
+    setWorking('contact')
+    try {
+      const res = await fetch('/att/api/account/contact', { method: 'DELETE' })
+      if (!res.ok) throw new Error('Could not clear email')
+      setContactSaved(null)
+      setContactEmail('')
+      setContactMsg('Removed.')
+    } catch (err) {
+      setContactMsg(err instanceof Error ? err.message : 'Could not clear email')
+    } finally {
+      setWorking(null)
+    }
+  }
 
   async function disconnectStrava() {
     setError('')
@@ -161,6 +216,53 @@ function AccountPageInner() {
                 <dd className="col-span-2 text-[#64748b] tabular text-xs break-all">{user.id}</dd>
               </dl>
             </section>
+
+            {/* Contact email — only shown to Strava-only accounts (those
+                with a synthesised email). Email-and-password users already
+                have a real email and don't need this. */}
+            {isSyntheticStravaEmail(user.email) && (
+              <section>
+                <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+                  Contact email
+                </h2>
+                <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+                  You signed in with Strava, so the address on your account
+                  ({user.email}) is a placeholder we can&apos;t deliver to. Add a
+                  real email below if you&apos;d like us to send you account or
+                  T&amp;C updates. We&apos;ll never share it. Optional — leave blank
+                  if you prefer.
+                </p>
+                <form onSubmit={saveContactEmail} className="flex flex-col sm:flex-row gap-2 mb-3">
+                  <input
+                    type="email"
+                    value={contactEmail}
+                    onChange={e => setContactEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors flex-1"
+                  />
+                  <button
+                    type="submit"
+                    disabled={working === 'contact' || !contactEmail.trim()}
+                    className="px-4 py-2 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {working === 'contact' ? 'SAVING…' : (contactSaved ? 'UPDATE' : 'SAVE')}
+                  </button>
+                  {contactSaved && (
+                    <button
+                      type="button"
+                      onClick={clearContactEmail}
+                      disabled={working === 'contact'}
+                      className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                    >
+                      REMOVE
+                    </button>
+                  )}
+                </form>
+                {contactMsg && (
+                  <p className="text-xs text-[#64748b]">{contactMsg}</p>
+                )}
+              </section>
+            )}
 
             <section>
               <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
