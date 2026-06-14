@@ -15,6 +15,7 @@ import {
 } from '@/lib/cognito'
 import { setAuthCookies } from '@/lib/auth'
 import { canonicalBaseUrl } from '@/lib/url'
+import { syntheticEmailFor } from '@/lib/strava-account'
 
 // Strava OAuth callback for the SIGN-IN flow. This is what runs after the
 // user approves the authorize page from /att/api/auth/strava/init.
@@ -60,58 +61,71 @@ export async function GET(req: NextRequest) {
   }
   const profile = await getAthleteProfile(tokens.accessToken)
   if (!profile) return fail('strava_profile_failed')
-  if (!profile.email) {
-    // We requested profile:read_all but Strava sometimes returns no email
-    // (e.g. user signed up with a phone number only). Without an email we
-    // can't auto-link to an existing account or send password resets.
-    return fail('strava_no_email')
-  }
+
+  // Strava removed `email` from /api/v3/athlete in 2018-ish as a privacy
+  // policy. Even with profile:read_all granted, the field is never
+  // returned. Rather than block sign-in, we synthesise a stable
+  // strava-{athleteId}@noreply.paddlesnitch.com address that satisfies
+  // Cognito's email-format requirement. The user can add a real contact
+  // email later from /att/account — see src/lib/strava-account.ts and
+  // the StravaContactBanner.
+  const hasRealEmail = !!profile.email
+  const accountEmail = profile.email ?? syntheticEmailFor(profile.id)
 
   // 2. Find or create the matching Cognito user.
   //    Priority:
   //      a) Existing athlete index entry  → use the linked Cognito user.
   //      b) Existing email account        → link the athlete to it.
+  //         (Only applicable when Strava actually gave us an email;
+  //         synth emails are unique-per-athlete so the lookup is
+  //         pointless.)
   //      c) Otherwise                     → create a fresh Cognito user.
   let cognitoEmail: string
   const displayName = [profile.firstname, profile.lastname].filter(Boolean).join(' ').trim()
-    || profile.email.split('@')[0]
+    || accountEmail.split('@')[0]
 
   const linkedUserId = await getUserIdByAthleteId(profile.id)
   if (linkedUserId) {
-    // We have a previous link but only stored the sub, not the email-as-username.
-    // Look up the existing user by sub via the email we just got — same email
-    // because the link was established under that email. If the user changed
-    // their Strava email since linking, the linkedUserId still wins; we just
-    // need the current Cognito username for the sign-in call.
-    const existing = await findUserByEmail(profile.email)
+    // We have a previous link. Look up the existing user by the email we
+    // just got. If the user changed their Strava email since linking,
+    // linkedUserId still wins; we just need the current Cognito username
+    // for the sign-in call. Synth emails are deterministic so the lookup
+    // matches the prior session by construction.
+    const existing = await findUserByEmail(accountEmail)
     if (existing) {
       cognitoEmail = existing.email
     } else {
       // Edge case: the linked Cognito user no longer exists (deleted account?).
       // Drop the stale index and fall through to create a new one.
       console.warn(`[strava signin] athlete ${profile.id} linked to missing user ${linkedUserId}; relinking`)
-      cognitoEmail = profile.email
-      const created = await adminCreateUserForStrava(profile.email, displayName)
+      cognitoEmail = accountEmail
+      const created = await adminCreateUserForStrava(accountEmail, displayName)
       if ('error' in created) return fail('strava_user_create_failed')
       await putAthleteIndex(profile.id, created.sub)
     }
   } else {
-    const existing = await findUserByEmail(profile.email)
+    // Only try the email-merge path when Strava actually gave us an
+    // email. The synth path skips straight to creation — there can be
+    // no pre-existing account with that synthesised address.
+    const existing = hasRealEmail ? await findUserByEmail(accountEmail) : null
     if (existing) {
       cognitoEmail = existing.email
       await putAthleteIndex(profile.id, existing.sub)
     } else {
-      const created = await adminCreateUserForStrava(profile.email, displayName)
+      const created = await adminCreateUserForStrava(accountEmail, displayName)
       if ('error' in created) {
         console.error('[strava signin] adminCreateUser failed', created.error)
         return fail('strava_user_create_failed')
       }
-      cognitoEmail = profile.email
+      cognitoEmail = accountEmail
       await putAthleteIndex(profile.id, created.sub)
       // Pull in any club invitations queued for this email before signup.
+      // Synth-email users will hit zero pending invites by construction
+      // (nobody invites a strava-{n}@noreply… address), but the call is
+      // cheap and the storage layer no-ops when the index is empty.
       try {
         const { applyPendingInvitations } = await import('@/lib/pending-invitations')
-        await applyPendingInvitations(profile.email, created.sub)
+        await applyPendingInvitations(accountEmail, created.sub)
       } catch (err) {
         console.error('[strava signin] applyPendingInvitations failed', err)
       }
