@@ -152,11 +152,16 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 
 **ATT — Automated Time Trials.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
 
-## In-flight feature work
+## Feature work
 
-Active specs live under `docs/features/`. Currently:
-- [`courses-and-entries.md`](docs/features/courses-and-entries.md) — make courses a shared catalogue, distinguish organiser/paddler UX, strip personal data from entries, add boat class + crew, add pace variants + date picker. Four-phase plan; each phase is its own PR.
-- [`visibility-clubs-tos.md`](docs/features/visibility-clubs-tos.md) — public/private visibility, club entity with delegated admins, invitational trials, make-public acknowledgement, versioned Terms of Service. Five-phase plan; each phase is its own PR.
+No specs are currently in flight. Shipped specs are retained under
+`docs/features/` as design records — the sections below are the authoritative
+source for current behaviour:
+- [`courses-and-entries.md`](docs/features/courses-and-entries.md) — ✅ shipped 2026-05-31. Shared course catalogue, organiser/paddler UX, HR/cadence stripped from entries, boat class + crew, pace variants + date picker.
+- [`visibility-clubs-tos.md`](docs/features/visibility-clubs-tos.md) — ✅ shipped 2026-06-13. Public/private/club visibility, clubs with delegated admins, invitational trials, make-public acknowledgement, versioned Terms of Service.
+
+When you start a new multi-phase feature, add its spec here and flip this
+heading back to "In-flight feature work."
 
 ---
 

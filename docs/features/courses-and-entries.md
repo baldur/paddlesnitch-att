@@ -1,6 +1,6 @@
 # Feature spec: Course catalogue + paddler-centric entries
 
-**Status:** draft, in-flight.
+**Status:** ✅ Shipped 2026-05-31 (all four phases; PRs #7 onward). Course-detail editing followed in #58 (2026-06-14). Retained as a design record — see CLAUDE.md for the authoritative current behaviour.
 **Owners:** Baldur (product), Claude (implementation).
 **Tracking:** see GitHub PRs labelled `feature:courses-and-entries`.
 
