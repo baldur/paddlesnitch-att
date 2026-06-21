@@ -1,5 +1,9 @@
 # Visibility, Invitations, Clubs, Terms of Service
 
+**Status:** ✅ Shipped. All five phases merged 2026-06-13 (PRs #44–#48); email
+invitations to non-account holders followed in #53 (2026-06-14). Retained as a
+design record — see CLAUDE.md for the authoritative current behaviour.
+
 Designed 2026-06-13. Phased rollout; each phase is its own PR. Greenfield
 schema — `.local-data/` and prod S3 (`paddlesnitch-data-prod`) are wiped on
 Phase 1 merge so we don't carry back-compat shims.
