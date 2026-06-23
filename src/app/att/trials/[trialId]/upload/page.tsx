@@ -2,8 +2,13 @@
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
+import CourseMapClient from '@/components/map/CourseMapClient'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
-import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary } from '@/lib/types'
+import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
+
+// What the upload route returns alongside a "did not cross the lines" failure:
+// the parsed track + the course geometry, enough to draw a diagnostic map.
+type UploadDiagnostic = { track: LatLng[]; course: CourseMetadata }
 
 // Local helpers used only by the Strava picker.
 function formatDistance(metres: number): string {
@@ -158,6 +163,9 @@ export default function UploadPage({
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
   const [error, setError] = useState('')
+  // Set when processing fails because the track didn't cross the lines — drives
+  // the diagnostic map so the user can see their track against the course.
+  const [diagnostic, setDiagnostic] = useState<UploadDiagnostic | null>(null)
   const [inputMode, setInputMode] = useState<'file' | 'url' | 'strava'>('file')
   const [activityUrl, setActivityUrl] = useState('')
   // Strava picker state. `connected` is undefined until status/me come back so
@@ -231,6 +239,25 @@ export default function UploadPage({
     return null
   }
 
+  // Shared handling for an upload/import response. On success we navigate to the
+  // leaderboard. On the "did not cross the lines" failure the route returns a
+  // diagnostic (parsed track + course geometry) which we stash to draw a map.
+  async function handleUploadResponse(res: Response, fallback: string) {
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      router.push(`/att/trials/${trialId}`)
+      return
+    }
+    setError(typeof data.error === 'string' ? data.error : fallback)
+    const diag = data.diagnostic
+    setDiagnostic(
+      diag && Array.isArray(diag.track) && diag.course
+        ? { track: diag.track, course: diag.course }
+        : null,
+    )
+    setStatus('error')
+  }
+
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
@@ -240,6 +267,7 @@ export default function UploadPage({
 
     setStatus('uploading')
     setError('')
+    setDiagnostic(null)
 
     const formData = new FormData()
     formData.append('file', file)
@@ -252,11 +280,9 @@ export default function UploadPage({
         method: 'POST',
         body: formData,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
-      router.push(`/att/trials/${trialId}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      await handleUploadResponse(res, 'Upload failed')
+    } catch {
+      setError('Upload failed')
       setStatus('error')
     }
   }
@@ -269,6 +295,7 @@ export default function UploadPage({
 
     setStatus('uploading')
     setError('')
+    setDiagnostic(null)
 
     try {
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
@@ -276,11 +303,9 @@ export default function UploadPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stravaActivityId, boatClass, crew, raceDate }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Import failed')
-      router.push(`/att/trials/${trialId}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed')
+      await handleUploadResponse(res, 'Import failed')
+    } catch {
+      setError('Import failed')
       setStatus('error')
     }
   }
@@ -293,6 +318,7 @@ export default function UploadPage({
 
     setStatus('uploading')
     setError('')
+    setDiagnostic(null)
 
     try {
       const res = await fetch(`/att/api/trials/${trialId}/upload`, {
@@ -300,11 +326,9 @@ export default function UploadPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew, raceDate }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
-      router.push(`/att/trials/${trialId}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      await handleUploadResponse(res, 'Upload failed')
+    } catch {
+      setError('Upload failed')
       setStatus('error')
     }
   }
@@ -560,6 +584,21 @@ export default function UploadPage({
                   {status === 'uploading' ? 'IMPORTING…' : 'IMPORT FROM STRAVA'}
                 </button>
               </form>
+            )}
+
+            {diagnostic && (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-[#64748b] tracking-widest">
+                  WHAT WE RECORDED
+                </label>
+                <p className="text-xs text-[#64748b]">
+                  Your track is blue; the start line is green and the finish line
+                  red. If your track doesn&apos;t pass cleanly through both lines,
+                  your GPS may not have been recording there, or the course lines
+                  may need adjusting.
+                </p>
+                <CourseMapClient course={diagnostic.course} track={diagnostic.track} />
+              </div>
             )}
           </div>
         )}

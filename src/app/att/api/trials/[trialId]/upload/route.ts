@@ -11,7 +11,22 @@ import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
 import { canSubmitToTrial } from '@/lib/permissions'
 import { getUserClubIds } from '@/lib/clubs'
-import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng } from '@/lib/types'
+
+// Reduce a parsed track to [lat, lng] pairs for the diagnostic map we return
+// when processing fails. Strava streams can be many thousands of points; ~1500
+// is plenty to show the shape of the track, and keeps the 422 payload bounded.
+// The final point is always included so the track's end is drawn accurately.
+function trackToLatLngs(track: TrackPoint[], max = 1500): LatLng[] {
+  const stride = Math.max(1, Math.ceil(track.length / max))
+  const out: LatLng[] = []
+  for (let i = 0; i < track.length; i += stride) out.push([track[i].lat, track[i].lng])
+  const last = track[track.length - 1]
+  if (last && (out.length === 0 || out[out.length - 1][0] !== last.lat || out[out.length - 1][1] !== last.lng)) {
+    out.push([last.lat, last.lng])
+  }
+  return out
+}
 
 type StoredEntry = {
   entryId: string
@@ -92,8 +107,14 @@ async function processTrack(
 ): Promise<NextResponse> {
   const result = processTrace(track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
+    // Hand back the parsed track + course geometry so the upload page can show
+    // the user a map of what we recorded against the start/finish lines — they
+    // can then see whether their GPS coverage or the course lines are at fault.
     return NextResponse.json(
-      { error: 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.' },
+      {
+        error: 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.',
+        diagnostic: { track: trackToLatLngs(track), course },
+      },
       { status: 422 }
     )
   }
