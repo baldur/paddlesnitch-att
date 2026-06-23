@@ -205,6 +205,8 @@ Legacy aliases (accepted in API, not surfaced in UI): `one_way` = `point_to_poin
 
 `processTrace` in `geo.ts` uses the best-effort algorithm: tries every valid start crossing, returns the shortest valid pair.
 
+**Reverse-role fallback (point_to_point only)**: if the forward start→finish search finds nothing — e.g. the athlete crossed the finish line first and never re-crossed it after the start, so the run effectively went finish→start — `processTrace` retries once with the start/finish lines swapped before yielding null. Forward is always preferred (the fallback only fires when the normal pass found nothing), so a properly-directed run is never affected. Guarded by the internal `tryReverse` param to run at most once. See issue #66.
+
 ### Time Trial
 An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`.
 

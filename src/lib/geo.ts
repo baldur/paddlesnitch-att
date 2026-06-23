@@ -212,7 +212,10 @@ export function processTrace(
   courseType: CourseType = 'point_to_point',
   minValidSeconds = 0,
   gateDirection?: 1 | -1,
-  gates?: Array<{ line: Line; direction: 1 | -1 }>
+  gates?: Array<{ line: Line; direction: 1 | -1 }>,
+  // Internal: set false on the swapped retry below so the fallback runs at most
+  // once (prevents infinite recursion). Callers leave it at the default.
+  tryReverse = true
 ): ProcessedResult | null {
   if (track.length < 2) return null
 
@@ -268,6 +271,17 @@ export function processTrace(
     if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) {
       best = candidate
     }
+  }
+
+  // Fallback for point-to-point: a run that crossed the finish line first and
+  // never re-crossed it after the start has no forward start→finish segment, so
+  // `best` is null. Before yielding an error, try once more with the two lines'
+  // roles swapped — i.e. allow the clock to run finish→start (the athlete went
+  // the course's other direction, or the lines were drawn the opposite way).
+  // Forward is preferred: this only fires when the normal pass found nothing, so
+  // a properly-directed run is never affected. See issue #66.
+  if (!best && tryReverse && (courseType === 'point_to_point' || courseType === 'one_way') && finishLine) {
+    return processTrace(track, finishLine, startLine, courseType, minValidSeconds, gateDirection, gates, false)
   }
 
   return best

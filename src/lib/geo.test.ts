@@ -91,6 +91,22 @@ describe('processTrace', () => {
     expect(result).not.toHaveProperty('hrSeries')
     expect(result).not.toHaveProperty('cadenceSeries')
   })
+
+  it('rescues a run that crossed the finish line before the start (#66)', () => {
+    // The athlete went south: crossed the finish line (lat 0.005) first, then
+    // the start line (lat 0.001), and stopped. There is no forward
+    // start→finish segment, so the forward pass yields nothing. The fallback
+    // retries with the lines' roles swapped (clock runs finish→start) and times
+    // it: finish-crossing at 7.5s, start-crossing at 47.5s → 40s elapsed.
+    const finishFirst = [
+      pt(0.008, 0, 0),
+      pt(0.004, 0, 10_000),  // crosses finish line (lat 0.005) at 7.5s
+      pt(0.000, 0, 60_000),  // crosses start line  (lat 0.001) at 47.5s
+    ]
+    const result = processTrace(finishFirst, startLine, finishLine, 'point_to_point')
+    expect(result).not.toBeNull()
+    expect(result!.totalElapsedSeconds).toBeCloseTo(40, 1)
+  })
 })
 
 describe('processTrace — loop and gate course types', () => {
