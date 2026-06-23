@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 import { getAuthUser } from '@/lib/auth'
+import { looksLikeBot } from '@/lib/anti-bot'
 
 // Customer feedback endpoint. Posts a new issue to the GitHub repo with the
 // `customer-reported` and `triage` labels. The submitter doesn't need a
@@ -15,10 +16,6 @@ import { getAuthUser } from '@/lib/auth'
 
 const MIN_DESCRIPTION_CHARS = 10
 const MAX_DESCRIPTION_CHARS = 5000
-// Submissions that arrive sooner than this after the modal opened are
-// treated as bots. Two seconds is the floor — even a paste-and-send takes
-// longer than that for a real human.
-const MIN_ELAPSED_MS = 2000
 
 type FeedbackBody = {
   description?: unknown
@@ -78,9 +75,7 @@ export async function POST(req: NextRequest) {
   // Anti-bot gate. If the honeypot field came back populated, or the form
   // was submitted faster than any human could, drop silently and return a
   // success-looking response so the bot has no signal to retry differently.
-  const honeypot = asString(body.website)
-  const elapsedMs = typeof body.elapsedMs === 'number' ? body.elapsedMs : 0
-  if (honeypot || elapsedMs < MIN_ELAPSED_MS) {
+  if (looksLikeBot(body)) {
     return NextResponse.json({ ok: true })
   }
 

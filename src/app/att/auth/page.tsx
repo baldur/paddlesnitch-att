@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function AuthForm() {
@@ -46,6 +46,10 @@ function AuthForm() {
   // and we're waiting for them to type it in.
   const [otpSession, setOtpSession] = useState('')
   const [otpCode, setOtpCode] = useState('')
+  // Anti-bot fields for the passwordless code request (which sends an email):
+  // a honeypot the user never sees, and the elapsed time since the page loaded.
+  const [website, setWebsite] = useState('')
+  const mountedAt = useRef(Date.now())
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,7 +109,7 @@ function AuthForm() {
       const res = await fetch('/att/api/auth/otp-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, website, elapsedMs: Date.now() - mountedAt.current }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error ?? 'Could not send code')
@@ -365,6 +369,21 @@ function AuthForm() {
           </form>
         ) : (
           <form onSubmit={handleOtpRequest} className="flex flex-col gap-4">
+            {/* Honeypot — visually hidden, skipped by keyboard + screen readers.
+                Real users never see or fill this; bots scraping inputs will. */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+              <label>
+                Website
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={e => setWebsite(e.target.value)}
+                />
+              </label>
+            </div>
             <p className="text-xs text-[#64748b]">
               Enter your email and we&apos;ll send you a one-time code. No password needed.
             </p>

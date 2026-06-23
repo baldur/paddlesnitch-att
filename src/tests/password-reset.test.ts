@@ -14,10 +14,13 @@ let dataDir: string
 beforeEach(async () => { dataDir = await makeDataDir() })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
-function jsonReq(url: string, body: unknown) {
+// Real clients post anti-bot fields (an empty honeypot + the elapsed time
+// since the form loaded). Default to a human-like submission so the existing
+// cases sail through the gate; the bot test overrides them.
+function jsonReq(url: string, body: Record<string, unknown>) {
   return new NextRequest(url, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ website: '', elapsedMs: 5_000, ...body }),
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -39,6 +42,19 @@ describe('POST /att/api/auth/password-reset/request', () => {
   it('returns 400 when email is missing', async () => {
     const res = await requestReset(jsonReq('http://x', {}))
     expect(res.status).toBe(400)
+  })
+
+  it('drops a bot submission (populated honeypot) without emailing a code', async () => {
+    const user = await makeUser()
+    // cognito-local leaves the signup verification code on the record, so we
+    // can't assert "no code at all". Instead: a real reset overwrites it with a
+    // fresh random code, so a blocked bot request must leave it UNCHANGED.
+    const before = await readConfirmationCode(user.email)
+    const res = await requestReset(jsonReq('http://x', { email: user.email, website: 'http://spam.example' }))
+    // Same { ok: true } a real request gets — no signal to the bot...
+    expect(res.status).toBe(200)
+    // ...and forgotPassword never ran, so the code is untouched.
+    expect(await readConfirmationCode(user.email)).toBe(before)
   })
 })
 

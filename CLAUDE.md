@@ -294,12 +294,27 @@ strava/callback       GET  — verifies state, exchanges code, persists tokens, 
 strava/status         GET  — { connected, athlete? }
 strava/disconnect     POST — revokes on Strava, deletes local tokens
 strava/activities     GET  — recent water-sport activities, refreshes token if needed
-feedback              POST — files a customer-reported GitHub issue (anti-bot: honeypot + 2s minimum)
+feedback              POST — files a customer-reported GitHub issue (anti-bot gate, see below)
 account/export        GET  — JSON archive of the signed-in user's data (GDPR Art. 15)
 account               DELETE — full account erasure (GDPR Art. 17)
 ```
 
 **Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
+
+### Anti-bot gate
+
+Unauthenticated POST endpoints that send email or create content guard against naive bots with two invisible, zero-friction checks in `src/lib/anti-bot.ts` (`looksLikeBot()`):
+
+- **Honeypot** — a hidden `website` form field real users never fill; bots scraping inputs do.
+- **Time trap** — submissions arriving sooner than `MIN_ELAPSED_MS` (2 s) after the form loaded are bots. The client sends `elapsedMs` measured from page/form mount.
+
+A positive result means **drop silently**: skip the side effect (send no email, create no Cognito user, file no issue) and return a success-looking response so the bot gets no signal to adapt. Guarded routes:
+
+- `auth/otp-request` — the gate runs **before** `signUp`/SES, so a bot can't email-bomb arbitrary inboxes *or* churn junk Cognito accounts. On a bot signal it returns a throwaway `{ session }`; a rare false-positive human hits "use a different email" to retry (timer resets, well past 2 s by then).
+- `auth/password-reset/request` — returns the same `{ ok: true }` it returns for a non-existent account; `forgotPassword` never runs.
+- `feedback` — returns `{ ok: true }` without filing the issue.
+
+Client forms (`/att/auth` OTP tab, `/att/auth/forgot`, the feedback widget) carry the hidden `website` input + a `mountedAt` ref. These checks only stop unsophisticated bots — a script POSTing JSON directly omits both fields. They're a cheap first line, **not** a guarantee; a real challenge (Turnstile) or rate limiting would be the next step if targeted abuse appears. Tests: `src/lib/anti-bot.test.ts` (unit) plus bot-drop cases in `otp.test.ts`, `password-reset.test.ts`, `feedback.test.ts`.
 
 ---
 

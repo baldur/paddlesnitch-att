@@ -37,10 +37,13 @@ beforeEach(async () => {
 })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
-function jsonReq(body: unknown) {
+// Real clients post anti-bot fields (an empty honeypot + the elapsed time
+// since the form loaded). Default to a human-like submission so the existing
+// cases sail through the gate; bot tests override `website` / `elapsedMs`.
+function jsonReq(body: Record<string, unknown>) {
   return new NextRequest('http://x', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ website: '', elapsedMs: 5_000, ...body }),
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -74,6 +77,23 @@ describe('POST /att/api/auth/otp-request', () => {
     vi.mocked(cognito.otpRequest).mockResolvedValue({ error: 'unknown' })
     const res = await otpRequest(jsonReq({ email: 'a@b.c' }))
     expect(res.status).toBe(500)
+  })
+
+  it('drops a populated-honeypot submission without sending mail or creating a user', async () => {
+    const res = await otpRequest(jsonReq({ email: 'bot@example.com', website: 'http://spam.example' }))
+    // Success-looking response so the bot gets no signal...
+    expect(res.status).toBe(200)
+    expect((await res.json()).session).toBeTruthy()
+    // ...but no Cognito work happened: no email sent, no account churned.
+    expect(cognito.otpRequest).not.toHaveBeenCalled()
+    expect(cognito.signUp).not.toHaveBeenCalled()
+  })
+
+  it('drops an instantly-submitted form (faster than a human) the same way', async () => {
+    const res = await otpRequest(jsonReq({ email: 'bot@example.com', elapsedMs: 50 }))
+    expect(res.status).toBe(200)
+    expect(cognito.otpRequest).not.toHaveBeenCalled()
+    expect(cognito.signUp).not.toHaveBeenCalled()
   })
 })
 

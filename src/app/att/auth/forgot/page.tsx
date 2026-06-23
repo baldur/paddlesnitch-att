@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 // Step 1 of password reset: user types their email, we ask Cognito to send a
@@ -11,6 +11,10 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Anti-bot fields for the reset-code request (which sends an email): a
+  // honeypot the user never sees, and elapsed time since the page loaded.
+  const [website, setWebsite] = useState('')
+  const mountedAt = useRef(Date.now())
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,7 +24,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch('/att/api/auth/password-reset/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, website, elapsedMs: Date.now() - mountedAt.current }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -52,6 +56,21 @@ export default function ForgotPasswordPage() {
             password.
           </p>
           <form onSubmit={submit} className="flex flex-col gap-4">
+            {/* Honeypot — visually hidden, skipped by keyboard + screen readers.
+                Real users never see or fill this; bots scraping inputs will. */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+              <label>
+                Website
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={e => setWebsite(e.target.value)}
+                />
+              </label>
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-[#64748b] tracking-widest">EMAIL</label>
               <input
