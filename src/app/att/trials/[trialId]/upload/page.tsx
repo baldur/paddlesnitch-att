@@ -7,8 +7,11 @@ import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/li
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
 
 // What the upload route returns alongside a "did not cross the lines" failure:
-// the parsed track + the course geometry, enough to draw a diagnostic map.
-type UploadDiagnostic = { track: LatLng[]; course: CourseMetadata }
+// the parsed track + the course geometry, enough to draw a diagnostic map. For
+// gate courses it also carries the gate analysis so we can highlight the gate
+// that blocked the match.
+type GateAnalysis = { blocking: { gateNumber: number } | null }
+type UploadDiagnostic = { track: LatLng[]; course: CourseMetadata; gateAnalysis?: GateAnalysis }
 
 // Local helpers used only by the Strava picker.
 function formatDistance(metres: number): string {
@@ -252,7 +255,7 @@ export default function UploadPage({
     const diag = data.diagnostic
     setDiagnostic(
       diag && Array.isArray(diag.track) && diag.course
-        ? { track: diag.track, course: diag.course }
+        ? { track: diag.track, course: diag.course, gateAnalysis: diag.gateAnalysis }
         : null,
     )
     setStatus('error')
@@ -592,12 +595,15 @@ export default function UploadPage({
                   WHAT WE RECORDED
                 </label>
                 <p className="text-xs text-[#64748b]">
-                  Your track is blue; the start line is green and the finish line
-                  red. If your track doesn&apos;t pass cleanly through both lines,
-                  your GPS may not have been recording there, or the course lines
-                  may need adjusting.
+                  {diagnostic.gateAnalysis?.blocking
+                    ? <>Your track is blue. The gate that blocked the match is highlighted in red — check it crosses that gate in the right direction and order.</>
+                    : <>Your track is blue; the start line is green and the finish line red. If your track doesn&apos;t pass cleanly through both lines, your GPS may not have been recording there, or the course lines may need adjusting.</>}
                 </p>
-                <CourseMapClient course={diagnostic.course} track={diagnostic.track} />
+                <CourseMapClient
+                  course={diagnostic.course}
+                  track={diagnostic.track}
+                  highlightGateIndex={diagnostic.gateAnalysis?.blocking ? diagnostic.gateAnalysis.blocking.gateNumber - 1 : undefined}
+                />
               </div>
             )}
           </div>

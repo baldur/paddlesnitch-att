@@ -203,6 +203,86 @@ function processMultiGate(
   return best
 }
 
+export type GateDiagnosis = {
+  total: number
+  // Gates satisfied (in order, in the required direction) before the block.
+  gatesPassed: number
+  blocking: {
+    gateNumber: number          // 1-based, for display
+    requiredDirection: 1 | -1
+    // wrong_direction: the gate WAS crossed after the previous one, but only in
+    // the opposite direction (likely a backwards gate config, or the athlete
+    // passed it the wrong way). not_crossed: no crossing after the previous gate
+    // at all (GPS gap, skipped, or out of order).
+    reason: 'wrong_direction' | 'not_crossed'
+  } | null                       // null only if the chain actually completes
+}
+
+// Explain why a multi-gate match failed: how far the run got, and what blocked
+// the next gate. Only called on the failure path (a successful match returns a
+// result and never reaches here), so the extra scan cost doesn't matter.
+export function diagnoseGates(
+  track: TrackPoint[],
+  gates: Array<{ line: Line; direction: 1 | -1 }>,
+): GateDiagnosis {
+  const total = gates.length
+
+  // Start gate must be crossed in its required direction to begin the chain.
+  const startCandidates = findAllCrossings(track, gates[0].line)
+    .filter(c => c.rxsSign === gates[0].direction)
+  if (startCandidates.length === 0) {
+    const crossedWrongWay = findAllCrossings(track, gates[0].line).length > 0
+    return {
+      total,
+      gatesPassed: 0,
+      blocking: {
+        gateNumber: 1,
+        requiredDirection: gates[0].direction,
+        reason: crossedWrongWay ? 'wrong_direction' : 'not_crossed',
+      },
+    }
+  }
+
+  // Try every valid start crossing; keep the chain that reaches the furthest
+  // gate, so we report the most progress the athlete actually made.
+  let bestPassed = 0
+  let bestBlockIndex = 1
+  let bestBlockFromIndex = startCandidates[0].trackIndex
+
+  for (const start of startCandidates) {
+    let current = start
+    let passed = 1
+    let g = 1
+    for (; g < total; g++) {
+      const next = findFirstCrossing(track, gates[g].line, current.trackIndex + 1, gates[g].direction)
+      if (!next) break
+      current = next
+      passed++
+    }
+    if (passed === total) return { total, gatesPassed: total, blocking: null }
+    if (passed > bestPassed) {
+      bestPassed = passed
+      bestBlockIndex = g
+      bestBlockFromIndex = current.trackIndex
+    }
+  }
+
+  // Reason for the furthest chain's block: was the blocking gate crossed at all
+  // (any direction) after the last satisfied gate? Yes → wrong direction; no →
+  // never crossed.
+  const blockGate = gates[bestBlockIndex]
+  const crossedWrongWay = findFirstCrossing(track, blockGate.line, bestBlockFromIndex + 1) !== null
+  return {
+    total,
+    gatesPassed: bestPassed,
+    blocking: {
+      gateNumber: bestBlockIndex + 1,
+      requiredDirection: blockGate.direction,
+      reason: crossedWrongWay ? 'wrong_direction' : 'not_crossed',
+    },
+  }
+}
+
 // Try every start-line crossing and pair it with the correct finish crossing for the course type.
 // Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
 export function processTrace(

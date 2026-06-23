@@ -199,6 +199,8 @@ Legacy aliases (accepted in API, not surfaced in UI): `one_way` = `point_to_poin
 
 **Multi-gate (`processMultiGate`)**: finds all valid start crossings of `gates[0]` with required direction, then chains through each subsequent gate. Returns the shortest complete run. Lives in `geo.ts`.
 
+**Gate failure diagnosis (`diagnoseGates`)**: when a gate match fails, `diagnoseGates(track, gates)` (in `geo.ts`) reports how far the run got and what blocked the next gate — `{ gatesPassed, total, blocking: { gateNumber (1-based), requiredDirection, reason } }`. `reason` is `'wrong_direction'` (the gate was crossed after the previous one, but only in the opposite direction — likely a backwards gate config) or `'not_crossed'` (no crossing after the previous gate). Only called on the failure path. The upload route turns this into an actionable error message and the upload page highlights the blocking gate in red on the diagnostic map. Regression fixture from a real failing trace lives at `src/tests/fixtures/gate-66-failing-trace.json`. See issue #66.
+
 **minValidSeconds**: Stored on `CourseMetadata`; any result shorter than this is discarded. Useful for loop courses where warmup crossings can create false positives shorter than any real race time.
 
 **trackSegment**: `ProcessedResult.trackSegment` stores the interpolated lat/lng path from start crossing to finish crossing. Used to plot the leader's track on the leaderboard map.
@@ -289,7 +291,7 @@ courses               GET / POST
 courses/[id]          GET / PATCH
 trials                GET (?courseId=) / POST
 trials/[id]           GET / PATCH (open/close)
-trials/[id]/upload    POST — parse GPX/FIT/CSV (or Strava import via {stravaActivityId}), process, rebuild leaderboard. On a "did not cross the lines" failure, the 422 body carries `diagnostic: { track, course }` (parsed track as [lat,lng] pairs, downsampled to ≤1500 points, plus the course geometry) so the upload page can render a map of the track against the start/finish lines. The full-fidelity failing track + course is also persisted to `trials/{trialId}/failed-uploads/{userId}/{id}/diagnostic.json` (best-effort; a write error doesn't change the 422) so a failure can be reproduced offline. Failed uploads are otherwise not saved.
+trials/[id]/upload    POST — parse GPX/FIT/CSV (or Strava import via {stravaActivityId}), process, rebuild leaderboard. On a "did not cross the lines" failure, the 422 body carries `diagnostic: { track, course }` (parsed track as [lat,lng] pairs, downsampled to ≤1500 points, plus the course geometry) so the upload page can render a map of the track against the start/finish lines. For gate courses the 422 also carries `diagnostic.gateAnalysis` (see `diagnoseGates`) and the error message names the specific blocking gate. The full-fidelity failing track + course (+ gateAnalysis) is also persisted to `trials/{trialId}/failed-uploads/{userId}/{id}/diagnostic.json` (best-effort; a write error doesn't change the 422) so a failure can be reproduced offline. Failed uploads are otherwise not saved.
 trials/[id]/leaderboard GET
 strava/connect        GET  — sets state cookie, 302 to Strava authorize URL
 strava/callback       GET  — verifies state, exchanges code, persists tokens, redirects to /att/account?strava=connected
