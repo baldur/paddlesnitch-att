@@ -177,9 +177,11 @@ A named stretch of water with:
 - Owned by the user who created it (the **course admin**)
 - **Visibility** — `public` | `private` (phase 1). Public courses appear in the catalogue and on detail pages for any visitor; private courses are owner-only. `club` visibility (scoped to a specific club's members) arrives in phase 4. Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
 
-#### Modify-creates-copy
+#### Geometry lock (course with entries)
 
-If a course has at least one entry on it (across any trial), editing its **geometry** — `type`, `startLine`, `finishLine`, `gates`, `gateDirection`, `distanceMetres`, `minValidSeconds` — does not mutate. The PATCH route clones the course with the new geometry, assigns the editor as the admin of the clone, and returns it with `cloned: true` and `clonedFrom: <originalId>`. The original is left untouched so historical leaderboards stay interpretable. Name + visibility edits still mutate in place — they don't invalidate any race result.
+If a course has at least one entry on it (across any trial), editing its **geometry** — `type`, `startLine`, `finishLine`, `gates`, `gateDirection`, `distanceMetres`, `minValidSeconds` — is **rejected** with `409` and `{ code: 'course_has_entries' }`. Changing it would silently invalidate the historical results recorded against that geometry. **Name, visibility, and sport** edits still mutate in place — they don't invalidate any race result. (A geometry field re-sent with its current value is a no-op, not a rejection — `geometryChanged` only fires on an actual diff.)
+
+The eventual "clone the course + re-run every existing trace + recalculate leaderboards" flow is tracked in #72; until then the lock is the safe behaviour. (This replaced the earlier modify-creates-copy clone, which produced orphan courses with empty leaderboards.)
 
 Detection lives in `src/lib/course-entries.ts` (`courseHasEntries`, `geometryChanged`, `GEOMETRY_FIELDS`). PATCH logic lives in `src/app/att/api/courses/[courseId]/route.ts`.
 

@@ -1,9 +1,9 @@
-// Helpers for the "modify-creates-copy" rule on courses with entries.
+// Helpers for the geometry-lock rule on courses with entries.
 //
 // A course's geometry (lines, gates, type, distance) MUST NOT change once
 // anyone has raced on it — historical results would otherwise become
-// uninterpretable. Editing geometry on a course-with-entries clones the
-// course instead of mutating it.
+// uninterpretable. Editing geometry on a course-with-entries is rejected (409);
+// name/visibility/sport stay editable. Clone-and-recompute is tracked in #72.
 
 import { listKeys, getJson } from './storage'
 import type { TrialMetadata } from './types'
@@ -27,8 +27,8 @@ export async function courseHasEntries(courseId: string): Promise<boolean> {
   return false
 }
 
-// Fields that, if changed, must trigger a clone rather than an in-place
-// mutation. Anything else (name, visibility) is fine to mutate.
+// Fields that, if changed on a course with entries, lock the edit (409).
+// Anything else (name, visibility, sport) is fine to mutate in place.
 //
 // `gates` is left out of the array form deliberately — we compare it
 // structurally in `geometryChanged` below since it's an array.

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewCourse, canManageCourse } from '@/lib/permissions'
@@ -79,35 +78,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const body = await req.json()
 
-  // Modify-creates-copy (phase 3): if the patch touches geometry AND the
-  // course has any entries on it, we MUST NOT mutate. The historical
-  // results are recorded against this course's geometry; changing it would
-  // silently invalidate them. Clone instead — the new course inherits
-  // ownership + visibility but is a brand-new id with no trials attached.
+  // Once a trace has been submitted, a course's geometry is locked: historical
+  // results are recorded against this geometry and changing it would silently
+  // invalidate them. Reject geometry edits on a course-with-entries (name +
+  // visibility are still fine — they don't affect any result). The proper
+  // "clone + re-run all traces + recalculate" flow is tracked in #72.
   const wantsGeometryChange = geometryChanged(course as unknown as Record<string, unknown>, body)
   if (wantsGeometryChange && await courseHasEntries(course.id)) {
-    const cloneId = nanoid()
-    const clone: CourseMetadata = {
-      ...course,
-      ...pickGeometry(course, body),
-      id: cloneId,
-      // Edits are owned by whoever made them — usually the same person, but
-      // a club admin might trigger this with their own identity. Tracks
-      // "this clone was created by X" cleanly.
-      adminUserId: user.id,
-      // Non-geometry edits carry over from the patch too.
-      name: typeof body.name === 'string' ? body.name : course.name,
-      sport: isSport(body.sport) ? body.sport : course.sport,
-      createdAt: new Date().toISOString(),
-    }
-    // Visibility (incl. club-scope validation) runs on the clone like any
-    // other edit — keeps the rule consistent across in-place and copy paths.
-    await applyVisibility(clone, course, body, user.id)
-    await putJson(`courses/${cloneId}/metadata.json`, clone)
-    // 201 + the new course payload + a `cloned: true` flag so the UI knows
-    // to redirect to the new course's admin page instead of staying on the
-    // original.
-    return NextResponse.json({ ...clone, cloned: true, clonedFrom: course.id }, { status: 201 })
+    return NextResponse.json(
+      {
+        error: 'This course already has submitted results, so its layout (lines, gates, type, distance) is locked. You can still edit the name and visibility.',
+        code: 'course_has_entries',
+      },
+      { status: 409 },
+    )
   }
 
   // Plain in-place edit. Whitelist mutable fields rather than spreading body
@@ -126,20 +110,4 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('gates' in body) next.gates = body.gates
   await putJson(`courses/${courseId}/metadata.json`, next)
   return NextResponse.json(next)
-}
-
-// Returns an object containing only the geometry fields from `patch` that
-// differ from `before`, with any not-touched fields defaulting to `before`.
-// Used inside the clone branch so a clone has a fully populated CourseMetadata
-// even when the patch only changed one geometry field.
-function pickGeometry(
-  before: CourseMetadata,
-  patch: Record<string, unknown>,
-): Partial<CourseMetadata> {
-  const out: Record<string, unknown> = {}
-  for (const field of GEOMETRY_FIELDS) {
-    out[field] = field in patch ? patch[field] : (before as unknown as Record<string, unknown>)[field]
-  }
-  out.gates = 'gates' in patch ? patch.gates : before.gates
-  return out as Partial<CourseMetadata>
 }
