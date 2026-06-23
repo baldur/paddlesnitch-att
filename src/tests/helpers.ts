@@ -54,7 +54,7 @@ export async function makeUser(displayName = 'Test User'): Promise<TestUser> {
 
 export async function makeCourse(
   adminUserId: string,
-  opts: { visibility?: 'public' | 'private' } = {},
+  opts: { visibility?: 'public' | 'private'; gate?: boolean } = {},
 ): Promise<CourseMetadata> {
   const course: CourseMetadata = {
     id: nanoid(),
@@ -67,6 +67,16 @@ export async function makeCourse(
     distanceMetres: 556,
     visibility: opts.visibility ?? 'public',
     createdAt: new Date().toISOString(),
+  }
+  if (opts.gate) {
+    // Two-gate course, both required northbound (+1). Same line positions as the
+    // start/finish above so existing test tracks still cross them.
+    course.type = 'gate'
+    course.gateDirection = 1
+    course.gates = [
+      { line: [[51.525, -0.91], [51.525, -0.89]], direction: 1 },
+      { line: [[51.575, -0.91], [51.575, -0.89]], direction: 1 },
+    ]
   }
   await putJson(`courses/${course.id}/metadata.json`, course)
   return course

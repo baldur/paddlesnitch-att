@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { haversine, processTrace, formatTime } from './geo'
+import { haversine, processTrace, formatTime, diagnoseGates } from './geo'
 import type { TrackPoint, Line } from './types'
+import failingGateTrace from '../tests/fixtures/gate-66-failing-trace.json'
 
 // Helpers
 function pt(lat: number, lng: number, ms: number): TrackPoint {
@@ -221,5 +222,74 @@ describe('formatTime', () => {
 
   it('formats sub-minute time', () => {
     expect(formatTime(42.3)).toBe('0:42.3')
+  })
+})
+
+describe('diagnoseGates', () => {
+  // Northbound (increasing lat) crossing of a horizontal gate line gives
+  // rxsSign +1; southbound gives -1 (same convention as the gate tests above).
+  const g0: Line = [[0.001, -0.001], [0.001, 0.001]]
+  const g1: Line = [[0.003, -0.001], [0.003, 0.001]]
+  const g2: Line = [[0.005, -0.001], [0.005, 0.001]]
+
+  // Northbound track crossing all three gates in order, each in the +1 dir.
+  const northTrack: TrackPoint[] = [
+    pt(0.000, 0, 0),
+    pt(0.002, 0, 10_000),  // crosses g0 (+1)
+    pt(0.004, 0, 20_000),  // crosses g1 (+1)
+    pt(0.006, 0, 30_000),  // crosses g2 (+1)
+  ]
+
+  it('returns no blocker when every gate is satisfied', () => {
+    const gates = [g0, g1, g2].map(line => ({ line, direction: 1 as const }))
+    const d = diagnoseGates(northTrack, gates)
+    expect(d.gatesPassed).toBe(3)
+    expect(d.blocking).toBeNull()
+  })
+
+  it('flags a gate crossed in the wrong direction', () => {
+    // g1 requires -1, but the track crosses it +1.
+    const gates = [
+      { line: g0, direction: 1 as const },
+      { line: g1, direction: -1 as const },
+      { line: g2, direction: 1 as const },
+    ]
+    const d = diagnoseGates(northTrack, gates)
+    expect(d.gatesPassed).toBe(1)
+    expect(d.blocking).toEqual({ gateNumber: 2, requiredDirection: -1, reason: 'wrong_direction' })
+  })
+
+  it('flags a gate that is never crossed', () => {
+    // Track stops after g1; g2 is never reached.
+    const shortTrack: TrackPoint[] = [
+      pt(0.000, 0, 0),
+      pt(0.002, 0, 10_000),  // g0
+      pt(0.004, 0, 20_000),  // g1, then stops
+    ]
+    const gates = [g0, g1, g2].map(line => ({ line, direction: 1 as const }))
+    const d = diagnoseGates(shortTrack, gates)
+    expect(d.gatesPassed).toBe(2)
+    expect(d.blocking).toEqual({ gateNumber: 3, requiredDirection: 1, reason: 'not_crossed' })
+  })
+
+  it('flags the start gate when it is never crossed', () => {
+    const farTrack: TrackPoint[] = [pt(1.0, 1.0, 0), pt(1.1, 1.0, 10_000)]
+    const gates = [g0, g1, g2].map(line => ({ line, direction: 1 as const }))
+    const d = diagnoseGates(farTrack, gates)
+    expect(d.gatesPassed).toBe(0)
+    expect(d.blocking).toEqual({ gateNumber: 1, requiredDirection: 1, reason: 'not_crossed' })
+  })
+
+  it('diagnoses the real #66 trace: passed 6 gates, blocked at gate 7 (wrong direction)', () => {
+    // Captured from the failing prod upload — course 0WuI-dHd89MogQ0GlHAy5,
+    // whose gate 7 (index 6) had its direction set backwards.
+    const track: TrackPoint[] = failingGateTrace.track.map(p => ({
+      lat: p.lat, lng: p.lng, timestamp: new Date(p.timestamp),
+    }))
+    const gates = failingGateTrace.gates as Array<{ line: Line; direction: 1 | -1 }>
+    const d = diagnoseGates(track, gates)
+    expect(d.total).toBe(9)
+    expect(d.gatesPassed).toBe(6)
+    expect(d.blocking).toEqual({ gateNumber: 7, requiredDirection: 1, reason: 'wrong_direction' })
   })
 })

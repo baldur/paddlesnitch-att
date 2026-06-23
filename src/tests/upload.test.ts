@@ -265,6 +265,22 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(saved!.course.startLine).toEqual(course.startLine)
   })
 
+  it('gate course: failure returns a gate-specific diagnosis instead of the generic error', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id, { gate: true })
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    // Track nowhere near the gates → the start gate is never crossed.
+    const offCourse = makeGpxBuffer([[1.0, 0.0, '2024-06-01T10:00:00Z'], [1.1, 0.0, '2024-06-01T10:01:00Z']])
+    const res = await upload(uploadReq(trial.id, new File([offCourse], 'activity.gpx')), { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(422)
+
+    const body = await res.json()
+    expect(body.error).toMatch(/Gate 1 was not crossed/)
+    expect(body.diagnostic.gateAnalysis.blocking).toEqual({ gateNumber: 1, requiredDirection: 1, reason: 'not_crossed' })
+  })
+
   it('returns 400 when the trial is closed', async () => {
     const user = await makeUser()
     const course = await makeCourse(user.id)

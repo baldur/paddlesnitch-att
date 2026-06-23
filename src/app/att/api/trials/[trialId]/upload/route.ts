@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
-import { processTrace } from '@/lib/geo'
+import { processTrace, diagnoseGates, type GateDiagnosis } from '@/lib/geo'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
@@ -72,6 +72,21 @@ function parseCrewField(raw: unknown): CrewMember[] | { error: string } {
   return out
 }
 
+const GENERIC_NO_MATCH = 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.'
+
+// Turn a gate diagnosis into a specific, actionable message. Falls back to the
+// generic line when there's nothing useful to say.
+function gateFailureMessage(d: GateDiagnosis): string {
+  if (!d.blocking) return GENERIC_NO_MATCH
+  const { gateNumber, reason } = d.blocking
+  const progress = d.gatesPassed > 0 ? `You passed ${d.gatesPassed} of ${d.total} gates in order. ` : ''
+  if (reason === 'wrong_direction') {
+    return `${progress}Gate ${gateNumber} was crossed in the opposite direction to what the course requires. Either you passed it the wrong way, or gate ${gateNumber}'s direction is set incorrectly on the course.`
+  }
+  const where = d.gatesPassed > 0 ? ' after the previous gate' : ''
+  return `${progress}Gate ${gateNumber} was not crossed${where}. Make sure your GPS was recording as you passed through every gate, in the right order and direction.`
+}
+
 async function processBuffer(
   arrayBuffer: ArrayBuffer,
   filename: string,
@@ -107,6 +122,14 @@ async function processTrack(
 ): Promise<NextResponse> {
   const result = processTrace(track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
+    // For gate courses, work out HOW FAR the run got and what blocked the next
+    // gate (wrong direction vs never crossed), so the error can be actionable
+    // instead of a generic "didn't cross the lines". See issue #66.
+    const gateAnalysis = course.type === 'gate' && course.gates && course.gates.length >= 2
+      ? diagnoseGates(track, course.gates)
+      : undefined
+    const message = gateAnalysis ? gateFailureMessage(gateAnalysis) : GENERIC_NO_MATCH
+
     // Persist the FULL failing track + course geometry so a failure can be
     // reproduced and debugged offline — successful entries are saved, but a
     // trace that doesn't match leaves nothing behind otherwise. Best-effort:
@@ -120,6 +143,7 @@ async function processTrack(
         displayName: user.displayName,
         filename,
         course,
+        gateAnalysis,
         trackPointCount: track.length,
         track: track.map(p => ({ lat: p.lat, lng: p.lng, timestamp: p.timestamp.toISOString() })),
       })
@@ -127,13 +151,13 @@ async function processTrack(
       console.error('[upload] could not persist failed-upload diagnostic:', err)
     }
 
-    // Hand back the parsed track + course geometry so the upload page can show
-    // the user a map of what we recorded against the start/finish lines — they
-    // can then see whether their GPS coverage or the course lines are at fault.
+    // Hand back the parsed track + course geometry (and gate analysis) so the
+    // upload page can show a map of what we recorded against the lines and
+    // highlight the blocking gate.
     return NextResponse.json(
       {
-        error: 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.',
-        diagnostic: { track: trackToLatLngs(track), course },
+        error: message,
+        diagnostic: { track: trackToLatLngs(track), course, gateAnalysis },
       },
       { status: 422 }
     )

@@ -68,7 +68,7 @@ function DirectionArrow({ line, direction, color }: { line: Line; direction: 1 |
   )
 }
 
-export default function CourseMap({ course, track }: { course: CourseMetadata; track?: LatLng[] }) {
+export default function CourseMap({ course, track, highlightGateIndex }: { course: CourseMetadata; track?: LatLng[]; highlightGateIndex?: number }) {
   const [mounted, setMounted] = useState(false)
   const [dark, setDark] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -108,14 +108,18 @@ export default function CourseMap({ course, track }: { course: CourseMetadata; t
         {isMultiGate ? (
           // Multi-gate: render each gate with its color and direction dots
           course.gates!.map((gate, i) => {
-            const color = gateColor(i, course.gates!.length)
+            // A blocking gate (from a failed-upload diagnosis) is drawn in red,
+            // solid and thicker, so the user can see exactly which gate to fix.
+            const highlighted = i === highlightGateIndex
+            const color = highlighted ? '#b91c1c' : gateColor(i, course.gates!.length)
+            const weight = highlighted ? 6 : 4
             return (
               <span key={i}>
-                <Polyline positions={gate.line} pathOptions={{ color, weight: 4, dashArray: '8 4' }} />
-                <CircleMarker center={gate.line[0]} radius={5}
+                <Polyline positions={gate.line} pathOptions={{ color, weight, dashArray: highlighted ? undefined : '8 4' }} />
+                <CircleMarker center={gate.line[0]} radius={highlighted ? 7 : 5}
                   pathOptions={{ color, fillColor: color, fillOpacity: 1 }}
                 />
-                <CircleMarker center={gate.line[1]} radius={5}
+                <CircleMarker center={gate.line[1]} radius={highlighted ? 7 : 5}
                   pathOptions={{ color, fillColor: color, fillOpacity: 1 }}
                 />
                 <DirectionArrow line={gate.line} direction={gate.direction} color={color} />
