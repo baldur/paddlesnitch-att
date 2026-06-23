@@ -32,6 +32,13 @@ export async function GET() {
   const submittedEntries = (await Promise.all(entryKeys.map(k => getJson(k))))
     .filter((e): e is Record<string, unknown> => e !== null)
 
+  // Failed uploads the user submitted — GPS tracks of traces that didn't match
+  // a course, retained for debugging. Same id-scoped path as entries.
+  const failedKeys = (await listKeys(`trials/`))
+    .filter(k => k.endsWith('diagnostic.json') && k.includes(`/failed-uploads/${user.id}/`))
+  const failedUploads = (await Promise.all(failedKeys.map(k => getJson(k))))
+    .filter((e): e is Record<string, unknown> => e !== null)
+
   const body = {
     exportedAt: new Date().toISOString(),
     user: {
@@ -42,6 +49,7 @@ export async function GET() {
     ownedCourses,
     ownedTrials,
     submittedEntries,
+    failedUploads,
     notes: [
       'This file contains all personal data paddlesnitch.com holds about you.',
       'Heart rate and cadence are intentionally never collected — see the privacy policy.',
