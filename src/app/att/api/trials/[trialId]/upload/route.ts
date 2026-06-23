@@ -107,6 +107,26 @@ async function processTrack(
 ): Promise<NextResponse> {
   const result = processTrace(track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
+    // Persist the FULL failing track + course geometry so a failure can be
+    // reproduced and debugged offline — successful entries are saved, but a
+    // trace that doesn't match leaves nothing behind otherwise. Best-effort:
+    // a storage hiccup must not turn the user's 422 into a 500. See issue #66.
+    try {
+      const failureId = nanoid()
+      await putJson(`trials/${trialId}/failed-uploads/${user.id}/${failureId}/diagnostic.json`, {
+        failedAt: new Date().toISOString(),
+        trialId,
+        userId: user.id,
+        displayName: user.displayName,
+        filename,
+        course,
+        trackPointCount: track.length,
+        track: track.map(p => ({ lat: p.lat, lng: p.lng, timestamp: p.timestamp.toISOString() })),
+      })
+    } catch (err) {
+      console.error('[upload] could not persist failed-upload diagnostic:', err)
+    }
+
     // Hand back the parsed track + course geometry so the upload page can show
     // the user a map of what we recorded against the start/finish lines — they
     // can then see whether their GPS coverage or the course lines are at fault.
