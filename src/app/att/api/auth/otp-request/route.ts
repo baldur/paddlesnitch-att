@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { otpRequest, signUp } from '@/lib/cognito'
+import { looksLikeBot } from '@/lib/anti-bot'
 
 // Step 1 of passwordless sign-in. We ALWAYS return the same shape regardless
 // of whether the email exists in the pool, to avoid leaking account existence
@@ -11,6 +12,17 @@ export async function POST(req: NextRequest) {
   const email = typeof body?.email === 'string' ? body.email.toLowerCase().trim() : ''
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+  }
+
+  // Anti-bot gate runs BEFORE any Cognito work. This endpoint both sends an SES
+  // email and, for unknown addresses, creates a Cognito user — so an unguarded
+  // bot could email-bomb arbitrary inboxes and churn junk accounts. On a bot
+  // signal we send nothing and create nothing, but hand back a normal-looking
+  // session so the caller advances to the code step and gets no signal to adapt.
+  // A rare false-positive human can hit "use a different email" to reset and
+  // retry; by then the form's been on screen well past the time threshold.
+  if (looksLikeBot(body)) {
+    return NextResponse.json({ session: crypto.randomUUID() })
   }
 
   const result = await otpRequest(email)
