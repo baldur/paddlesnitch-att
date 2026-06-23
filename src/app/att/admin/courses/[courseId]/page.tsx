@@ -128,15 +128,10 @@ export default function CourseAdminPage({
         body: JSON.stringify(patch),
       })
       const data = await res.json()
+      // Geometry edits on a course with entries return 409 (locked) — the
+      // error message is surfaced below. Name/visibility/sport still succeed.
       if (!res.ok) throw new Error(data.error ?? 'Failed to save')
 
-      // Modify-creates-copy: if the geometry change forced a clone (because
-      // entries already exist), the API returns the new course with
-      // `cloned: true` and `clonedFrom`. Bounce the admin to the new course.
-      if (data.cloned) {
-        router.push(`/att/admin/courses/${data.id}`)
-        return
-      }
       setCourse(data)
       setEditing(false)
     } catch (err) {

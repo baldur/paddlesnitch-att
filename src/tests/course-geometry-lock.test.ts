@@ -26,8 +26,8 @@ function jsonReq(method: string, body?: unknown) {
   })
 }
 
-// Story titles for modify-creates-copy. Phase 3 of
-// docs/features/visibility-clubs-tos.md.
+// Geometry is locked once a course has entries: the edit is rejected (409),
+// not cloned. Name + visibility stay editable. Clone-and-recompute is #72.
 
 describe('editing a course with NO entries', () => {
   it('the owner can rename in place', async () => {
@@ -89,7 +89,7 @@ describe('editing a course WITH entries', () => {
     expect(body.visibility).toBe('private')
   })
 
-  it('changing geometry creates a NEW course (clone) and leaves the original untouched', async () => {
+  it('changing geometry is rejected (409) and leaves the original untouched', async () => {
     const owner = await makeUser('Owner')
     const course = await makeCourse(owner.id)
     const trial = await makeTrial(course.id, owner.id)
@@ -100,37 +100,34 @@ describe('editing a course WITH entries', () => {
       distanceMetres: 1234,
       startLine: [[52.0, -1.0], [52.0, -0.99]],
     }), { params: Promise.resolve({ courseId: course.id }) })
-    expect(res.status).toBe(201)
-    const clone = await res.json()
-    expect(clone.cloned).toBe(true)
-    expect(clone.clonedFrom).toBe(course.id)
-    expect(clone.id).not.toBe(course.id)
-    expect(clone.distanceMetres).toBe(1234)
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe('course_has_entries')
 
-    // Original is untouched.
+    // Original geometry is untouched.
     mockAuth(owner.idToken)
     const orig = await (await getCourse(new NextRequest('http://x'),
       { params: Promise.resolve({ courseId: course.id }) })).json()
     expect(orig.distanceMetres).not.toBe(1234)
   })
 
-  it('the clone is owned by whoever did the edit, even if that differs from the original owner', async () => {
-    // (Future-proof: when phase 4 lets a club admin trigger this, the clone
-    // belongs to the editor — keeping the audit story clean.)
+  it('a geometry edit that matches the current geometry is a no-op, not a rejection', async () => {
+    // geometryChanged only fires on an actual difference, so re-sending the
+    // existing distance alongside a name change must still succeed.
     const owner = await makeUser('Owner')
     const course = await makeCourse(owner.id)
     const trial = await makeTrial(course.id, owner.id)
     await plantEntry(trial.id, owner.id)
 
     mockAuth(owner.idToken)
-    const res = await patchCourse(jsonReq('PATCH', { distanceMetres: 9999 }),
-      { params: Promise.resolve({ courseId: course.id }) })
-    expect(res.status).toBe(201)
-    const clone = await res.json()
-    expect(clone.adminUserId).toBe(owner.id)
+    const res = await patchCourse(jsonReq('PATCH', {
+      name: 'Same Geometry',
+      distanceMetres: course.distanceMetres,
+    }), { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+    expect((await res.json()).name).toBe('Same Geometry')
   })
 
-  it('a non-owner still cannot trigger a clone via PATCH', async () => {
+  it('a non-owner cannot edit geometry (403, before the lock check)', async () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     const course = await makeCourse(owner.id)

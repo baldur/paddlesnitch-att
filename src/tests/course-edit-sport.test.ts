@@ -58,22 +58,19 @@ describe('#58 — patching a course sport', () => {
     expect(body.sport).toBe(course.sport)
   })
 
-  it('the sport carries through into a clone when geometry also changes', async () => {
+  it('the owner can change the sport in place even on a course with entries (sport is not geometry)', async () => {
     const owner = await makeUser('Owner')
     const course = await makeCourse(owner.id)
     const trial = await makeTrial(course.id, owner.id)
     await plantEntry(trial.id, owner.id)
 
     mockAuth(owner.idToken)
-    const res = await patchCourse(jsonReq('PATCH', {
-      sport: 'rowing',
-      distanceMetres: 1234,
-    }), { params: Promise.resolve({ courseId: course.id }) })
-    expect(res.status).toBe(201)
-    const clone = await res.json()
-    expect(clone.cloned).toBe(true)
-    expect(clone.sport).toBe('rowing')
-    expect(clone.distanceMetres).toBe(1234)
+    const res = await patchCourse(jsonReq('PATCH', { sport: 'rowing' }),
+      { params: Promise.resolve({ courseId: course.id }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.sport).toBe('rowing')
+    expect(body.id).toBe(course.id)
   })
 
   it('a non-owner cannot patch the sport', async () => {
