@@ -216,6 +216,24 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(res.status).toBe(422)
   })
 
+  it('returns the parsed track + course as a diagnostic when the track does not cross', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const offCourse = makeGpxBuffer([[1.0, 0.0, '2024-06-01T10:00:00Z'], [1.1, 0.0, '2024-06-01T10:01:00Z']])
+    const file = new File([offCourse], 'activity.gpx')
+    const res = await upload(uploadReq(trial.id, file), { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(422)
+
+    const body = await res.json()
+    // The track comes back as [lat, lng] pairs so the upload page can draw it.
+    expect(body.diagnostic.track).toEqual([[1.0, 0.0], [1.1, 0.0]])
+    // The course geometry comes back so the map can draw the start/finish lines.
+    expect(body.diagnostic.course.startLine).toEqual(course.startLine)
+  })
+
   it('returns 400 when the trial is closed', async () => {
     const user = await makeUser()
     const course = await makeCourse(user.id)
