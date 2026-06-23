@@ -5,6 +5,7 @@ import {
   makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial,
   makeGpxBuffer, makeTestTrack,
 } from './helpers'
+import { listKeys, getJson } from '@/lib/storage'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -232,6 +233,36 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(body.diagnostic.track).toEqual([[1.0, 0.0], [1.1, 0.0]])
     // The course geometry comes back so the map can draw the start/finish lines.
     expect(body.diagnostic.course.startLine).toEqual(course.startLine)
+  })
+
+  it('persists the full failing track + course to S3 for offline debugging (#66)', async () => {
+    const user = await makeUser()
+    const course = await makeCourse(user.id)
+    const trial = await makeTrial(course.id, user.id, 'open')
+    mockAuth(user.idToken)
+
+    const offCourse = makeGpxBuffer([[1.0, 0.0, '2024-06-01T10:00:00Z'], [1.1, 0.0, '2024-06-01T10:01:00Z']])
+    const file = new File([offCourse], 'activity.gpx')
+    const res = await upload(uploadReq(trial.id, file), { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(422)
+
+    const keys = await listKeys(`trials/${trial.id}/failed-uploads/${user.id}/`)
+    const diagKey = keys.find(k => k.endsWith('diagnostic.json'))
+    expect(diagKey).toBeDefined()
+
+    const saved = await getJson<{
+      trackPointCount: number
+      track: Array<{ lat: number; lng: number; timestamp: string }>
+      course: { startLine: unknown }
+    }>(diagKey!)
+    // Full-fidelity track (not the downsampled response copy) with timestamps,
+    // so the exact failure can be replayed against geo.ts.
+    expect(saved!.trackPointCount).toBe(2)
+    expect(saved!.track).toEqual([
+      { lat: 1.0, lng: 0.0, timestamp: '2024-06-01T10:00:00.000Z' },
+      { lat: 1.1, lng: 0.0, timestamp: '2024-06-01T10:01:00.000Z' },
+    ])
+    expect(saved!.course.startLine).toEqual(course.startLine)
   })
 
   it('returns 400 when the trial is closed', async () => {
