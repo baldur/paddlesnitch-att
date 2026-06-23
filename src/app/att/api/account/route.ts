@@ -10,6 +10,7 @@ import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 //   - the Cognito user record (no more sign-ins)
 //   - every course they own and every trial that runs on those courses
 //   - every entry they ever submitted, in any trial, owned or not
+//   - every failed-upload diagnostic (GPS track) they left, in any trial
 // After pulling their entries out of trials they don't own, the affected
 // leaderboards get rebuilt so the public view stays consistent.
 export async function DELETE() {
@@ -50,11 +51,15 @@ export async function DELETE() {
       for (const k of allTrialKeys) await deleteObject(k)
       continue
     }
-    // Not owned by this user — surgically remove only their entries.
+    // Not owned by this user — surgically remove only their own data: their
+    // entries AND any failed-upload diagnostics they left here. Only entries
+    // affect the leaderboard, so only those trigger a rebuild.
     const userEntryKeys = await listKeys(`trials/${trialId}/entries/${user.id}/`)
-    if (userEntryKeys.length === 0) continue
+    const userFailedKeys = await listKeys(`trials/${trialId}/failed-uploads/${user.id}/`)
+    if (userEntryKeys.length === 0 && userFailedKeys.length === 0) continue
     for (const k of userEntryKeys) await deleteObject(k)
-    trialsWithUserEntries.add(trialId)
+    for (const k of userFailedKeys) await deleteObject(k)
+    if (userEntryKeys.length > 0) trialsWithUserEntries.add(trialId)
   }
 
   // 5. Rebuild leaderboards for trials we trimmed (not the ones we wiped).

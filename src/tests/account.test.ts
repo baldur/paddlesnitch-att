@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-import { makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial, makeGpxBuffer, makeTestTrack } from './helpers'
+import { makeDataDir, cleanDataDir, makeUser, makeCourse, makeTrial, makeGpxBuffer, makeTestTrack, plantFailedUpload } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -80,6 +80,22 @@ describe('GET /att/api/account/export', () => {
     const all = await getJson(`courses/${strangerCourse.id}/metadata.json`)
     expect(all).not.toBeNull()
   })
+
+  it('includes the user\'s failed uploads (GDPR Art. 15 — #70)', async () => {
+    const me = await makeUser('Me')
+    const organiser = await makeUser('Organiser')
+    const course = await makeCourse(organiser.id)
+    const trial = await makeTrial(course.id, organiser.id, 'open')
+    // Me left a failed upload on someone else's trial; a stranger left one too.
+    await plantFailedUpload(trial.id, me.id)
+    const stranger = await makeUser('Stranger')
+    await plantFailedUpload(trial.id, stranger.id)
+
+    mockAuth(me.idToken)
+    const body = JSON.parse(await (await exportData()).text())
+    expect(body.failedUploads).toHaveLength(1)
+    expect(body.failedUploads[0].userId).toBe(me.id)
+  })
 })
 
 describe('DELETE /att/api/account', () => {
@@ -142,6 +158,24 @@ describe('DELETE /att/api/account', () => {
     // Me's entry files are gone.
     const meEntries = await listKeys(`trials/${trial.id}/entries/${me.id}/`)
     expect(meEntries).toHaveLength(0)
+  })
+
+  it('removes the user\'s failed uploads from trials they do not own (GDPR Art. 17 — #70)', async () => {
+    const me = await makeUser('Me')
+    const organiser = await makeUser('Organiser')
+    const course = await makeCourse(organiser.id)
+    const trial = await makeTrial(course.id, organiser.id, 'open')
+    await plantFailedUpload(trial.id, me.id)
+    const strangerKey = await plantFailedUpload(trial.id, organiser.id)
+
+    mockAuth(me.idToken)
+    expect((await deleteAccount()).status).toBe(200)
+
+    // Me's failed-upload track is gone; the organiser's trial + their own
+    // failed upload survive.
+    expect(await listKeys(`trials/${trial.id}/failed-uploads/${me.id}/`)).toHaveLength(0)
+    expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
+    expect(await getJson(strangerKey)).not.toBeNull()
   })
 
   it('leaves other users\' data untouched', async () => {

@@ -132,6 +132,21 @@ export async function plantEntry(trialId: string, userId: string): Promise<void>
   })
 }
 
+// Mirrors what the upload route persists when a trace fails to match (see #69).
+// Returns the storage key so callers can assert on it.
+export async function plantFailedUpload(trialId: string, userId: string): Promise<string> {
+  const failureId = nanoid()
+  const key = `trials/${trialId}/failed-uploads/${userId}/${failureId}/diagnostic.json`
+  await putJson(key, {
+    failedAt: new Date().toISOString(),
+    trialId, userId, displayName: 'planted',
+    filename: 'planted.gpx',
+    trackPointCount: 1,
+    track: [{ lat: 1, lng: 1, timestamp: '2024-06-01T10:00:00.000Z' }],
+  })
+  return key
+}
+
 export function makeTestTrack(): Array<[number, number, string]> {
   return Array.from({ length: 11 }, (_, i) => [
     parseFloat((51.50 + i * 0.01).toFixed(4)),
