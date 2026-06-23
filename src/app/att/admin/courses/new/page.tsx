@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthNav from '@/components/AuthNav'
+import ReferenceTraceValidator from '@/components/ReferenceTraceValidator'
 import { haversine } from '@/lib/geo'
 import type { LatLng, Line } from '@/lib/types'
 
@@ -254,6 +255,11 @@ export default function NewCoursePage() {
               )}
             </div>
           </div>
+
+          {/* Gate courses: optionally validate the drawn gates against a real trace */}
+          {isGate && gates && gates.length >= 2 && (
+            <ReferenceTraceValidator geometry={{ type: 'gate', gates }} />
+          )}
 
           {/* Manual distance (loop only) */}
           {courseType === 'loop' && (

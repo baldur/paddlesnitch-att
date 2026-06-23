@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
-import { processTrace, diagnoseGates, type GateDiagnosis } from '@/lib/geo'
+import { processTrace, diagnoseGates, gateDiagnosisMessage } from '@/lib/geo'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
@@ -74,19 +74,6 @@ function parseCrewField(raw: unknown): CrewMember[] | { error: string } {
 
 const GENERIC_NO_MATCH = 'Your activity did not cross the course start and finish lines. Make sure your GPS was recording when you passed through both.'
 
-// Turn a gate diagnosis into a specific, actionable message. Falls back to the
-// generic line when there's nothing useful to say.
-function gateFailureMessage(d: GateDiagnosis): string {
-  if (!d.blocking) return GENERIC_NO_MATCH
-  const { gateNumber, reason } = d.blocking
-  const progress = d.gatesPassed > 0 ? `You passed ${d.gatesPassed} of ${d.total} gates in order. ` : ''
-  if (reason === 'wrong_direction') {
-    return `${progress}Gate ${gateNumber} was crossed in the opposite direction to what the course requires. Either you passed it the wrong way, or gate ${gateNumber}'s direction is set incorrectly on the course.`
-  }
-  const where = d.gatesPassed > 0 ? ' after the previous gate' : ''
-  return `${progress}Gate ${gateNumber} was not crossed${where}. Make sure your GPS was recording as you passed through every gate, in the right order and direction.`
-}
-
 async function processBuffer(
   arrayBuffer: ArrayBuffer,
   filename: string,
@@ -128,7 +115,7 @@ async function processTrack(
     const gateAnalysis = course.type === 'gate' && course.gates && course.gates.length >= 2
       ? diagnoseGates(track, course.gates)
       : undefined
-    const message = gateAnalysis ? gateFailureMessage(gateAnalysis) : GENERIC_NO_MATCH
+    const message = gateAnalysis ? gateDiagnosisMessage(gateAnalysis) : GENERIC_NO_MATCH
 
     // Persist the FULL failing track + course geometry so a failure can be
     // reproduced and debugged offline — successful entries are saved, but a

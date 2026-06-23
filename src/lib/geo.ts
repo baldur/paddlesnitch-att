@@ -283,6 +283,19 @@ export function diagnoseGates(
   }
 }
 
+// Human-readable explanation of a gate diagnosis. Shared by the upload route
+// (athlete-facing failure) and the reference-trace validator (organiser-facing).
+export function gateDiagnosisMessage(d: GateDiagnosis): string {
+  if (!d.blocking) return 'The trace crosses every gate in the required order and direction.'
+  const { gateNumber, reason } = d.blocking
+  const progress = d.gatesPassed > 0 ? `You passed ${d.gatesPassed} of ${d.total} gates in order. ` : ''
+  if (reason === 'wrong_direction') {
+    return `${progress}Gate ${gateNumber} was crossed in the opposite direction to what the course requires. Either you passed it the wrong way, or gate ${gateNumber}'s direction is set incorrectly on the course.`
+  }
+  const where = d.gatesPassed > 0 ? ' after the previous gate' : ''
+  return `${progress}Gate ${gateNumber} was not crossed${where}. Make sure your GPS was recording as you passed through every gate, in the right order and direction.`
+}
+
 // Try every start-line crossing and pair it with the correct finish crossing for the course type.
 // Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
 export function processTrace(
