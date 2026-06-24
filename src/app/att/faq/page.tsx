@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { readFaqDoc, parseFaq } from '@/lib/faq'
+import { readFaqDoc, parseFaq, faqParagraphs } from '@/lib/faq'
 import AuthNav from '@/components/AuthNav'
 
 // Public read-only help page, rendered server-side from legal/faq.md.
@@ -37,9 +37,13 @@ export default async function FaqPage() {
             {entries.map(entry => (
               <section key={entry.question} className="py-5 first:pt-0">
                 <h2 className="text-sm font-bold text-[#0f172a] mb-2">{entry.question}</h2>
-                <p className="text-sm text-[#64748b] leading-relaxed whitespace-pre-wrap">
-                  {entry.answer}
-                </p>
+                <div className="flex flex-col gap-3">
+                  {faqParagraphs(entry.answer).map((para, i) => (
+                    <p key={i} className="text-sm text-[#64748b] leading-relaxed">
+                      {para}
+                    </p>
+                  ))}
+                </div>
               </section>
             ))}
           </div>

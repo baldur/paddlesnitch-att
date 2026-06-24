@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseFaq, readFaqDoc } from './faq'
+import { parseFaq, readFaqDoc, faqParagraphs } from './faq'
 
 describe('parseFaq', () => {
   it('splits a markdown doc into question/answer pairs on ## headings', () => {
@@ -42,6 +42,44 @@ describe('parseFaq', () => {
 
   it('returns an empty array for a doc with no questions', () => {
     expect(parseFaq('just some prose, no headings')).toEqual([])
+  })
+})
+
+describe('faqParagraphs', () => {
+  it('reflows a hard-wrapped paragraph into a single line (no premature breaks)', () => {
+    // legal/faq.md is hard-wrapped at ~80 cols; those source newlines must
+    // not surface as mid-sentence line breaks in the rendered page (#81).
+    const answer = [
+      'Public courses and their trials are visible to anyone, so your',
+      'times may become public.',
+    ].join('\n')
+
+    expect(faqParagraphs(answer)).toEqual([
+      'Public courses and their trials are visible to anyone, so your times may become public.',
+    ])
+  })
+
+  it('keeps blank-line-separated paragraphs as distinct entries', () => {
+    const answer = [
+      'Your track did not cross the start/finish',
+      'lines.',
+      '',
+      'The upload page shows a diagnostic map of',
+      'your track.',
+    ].join('\n')
+
+    expect(faqParagraphs(answer)).toEqual([
+      'Your track did not cross the start/finish lines.',
+      'The upload page shows a diagnostic map of your track.',
+    ])
+  })
+
+  it('collapses runs of blank lines and ignores trailing whitespace', () => {
+    expect(faqParagraphs('One.\n\n\n\nTwo.\n')).toEqual(['One.', 'Two.'])
+  })
+
+  it('returns an empty array for an empty answer', () => {
+    expect(faqParagraphs('')).toEqual([])
   })
 })
 
