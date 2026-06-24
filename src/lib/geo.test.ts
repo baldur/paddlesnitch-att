@@ -93,6 +93,30 @@ describe('processTrace', () => {
     expect(result).not.toHaveProperty('cadenceSeries')
   })
 
+  it('reports runCount = 1 for a single clean start→finish run', () => {
+    const result = processTrace(track, startLine, finishLine)!
+    expect(result.runCount).toBe(1)
+  })
+
+  it('counts every valid run when a trace contains more than one (#77)', () => {
+    // Two separate races in one upload. After the first run the athlete
+    // returns to the start via lng=0.010 — east of the line segments
+    // (which only span lng -0.001..0.001) — so the return never re-crosses
+    // the lines and we get exactly two clean runs, not spurious extras.
+    const twoRuns: TrackPoint[] = [
+      pt(0.000, 0.000, 0),
+      pt(0.002, 0.000, 10_000), // crosses start  (run 1)
+      pt(0.006, 0.000, 20_000), // crosses finish (run 1)
+      pt(0.006, 0.010, 30_000), // east, clear of the lines
+      pt(0.000, 0.010, 40_000), // south, clear of the lines
+      pt(0.000, 0.000, 50_000), // back west to the start area
+      pt(0.002, 0.000, 60_000), // crosses start  (run 2)
+      pt(0.006, 0.000, 70_000), // crosses finish (run 2)
+    ]
+    const result = processTrace(twoRuns, startLine, finishLine, 'point_to_point')!
+    expect(result.runCount).toBe(2)
+  })
+
   it('rescues a run that crossed the finish line before the start (#66)', () => {
     // The athlete went south: crossed the finish line (lat 0.005) first, then
     // the start line (lat 0.001), and stopped. There is no forward

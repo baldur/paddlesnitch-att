@@ -183,6 +183,7 @@ function processMultiGate(
   if (startCrossings.length === 0) return null
 
   let best: ProcessedResult | null = null
+  let runCount = 0
 
   for (const startCrossing of startCrossings) {
     let current: Crossing = startCrossing
@@ -197,9 +198,11 @@ function processMultiGate(
     if (!valid) continue
     const candidate = buildResult(track, startCrossing, current)
     if (!candidate || candidate.totalElapsedSeconds < minValidSeconds) continue
+    runCount++
     if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) best = candidate
   }
 
+  if (best) best.runCount = runCount
   return best
 }
 
@@ -328,6 +331,7 @@ export function processTrace(
   if (startCrossings.length === 0) return null
 
   let best: ProcessedResult | null = null
+  let runCount = 0
 
   for (const startCrossing of startCrossings) {
     let finishCrossing: Crossing | null = null
@@ -361,10 +365,13 @@ export function processTrace(
     if (!candidate) continue
     if (candidate.totalElapsedSeconds < minValidSeconds) continue
 
+    runCount++
     if (!best || candidate.totalElapsedSeconds < best.totalElapsedSeconds) {
       best = candidate
     }
   }
+
+  if (best) best.runCount = runCount
 
   // Fallback for point-to-point: a run that crossed the finish line first and
   // never re-crossed it after the start has no forward start→finish segment, so

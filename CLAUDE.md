@@ -209,6 +209,8 @@ Organisers can pre-validate a gate course with a **reference trace**: `Reference
 
 **trackSegment**: `ProcessedResult.trackSegment` stores the interpolated lat/lng path from start crossing to finish crossing. Used to plot the leader's track on the leaderboard map.
 
+**runCount**: `ProcessedResult.runCount` is how many valid runs the uploaded trace contained (start→finish pairs passing `minValidSeconds`); the returned result is the fastest of them. Carried onto `LeaderboardEntry` only when `> 1`, and the leaderboard's expanded row shows "Best of N runs in this upload" so the athlete understands why one time was picked from a multi-run session. Undefined on pre-#77 entries — treat as a single run. See issue #77.
+
 `processTrace` in `geo.ts` uses the best-effort algorithm: tries every valid start crossing, returns the shortest valid pair.
 
 **Reverse-role fallback (point_to_point only)**: if the forward start→finish search finds nothing — e.g. the athlete crossed the finish line first and never re-crossed it after the start, so the run effectively went finish→start — `processTrace` retries once with the start/finish lines swapped before yielding null. Forward is always preferred (the fallback only fires when the normal pass found nothing), so a properly-directed run is never affected. Guarded by the internal `tryReverse` param to run at most once. See issue #66.
