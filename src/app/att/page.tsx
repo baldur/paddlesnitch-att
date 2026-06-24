@@ -103,9 +103,12 @@ export default async function Home() {
             ))}
           </div>
         )}
-        <div className="mt-8 text-center">
+        <div className="mt-8 flex items-center justify-center gap-6">
           <Link href="/att/courses" className="tt-nav-link text-xs tracking-widest">
             BROWSE ALL COURSES →
+          </Link>
+          <Link href="/att/faq" className="tt-nav-link text-xs tracking-widest">
+            HELP / FAQ
           </Link>
         </div>
       </section>
