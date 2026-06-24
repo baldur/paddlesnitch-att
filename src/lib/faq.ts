@@ -35,6 +35,19 @@ export function parseFaq(md: string): FaqEntry[] {
   return entries
 }
 
+// Splits an answer into display paragraphs. The markdown source is hard-wrapped
+// at ~80 columns; those single newlines are soft wraps, not intentional breaks,
+// so each paragraph's lines are reflowed into one line (joined with spaces).
+// Blank lines separate paragraphs and are the only real break. This keeps the
+// rendered page from breaking sentences mid-line the way `whitespace-pre-wrap`
+// did — see #81.
+export function faqParagraphs(answer: string): string[] {
+  return answer
+    .split(/\n\s*\n/)
+    .map(para => para.split('\n').map(line => line.trim()).filter(Boolean).join(' '))
+    .filter(Boolean)
+}
+
 // Reads the raw FAQ markdown. Returns null if the file is missing (the page
 // degrades to a "no FAQ" message rather than throwing). Server-side only.
 export async function readFaqDoc(): Promise<string | null> {
