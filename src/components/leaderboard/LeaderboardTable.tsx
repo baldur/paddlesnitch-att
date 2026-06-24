@@ -139,6 +139,11 @@ export default function LeaderboardTable({
                   {isOpen && (
                     <tr key={`${entry.entryId}-splits`} className="border-b border-[#f1f5f9] bg-[#f8fafc]">
                       <td colSpan={6} className="px-4 py-3">
+                        {entry.runCount && entry.runCount > 1 && (
+                          <div className="mb-4 text-xs text-[#64748b]">
+                            Best of {entry.runCount} runs in this upload — the fastest is shown.
+                          </div>
+                        )}
                         {entry.crew && entry.crew.length > 1 && (
                           <div className="mb-4">
                             <div className="text-[#64748b] text-xs tracking-wider mb-1.5">CREW</div>

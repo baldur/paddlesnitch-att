@@ -22,6 +22,11 @@ export type ProcessedResult = {
   totalElapsedSeconds: number
   splits: Split[]
   trackSegment?: LatLng[] // lat/lng points from start crossing to finish crossing
+  // How many valid runs the upload contained (start→finish pairs passing
+  // minValidSeconds). This result is the fastest of them; the rest are
+  // discarded. Used to tell the athlete "best of N runs". Absent on pre-#77
+  // entries — treat undefined as a single run.
+  runCount?: number
 }
 
 // Canonical types (new courses):
@@ -158,6 +163,10 @@ export type LeaderboardEntry = {
   crew: CrewMember[]
   totalElapsedSeconds: number
   splits: Split[]
+  // How many valid runs the uploaded trace contained; this row is the
+  // fastest. Shown as "best of N runs" when > 1. Undefined for pre-#77
+  // entries (treat as a single run).
+  runCount?: number
 }
 
 export type AuthUser = {
