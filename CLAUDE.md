@@ -309,6 +309,7 @@ feedback              POST — files a customer-reported GitHub issue (anti-bot 
 account/export        GET  — JSON archive of the signed-in user's data (GDPR Art. 15)
 account               DELETE — full account erasure (GDPR Art. 17)
 account/profile       GET / PATCH — read or set the viewer's profile visibility ({ public: boolean }); profiles are opt-in (private by default)
+account/handle        GET (?check=) / PUT / DELETE — check availability, claim/change, or release the viewer's vanity profile handle
 ```
 
 **Note on trial path:** Trials are stored flat (`trials/{trialId}/`) not nested under courseId. The `courseId` is stored inside `metadata.json`. This simplifies lookups by trialId.
@@ -569,7 +570,7 @@ A profile page at `/att/u/{userId}` shows one paddler's vanity stats — totals 
 1. **Opt-in.** A profile is private until the user flips it public (account page → Public profile → `PATCH /att/api/account/profile`). Setting stored at `users/{userId}/profile.json` (`{ public: boolean }`, default false). A private profile returns **404** to everyone but its owner (the owner sees their own with a "only you can see this" banner) — same no-leak pattern as private courses/trials.
 2. **No visibility leak.** `buildProfileStats(userId, viewer, viewerClubIds)` scans the user's `entries/*/result.json`, but counts a race **only if `canViewTrial(trial, viewer, viewerClubIds)`** passes — so a profile never reveals a result the viewer couldn't already see on that trial's leaderboard. Stats are recomputed per-viewer.
 
-Phase 1 keys profiles by `userId`. Claimed vanity handles (`/att/u/baldur` via a `usernames/{slug}.json → userId` index) are the planned phase 2.
+A user may also claim a **vanity handle** so their profile lives at `/att/u/baldur`. Handle logic is in `src/lib/profile.ts`: `normaliseHandle` (lowercase, 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, not in `RESERVED_HANDLES`), `claimHandle` / `releaseHandle` (maintains a `usernames/{slug}.json → { userId }` reverse index; changing a handle frees the old slug; taken handles are rejected), and `resolveToUserId(segment)` (a known handle wins, else the segment is treated as a userId so old `/att/u/{userId}` links keep working). The profile page redirects to the canonical `/att/u/{handle}` when one exists. Managed from the account page → Public profile → Profile handle (`GET ?check=` / `PUT` / `DELETE /att/api/account/handle`). Account erasure releases the handle index and wipes the whole `users/{userId}/` prefix (profile, contact, clubs index, strava, tos-consent — previously these survived deletion).
 
 ---
 

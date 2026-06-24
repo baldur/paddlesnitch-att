@@ -11,6 +11,7 @@ import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
 import { GET as listCourses } from '@/app/att/api/courses/route'
 import { GET as getLeaderboard } from '@/app/att/api/trials/[trialId]/leaderboard/route'
 import { listKeys, getJson } from '@/lib/storage'
+import { claimHandle } from '@/lib/profile'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -176,6 +177,21 @@ describe('DELETE /att/api/account', () => {
     expect(await listKeys(`trials/${trial.id}/failed-uploads/${me.id}/`)).toHaveLength(0)
     expect(await getJson(`trials/${trial.id}/metadata.json`)).not.toBeNull()
     expect(await getJson(strangerKey)).not.toBeNull()
+  })
+
+  it('wipes the users/ prefix and releases a claimed handle (#83)', async () => {
+    const me = await makeUser('Me')
+    mockAuth(me.idToken)
+    await claimHandle(me.id, 'gone-soon')
+    // sanity: index + profile.json exist before deletion
+    expect(await getJson(`usernames/gone-soon.json`)).not.toBeNull()
+    expect(await listKeys(`users/${me.id}/`)).not.toHaveLength(0)
+
+    expect((await deleteAccount()).status).toBe(200)
+
+    // Handle index released and the whole users/{id}/ prefix gone.
+    expect(await getJson(`usernames/gone-soon.json`)).toBeNull()
+    expect(await listKeys(`users/${me.id}/`)).toHaveLength(0)
   })
 
   it('leaves other users\' data untouched', async () => {

@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
 import { getUserClubIds } from '@/lib/clubs'
-import { getProfileSettings, buildProfileStats } from '@/lib/profile'
+import { getProfileSettings, buildProfileStats, resolveToUserId } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
 import AuthNav from '@/components/AuthNav'
@@ -29,9 +29,12 @@ function fmtMonthYear(iso: string | null): string {
 export default async function ProfilePage({
   params,
 }: {
+  // The dynamic segment is a handle OR a userId (kept the folder name [userId]).
   params: Promise<{ userId: string }>
 }) {
-  const { userId } = await params
+  const { userId: segment } = await params
+  // A claimed handle resolves to its owner; otherwise the segment is a userId.
+  const userId = await resolveToUserId(segment)
   const viewer = await getAuthUser()
   const isOwner = viewer?.id === userId
 
@@ -39,6 +42,12 @@ export default async function ProfilePage({
   // as a missing user — no "exists but private" leak.
   const settings = await getProfileSettings(userId)
   if (!settings.public && !isOwner) notFound()
+
+  // Canonical URL: if the user has a handle and they were reached some other way
+  // (by userId, or a different-cased handle), redirect to /att/u/{handle}.
+  if (settings.handle && segment !== settings.handle) {
+    redirect(`/att/u/${settings.handle}`)
+  }
 
   const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : new Set<string>()
   const stats = await buildProfileStats(userId, viewer, viewerClubIds)

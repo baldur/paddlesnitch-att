@@ -49,6 +49,10 @@ function AccountPageInner() {
   const [contactMsg, setContactMsg] = useState('')
   const [profilePublic, setProfilePublic] = useState<boolean | undefined>(undefined)
   const [profileSaving, setProfileSaving] = useState(false)
+  const [handle, setHandle] = useState<string | null>(null)
+  const [handleInput, setHandleInput] = useState('')
+  const [handleMsg, setHandleMsg] = useState('')
+  const [handleSaving, setHandleSaving] = useState(false)
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -82,9 +86,46 @@ function AccountPageInner() {
     if (!user) return
     fetch('/att/api/account/profile')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) setProfilePublic(!!d.public) })
+      .then(d => { if (d) { setProfilePublic(!!d.public); setHandle(d.handle ?? null); setHandleInput(d.handle ?? '') } })
       .catch(() => { /* leave undefined */ })
   }, [user])
+
+  async function saveHandle() {
+    setHandleMsg('')
+    setHandleSaving(true)
+    try {
+      const res = await fetch('/att/api/account/handle', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: handleInput.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not save handle')
+      setHandle(body.handle ?? null)
+      setHandleInput(body.handle ?? '')
+      setHandleMsg('Saved.')
+    } catch (err) {
+      setHandleMsg(err instanceof Error ? err.message : 'Could not save handle')
+    } finally {
+      setHandleSaving(false)
+    }
+  }
+
+  async function releaseHandle() {
+    setHandleMsg('')
+    setHandleSaving(true)
+    try {
+      const res = await fetch('/att/api/account/handle', { method: 'DELETE' })
+      if (!res.ok) throw new Error('Could not release handle')
+      setHandle(null)
+      setHandleInput('')
+      setHandleMsg('Handle released.')
+    } catch (err) {
+      setHandleMsg(err instanceof Error ? err.message : 'Could not release handle')
+    } finally {
+      setHandleSaving(false)
+    }
+  }
 
   async function toggleProfilePublic(next: boolean) {
     setProfileSaving(true)
@@ -367,10 +408,49 @@ function AccountPageInner() {
                       : 'MAKE PROFILE PUBLIC'}
                 </button>
                 {user && (
-                  <Link href={`/att/u/${user.id}`} className="tt-link text-sm">
+                  <Link href={`/att/u/${handle ?? user.id}`} className="tt-link text-sm">
                     {profilePublic ? 'View my profile →' : 'Preview my profile →'}
                   </Link>
                 )}
+              </div>
+
+              {/* Vanity handle */}
+              <div className="mt-5 flex flex-col gap-2">
+                <label className="text-xs text-[#64748b] tracking-widest">PROFILE HANDLE</label>
+                <p className="text-xs text-[#64748b]">
+                  Claim a handle for a memorable link like{' '}
+                  <span className="text-[#0f172a]">/att/u/{handle || 'your-handle'}</span>.
+                  Lowercase letters, numbers and hyphens, 3–30 characters.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-[#64748b]">/att/u/</span>
+                  <input
+                    type="text"
+                    value={handleInput}
+                    onChange={e => setHandleInput(e.target.value)}
+                    placeholder="your-handle"
+                    className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm focus:outline-none focus:border-[#0369a1] transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveHandle}
+                    disabled={handleSaving || !handleInput.trim() || handleInput.trim() === handle}
+                    className="px-4 py-2 border border-[#0369a1] text-[#0369a1] text-xs tracking-widest hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
+                  >
+                    {handleSaving ? 'SAVING…' : handle ? 'CHANGE' : 'CLAIM'}
+                  </button>
+                  {handle && (
+                    <button
+                      type="button"
+                      onClick={releaseHandle}
+                      disabled={handleSaving}
+                      className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#b91c1c] hover:text-[#b91c1c] disabled:opacity-50 transition-colors"
+                    >
+                      RELEASE
+                    </button>
+                  )}
+                </div>
+                {handleMsg && <p className="text-xs text-[#64748b]">{handleMsg}</p>}
               </div>
             </section>
 
