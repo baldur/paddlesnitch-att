@@ -47,6 +47,8 @@ function AccountPageInner() {
   const [contactEmail, setContactEmail] = useState<string>('')
   const [contactSaved, setContactSaved] = useState<string | null>(null)
   const [contactMsg, setContactMsg] = useState('')
+  const [profilePublic, setProfilePublic] = useState<boolean | undefined>(undefined)
+  const [profileSaving, setProfileSaving] = useState(false)
 
   useEffect(() => {
     fetch('/att/api/auth/me')
@@ -75,6 +77,33 @@ function AccountPageInner() {
       })
       .catch(() => { /* leave defaults */ })
   }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    fetch('/att/api/account/profile')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setProfilePublic(!!d.public) })
+      .catch(() => { /* leave undefined */ })
+  }, [user])
+
+  async function toggleProfilePublic(next: boolean) {
+    setProfileSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/att/api/account/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public: next }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not update profile')
+      setProfilePublic(!!body.public)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update profile')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
 
   async function saveContactEmail(e: React.FormEvent) {
     e.preventDefault()
@@ -313,6 +342,36 @@ function AccountPageInner() {
                   </button>
                 </div>
               )}
+            </section>
+
+            <section>
+              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-3">
+                Public profile
+              </h2>
+              <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
+                A public profile page shows your race history, personal bests and stats at a shareable link.
+                It only ever shows results from trials people can already see — private and club-only results stay hidden.
+                Off by default.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => toggleProfilePublic(!profilePublic)}
+                  disabled={profilePublic === undefined || profileSaving}
+                  className="px-6 py-2.5 border border-[#0369a1] text-[#0369a1] font-bold text-sm tracking-widest hover:bg-[#f0f9ff] disabled:opacity-50 transition-colors"
+                >
+                  {profileSaving
+                    ? 'SAVING…'
+                    : profilePublic
+                      ? 'MAKE PROFILE PRIVATE'
+                      : 'MAKE PROFILE PUBLIC'}
+                </button>
+                {user && (
+                  <Link href={`/att/u/${user.id}`} className="tt-link text-sm">
+                    {profilePublic ? 'View my profile →' : 'Preview my profile →'}
+                  </Link>
+                )}
+              </div>
             </section>
 
             <section>
