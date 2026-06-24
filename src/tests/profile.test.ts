@@ -6,7 +6,10 @@ import type { AuthUser, BoatClass } from '@/lib/types'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { getProfileSettings, setProfilePublic, buildProfileStats } from '@/lib/profile'
+import {
+  getProfileSettings, setProfilePublic, buildProfileStats,
+  normaliseHandle, claimHandle, releaseHandle, getHandleOwner, resolveToUserId,
+} from '@/lib/profile'
 
 let dataDir: string
 beforeEach(async () => { dataDir = await makeDataDir() })
@@ -50,6 +53,62 @@ describe('profile settings', () => {
     expect((await getProfileSettings(u.id)).public).toBe(true)
     await setProfilePublic(u.id, false)
     expect((await getProfileSettings(u.id)).public).toBe(false)
+  })
+
+  it('a visibility flip preserves a claimed handle', async () => {
+    const u = await makeUser()
+    await claimHandle(u.id, 'speedy')
+    await setProfilePublic(u.id, true)
+    expect((await getProfileSettings(u.id)).handle).toBe('speedy')
+  })
+})
+
+describe('handles', () => {
+  it('normalises and validates', () => {
+    expect(normaliseHandle('BalduR')).toEqual({ slug: 'baldur' })
+    expect(normaliseHandle('  Pat-99  ')).toEqual({ slug: 'pat-99' })
+    expect('error' in normaliseHandle('ab')).toBe(true)          // too short
+    expect('error' in normaliseHandle('-nope')).toBe(true)        // leading hyphen
+    expect('error' in normaliseHandle('has space')).toBe(true)    // bad char
+    expect('error' in normaliseHandle('account')).toBe(true)      // reserved
+  })
+
+  it('claims a handle and resolves it back to the user', async () => {
+    const u = await makeUser()
+    const res = await claimHandle(u.id, 'river-rat')
+    expect('error' in res).toBe(false)
+    expect(await getHandleOwner('river-rat')).toBe(u.id)
+    expect(await resolveToUserId('river-rat')).toBe(u.id)
+    // An unknown segment resolves to itself (treated as a userId).
+    expect(await resolveToUserId(u.id)).toBe(u.id)
+  })
+
+  it('rejects a handle already taken by someone else', async () => {
+    const a = await makeUser('A')
+    const b = await makeUser('B')
+    await claimHandle(a.id, 'shared')
+    const res = await claimHandle(b.id, 'shared')
+    expect(res).toEqual({ error: 'That handle is already taken.' })
+  })
+
+  it('changing handle frees the old one', async () => {
+    const u = await makeUser()
+    await claimHandle(u.id, 'old-name')
+    await claimHandle(u.id, 'new-name')
+    expect(await getHandleOwner('old-name')).toBeNull()
+    expect(await getHandleOwner('new-name')).toBe(u.id)
+    expect((await getProfileSettings(u.id)).handle).toBe('new-name')
+  })
+
+  it('releasing a handle frees it for others', async () => {
+    const a = await makeUser('A')
+    const b = await makeUser('B')
+    await claimHandle(a.id, 'grab')
+    await releaseHandle(a.id)
+    expect(await getHandleOwner('grab')).toBeNull()
+    expect((await getProfileSettings(a.id)).handle).toBeUndefined()
+    // Now b can take it.
+    expect('error' in (await claimHandle(b.id, 'grab'))).toBe(false)
   })
 })
 
