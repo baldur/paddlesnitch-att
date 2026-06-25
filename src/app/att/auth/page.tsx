@@ -164,10 +164,14 @@ function AuthForm() {
     <div className="w-full max-w-sm">
       <a
         href={stravaHref}
-        className="flex items-center justify-center gap-2 px-6 py-2.5 mb-6 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
+        className="flex items-center justify-center gap-2 px-6 py-2.5 mb-2 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
       >
         CONTINUE WITH STRAVA
       </a>
+      <p className="text-xs text-[#94a3b8] mb-6 text-center leading-relaxed">
+        Already have an email account? Sign in below first and connect Strava from your account
+        page — that links them, so Strava sign-in lands on your existing account instead of a new one.
+      </p>
       <div className="flex items-center gap-3 mb-6 text-xs text-[#94a3b8] tracking-widest">
         <span className="flex-1 h-px bg-[#e2e8f0]" />
         OR
