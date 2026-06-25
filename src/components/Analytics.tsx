@@ -2,12 +2,14 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
-// Fires a `pageview` beacon to /att/api/track on every route change. Off unless
-// NEXT_PUBLIC_ANALYTICS === '1' (so it stays dark in dev/preview and until you
-// explicitly enable it in production). Uses navigator.sendBeacon so the request
-// survives the navigation that triggered it. No PII: the only id sent is a
-// random per-tab session id from sessionStorage.
-const ENABLED = process.env.NEXT_PUBLIC_ANALYTICS === '1'
+// Fires a `pageview` beacon to /att/api/track on every route change. Enabled in
+// production builds; off in dev/test so local navigation doesn't emit. Set
+// NEXT_PUBLIC_ANALYTICS=0 to force it off (kill switch). Uses
+// navigator.sendBeacon so the request survives the navigation that triggered
+// it. No PII: the only id sent is a random per-tab session id from sessionStorage.
+const ENABLED =
+  process.env.NEXT_PUBLIC_ANALYTICS !== '0' &&
+  process.env.NODE_ENV === 'production'
 
 function sessionId(): string {
   try {

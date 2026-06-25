@@ -5,6 +5,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as iam from 'aws-cdk-lib/aws-iam'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
@@ -473,10 +474,72 @@ export class AttStack extends cdk.Stack {
     })
 
     // ---------------------------------------------------------------------------
+    // CloudWatch dashboard — product events (EMF) + server health
+    // ---------------------------------------------------------------------------
+    // The product-event metrics are created automatically from the EMF log lines
+    // emitMetric() writes (src/lib/metrics.ts). They populate once events fire;
+    // referencing them here before any data exists is fine.
+    const EVENT_NAMESPACE = 'Paddlesnitch/App'
+    const eventNames = ['pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create']
+    const eventMetric = (event: string, period: cdk.Duration) =>
+      new cloudwatch.Metric({
+        namespace: EVENT_NAMESPACE,
+        metricName: 'Count',
+        dimensionsMap: { Event: event },
+        statistic: 'Sum',
+        period,
+        label: event,
+      })
+
+    const dashboard = new cloudwatch.Dashboard(this, 'AppDashboard', {
+      dashboardName: 'paddlesnitch-app',
+      defaultInterval: cdk.Duration.days(30),
+    })
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Product events / day',
+        left: eventNames.map(e => eventMetric(e, cdk.Duration.days(1))),
+        width: 24,
+        height: 8,
+      }),
+    )
+
+    dashboard.addWidgets(
+      new cloudwatch.SingleValueWidget({
+        title: 'Events — selected time range (totals)',
+        metrics: eventNames.map(e => eventMetric(e, cdk.Duration.days(1))),
+        width: 24,
+        height: 4,
+        setPeriodToTimeRange: true,
+      }),
+    )
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Server Lambda — invocations & errors / hour',
+        left: [serverFn.metricInvocations({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
+        right: [serverFn.metricErrors({ statistic: 'Sum', period: cdk.Duration.hours(1) })],
+        width: 12,
+        height: 6,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Server Lambda — duration p95 (ms)',
+        left: [serverFn.metricDuration({ statistic: 'p95', period: cdk.Duration.hours(1) })],
+        width: 12,
+        height: 6,
+      }),
+    )
+
+    // ---------------------------------------------------------------------------
     // Outputs
     // ---------------------------------------------------------------------------
     new cdk.CfnOutput(this, 'CloudFrontUrl', {
       value: `https://${distribution.distributionDomainName}`,
+    })
+    new cdk.CfnOutput(this, 'DashboardUrl', {
+      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards/dashboard/paddlesnitch-app`,
+      description: 'CloudWatch dashboard for product events + server health',
     })
     new cdk.CfnOutput(this, 'DataBucketName', {
       value: dataBucket.bucketName,

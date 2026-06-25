@@ -854,8 +854,9 @@ Custom product events flow to CloudWatch metrics via **Embedded Metric Format** 
 
 - **Cardinality discipline:** the only metric dimension is `Event` (fixed allowlist in `METRIC_EVENTS`: `pageview`, `signup`, `login`, `upload`, `trial_create`, `course_create`). High-cardinality context (page `path`, session `sid`) is attached as a plain property — queryable in Logs Insights but does **not** create per-value metrics.
 - **Server events** (`signup`, `login`, `upload`) are emitted directly in those routes and are **always on in production** — no flag — so they can't be spoofed and start flowing on first deploy. Cost is ~6 custom metrics (~pennies/month).
-- **Client pageviews:** `src/components/Analytics.tsx` beacons a `pageview` to `POST /att/api/track` on each route change, **gated behind `NEXT_PUBLIC_ANALYTICS=1`** (a build-time inline var) so it stays dark until explicitly enabled. The endpoint drops any event not in the allowlist. No PII: only event, path, and a random per-tab `sid`.
-- **Not built yet (deliberate):** CloudWatch dashboards, alarms, and session heartbeats — add once events are confirmed flowing.
+- **Client pageviews:** `src/components/Analytics.tsx` beacons a `pageview` to `POST /att/api/track` on each route change. **On in production builds**, off in dev/test; set `NEXT_PUBLIC_ANALYTICS=0` to force it off (kill switch). The endpoint drops any event not in the allowlist. No PII: only event, path, and a random per-tab `sid`.
+- **Dashboard:** a CloudWatch dashboard `paddlesnitch-app` (defined in `infra/lib/att-stack.ts`) charts product events/day, period totals, and server-Lambda invocations/errors/p95. The `DashboardUrl` stack output links to it. The EMF metrics populate once events fire.
+- **Not built yet (deliberate):** alarms and session heartbeats — add later if wanted.
 
 ---
 
