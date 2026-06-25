@@ -72,6 +72,14 @@ export async function DELETE() {
     await deleteObject(`courses/${courseId}/metadata.json`)
   }
 
+  // 6b. Release a claimed vanity handle (the usernames/{slug} index lives
+  //     outside users/, so it needs an explicit delete), then wipe the whole
+  //     users/{userId}/ prefix — profile, contact, clubs index, strava tokens,
+  //     tos-consent. Previously these survived erasure (GDPR gap).
+  const profile = await getJson<{ handle?: string }>(`users/${user.id}/profile.json`)
+  if (profile?.handle) await deleteObject(`usernames/${profile.handle}.json`)
+  for (const k of await listKeys(`users/${user.id}/`)) await deleteObject(k)
+
   // 7. Revoke any active refresh token then delete the Cognito user.
   //    Order matters: if Cognito delete fails we want their session still revoked.
   const cookieStore = await cookies()

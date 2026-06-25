@@ -5,29 +5,107 @@
 //      entry is filtered through canViewTrial, so a private/club result stays
 //      hidden exactly as it is on the trial's own leaderboard.
 //
-// Phase 1 keys profiles by userId (/att/u/{userId}). Claimed vanity handles
-// (/att/u/baldur) arrive in phase 2.
+// Profiles are keyed by userId (/att/u/{userId}); a user may also claim a vanity
+// handle (/att/u/baldur) resolved via a usernames/{slug}.json -> userId index.
 
-import { getJson, putJson, listKeys } from './storage'
+import { getJson, putJson, deleteObject, listKeys } from './storage'
 import { canViewTrial } from './permissions'
 import type { AuthUser, TrialMetadata, CourseMetadata, BoatClass } from './types'
 
 export type ProfileSettings = {
   public: boolean
+  handle?: string // claimed vanity handle (phase 2); absent if unclaimed
 }
 
 function settingsKey(userId: string): string {
   return `users/${userId}/profile.json`
 }
 
+function handleKey(slug: string): string {
+  return `usernames/${slug}.json`
+}
+
 // Profiles default to private — a user must explicitly opt in.
 export async function getProfileSettings(userId: string): Promise<ProfileSettings> {
   const rec = await getJson<ProfileSettings>(settingsKey(userId))
-  return { public: rec?.public ?? false }
+  return { public: rec?.public ?? false, handle: rec?.handle }
 }
 
+// Read-modify-write so a visibility flip never clobbers the claimed handle.
 export async function setProfilePublic(userId: string, isPublic: boolean): Promise<ProfileSettings> {
-  const next: ProfileSettings = { public: isPublic }
+  const cur = await getProfileSettings(userId)
+  const next: ProfileSettings = { ...cur, public: isPublic }
+  await putJson(settingsKey(userId), next)
+  return next
+}
+
+// --- Vanity handles (phase 2) ---------------------------------------------
+
+// Handles can't shadow sibling routes or look like system paths. Lowercase.
+export const RESERVED_HANDLES = new Set([
+  'account', 'admin', 'api', 'auth', 'new', 'me', 'u', 'clubs', 'club',
+  'trials', 'trial', 'courses', 'course', 'login', 'logout', 'signin',
+  'signup', 'settings', 'help', 'about', 'privacy', 'terms', 'tos',
+  'leaderboard', 'upload', 'paddlesnitch', 'support', 'root', 'null',
+  'undefined', 'www',
+])
+
+// Normalise + validate a raw handle. Returns the canonical slug, or an error
+// reason. Rules: lowercased; 3-30 chars; [a-z0-9-]; no leading/trailing hyphen;
+// not reserved.
+export function normaliseHandle(raw: unknown): { slug: string } | { error: string } {
+  if (typeof raw !== 'string') return { error: 'Handle is required.' }
+  const slug = raw.trim().toLowerCase()
+  if (slug.length < 3 || slug.length > 30) return { error: 'Handle must be 3–30 characters.' }
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$/.test(slug)) {
+    return { error: 'Use lowercase letters, numbers and hyphens only (no leading/trailing hyphen).' }
+  }
+  if (RESERVED_HANDLES.has(slug)) return { error: 'That handle is reserved.' }
+  return { slug }
+}
+
+// Who owns this handle, if anyone.
+export async function getHandleOwner(slug: string): Promise<string | null> {
+  const rec = await getJson<{ userId: string }>(handleKey(slug))
+  return rec?.userId ?? null
+}
+
+// Resolve a route segment to a userId: a known handle wins, otherwise the
+// segment is treated as a userId directly (so old /att/u/{userId} links work).
+export async function resolveToUserId(segment: string): Promise<string> {
+  return (await getHandleOwner(segment.toLowerCase())) ?? segment
+}
+
+// Claim (or change to) a handle for a user. Validates, enforces uniqueness,
+// releases the user's previous handle, and updates both the index and the
+// profile settings. Re-claiming your own current handle is a no-op success.
+export async function claimHandle(userId: string, raw: unknown): Promise<ProfileSettings | { error: string }> {
+  const norm = normaliseHandle(raw)
+  if ('error' in norm) return norm
+  const { slug } = norm
+
+  const existingOwner = await getHandleOwner(slug)
+  if (existingOwner && existingOwner !== userId) {
+    return { error: 'That handle is already taken.' }
+  }
+
+  const cur = await getProfileSettings(userId)
+  if (cur.handle === slug) return cur // no-op
+
+  // Release the old handle index if the user is changing handles.
+  if (cur.handle) await deleteObject(handleKey(cur.handle))
+
+  await putJson(handleKey(slug), { userId })
+  const next: ProfileSettings = { ...cur, handle: slug }
+  await putJson(settingsKey(userId), next)
+  return next
+}
+
+// Drop the user's handle (frees it for others). Safe if they have none.
+export async function releaseHandle(userId: string): Promise<ProfileSettings> {
+  const cur = await getProfileSettings(userId)
+  if (cur.handle) await deleteObject(handleKey(cur.handle))
+  const next: ProfileSettings = { public: cur.public }
   await putJson(settingsKey(userId), next)
   return next
 }
