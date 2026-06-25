@@ -9,6 +9,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import {
   getProfileSettings, setProfilePublic, buildProfileStats,
   normaliseHandle, claimHandle, releaseHandle, getHandleOwner, resolveToUserId,
+  getPublicProfileLinks,
 } from '@/lib/profile'
 
 let dataDir: string
@@ -109,6 +110,24 @@ describe('handles', () => {
     expect((await getProfileSettings(a.id)).handle).toBeUndefined()
     // Now b can take it.
     expect('error' in (await claimHandle(b.id, 'grab'))).toBe(false)
+  })
+})
+
+describe('getPublicProfileLinks', () => {
+  it('returns a link only for public profiles, preferring the handle', async () => {
+    const pubWithHandle = await makeUser('PH')
+    const pubNoHandle = await makeUser('PN')
+    const privateUser = await makeUser('PV')
+
+    await setProfilePublic(pubWithHandle.id, true)
+    await claimHandle(pubWithHandle.id, 'speedy')
+    await setProfilePublic(pubNoHandle.id, true)
+    // privateUser stays private (default)
+
+    const links = await getPublicProfileLinks([pubWithHandle.id, pubNoHandle.id, privateUser.id])
+    expect(links.get(pubWithHandle.id)).toBe('speedy')   // handle preferred
+    expect(links.get(pubNoHandle.id)).toBe(pubNoHandle.id) // falls back to userId
+    expect(links.has(privateUser.id)).toBe(false)          // private → no link
   })
 })
 

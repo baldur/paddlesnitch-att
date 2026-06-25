@@ -572,6 +572,8 @@ A profile page at `/att/u/{userId}` shows one paddler's vanity stats — totals 
 
 A user may also claim a **vanity handle** so their profile lives at `/att/u/baldur`. Handle logic is in `src/lib/profile.ts`: `normaliseHandle` (lowercase, 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, not in `RESERVED_HANDLES`), `claimHandle` / `releaseHandle` (maintains a `usernames/{slug}.json → { userId }` reverse index; changing a handle frees the old slug; taken handles are rejected), and `resolveToUserId(segment)` (a known handle wins, else the segment is treated as a userId so old `/att/u/{userId}` links keep working). The profile page redirects to the canonical `/att/u/{handle}` when one exists. Managed from the account page → Public profile → Profile handle (`GET ?check=` / `PUT` / `DELETE /att/api/account/handle`). Account erasure releases the handle index and wipes the whole `users/{userId}/` prefix (profile, contact, clubs index, strava, tos-consent — previously these survived deletion).
 
+**Discoverability.** A signed-in user reaches their own profile via their name in `AuthNav`. On a trial leaderboard, an athlete's name links to their profile **only when that profile is public** — `getPublicProfileLinks(userIds)` returns `userId → handle-or-id` for public profiles only, and `LeaderboardTable` renders a link when present, plain text otherwise (no dead links to private/opt-out profiles). The owner's own race history links back to each trial.
+
 ---
 
 ## Clubs

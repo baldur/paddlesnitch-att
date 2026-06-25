@@ -4,6 +4,7 @@ import { getJson } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { canViewTrial } from '@/lib/permissions'
 import { getUserClubIds } from '@/lib/clubs'
+import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import AuthNav from '@/components/AuthNav'
@@ -36,6 +37,12 @@ export default async function TrialPage({
     ? await getJson<StoredEntry>(`trials/${trialId}/entries/${winner.userId}/${winner.entryId}/result.json`)
     : null
   const winnerTrack = winnerEntry?.result.trackSegment
+
+  // Link each athlete's name to their profile — but only for paddlers whose
+  // profile is public (opt-in), so private profiles never become dead links.
+  const profileLinks = Object.fromEntries(
+    await getPublicProfileLinks((leaderboard ?? []).map(e => e.userId)),
+  )
 
   return (
     <main className="flex-1 flex flex-col">
@@ -119,6 +126,7 @@ export default async function TrialPage({
           <LeaderboardTable
             entries={leaderboard ?? []}
             uploadHref={trial.status === 'open' ? `/att/trials/${trialId}/upload` : undefined}
+            profileLinks={profileLinks}
           />
         </section>
       </div>

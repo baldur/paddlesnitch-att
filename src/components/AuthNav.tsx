@@ -39,7 +39,9 @@ export default function AuthNav() {
 
   return (
     <>
-      <span className="text-[#0f172a]">{user.displayName}</span>
+      <Link href={`/att/u/${user.id}`} className="text-[#0f172a] hover:text-[#0369a1] transition-colors" title="My profile">
+        {user.displayName}
+      </Link>
       <button onClick={logout} className="text-[#64748b] hover:text-[#b91c1c] transition-colors">
         SIGN OUT
       </button>

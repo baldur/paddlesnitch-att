@@ -110,6 +110,19 @@ export async function releaseHandle(userId: string): Promise<ProfileSettings> {
   return next
 }
 
+// For a set of userIds, return the canonical profile path segment (handle when
+// claimed, else userId) ONLY for users whose profile is public. Used to link
+// names on a leaderboard without creating dead links to private profiles —
+// absence from the map means "render as plain text". Deduped; one read per id.
+export async function getPublicProfileLinks(userIds: string[]): Promise<Map<string, string>> {
+  const links = new Map<string, string>()
+  await Promise.all([...new Set(userIds)].map(async id => {
+    const s = await getProfileSettings(id)
+    if (s.public) links.set(id, s.handle ?? id)
+  }))
+  return links
+}
+
 export type ProfileRace = {
   trialId: string
   trialName: string
