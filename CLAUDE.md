@@ -504,7 +504,7 @@ src/
     page.tsx                   ← Landing page at / — link to /att
     globals.css                ← Tailwind + design tokens
     att/
-      page.tsx                 ← ATT home — server component; two columns (open trials + recent submissions) side-by-side on desktop, stacked on mobile. Recent submissions come from `getRecentSubmissions` (visibility-filtered) with names linking to public profiles only.
+      page.tsx                 ← ATT home — server component; two columns (open trials + recent submissions) side-by-side on desktop, stacked on mobile. Recent submissions come from `getRecentSubmissions` (visibility-filtered) with names linking to public profiles only. Each open-trial card the viewer owns (`canManageTrial`) shows a "MANAGE / CLOSE →" link to `/att/admin/trials/{id}` where the close control lives, so owners can reach it from the listing (#87).
       auth/
         page.tsx               ← Sign in / sign up (tabbed, client component)
       admin/
