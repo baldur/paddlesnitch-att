@@ -339,7 +339,10 @@ function AccountPageInner() {
                 Strava integration
               </h2>
               <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
-                Connect Strava once and you can import any of your recent water-sport activities directly into a time trial — no need to export GPX files yourself. We only request read access and never post anything to your Strava account.
+                Connect Strava once to do two things: import any of your recent water-sport
+                activities straight into a time trial (no GPX export needed), and sign in with
+                Strava next time instead of your email and password. We only request read access
+                and never post anything to your Strava account.
               </p>
 
               {stravaFlash && (
@@ -368,20 +371,27 @@ function AccountPageInner() {
               )}
 
               {strava && strava.connected && (
-                <div className="flex items-center justify-between gap-4 border border-[#e2e8f0] px-4 py-3">
-                  <div className="text-sm">
-                    <span className="text-[#15803d] tracking-widest text-xs mr-2">CONNECTED</span>
-                    <span className="text-[#0f172a]">{strava.athlete.name}</span>
+                <>
+                  <div className="flex items-center justify-between gap-4 border border-[#e2e8f0] px-4 py-3">
+                    <div className="text-sm">
+                      <span className="text-[#15803d] tracking-widest text-xs mr-2">CONNECTED</span>
+                      <span className="text-[#0f172a]">{strava.athlete.name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={disconnectStrava}
+                      disabled={working === 'strava'}
+                      className="px-4 py-2 border border-[#64748b] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
+                    >
+                      {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={disconnectStrava}
-                    disabled={working === 'strava'}
-                    className="px-4 py-2 border border-[#64748b] text-[#64748b] text-xs tracking-widest hover:bg-[#f1f5f9] disabled:opacity-50 transition-colors"
-                  >
-                    {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
-                  </button>
-                </div>
+                  <p className="text-xs text-[#64748b] mt-2">
+                    You can now use <span className="text-[#fc4c02]">Continue with Strava</span> on the
+                    sign-in page to log in to this account. Disconnecting stops both activity import and
+                    Strava sign-in.
+                  </p>
+                </>
               )}
             </section>
 
