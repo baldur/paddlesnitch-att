@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
-import { isListedForViewer } from '@/lib/permissions'
+import { isListedForViewer, canManageTrial } from '@/lib/permissions'
 import { getUserClubIds } from '@/lib/clubs'
 import { getRecentSubmissions } from '@/lib/recent'
 import { getPublicProfileLinks } from '@/lib/profile'
@@ -97,24 +97,44 @@ export default async function Home() {
             ) : (
               <div className="flex flex-col gap-3">
                 {openTrials.map(({ trial, course }) => (
-                  <a
+                  // The card itself links to the public trial page. Owners get
+                  // a separate "manage" link to the admin page so they can
+                  // close the trial — the close control lives there and was
+                  // otherwise unreachable from this listing (#87). Nested
+                  // anchors are invalid, so the manage link sits outside the
+                  // card anchor rather than inside it.
+                  <div
                     key={trial.id}
-                    href={`/att/trials/${trial.id}`}
-                    className="border border-[#e2e8f0] px-4 py-4 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
+                    className="border border-[#e2e8f0] hover:border-[#0369a1] transition-colors"
                   >
-                    <div>
-                      <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
-                        {trial.name}
+                    <a
+                      href={`/att/trials/${trial.id}`}
+                      className="px-4 py-4 flex items-center justify-between group"
+                    >
+                      <div>
+                        <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
+                          {trial.name}
+                        </div>
+                        <div className="text-xs text-[#64748b] mt-0.5">
+                          {course?.name ?? 'Unknown course'} · {trial.date}
+                          {course && ` · ${course.sport}`}
+                        </div>
                       </div>
-                      <div className="text-xs text-[#64748b] mt-0.5">
-                        {course?.name ?? 'Unknown course'} · {trial.date}
-                        {course && ` · ${course.sport}`}
+                      <span className="text-xs border border-[#15803d] text-[#15803d] px-2 py-0.5">
+                        OPEN
+                      </span>
+                    </a>
+                    {canManageTrial(trial, viewer) && (
+                      <div className="border-t border-[#e2e8f0] px-4 py-2 flex justify-end">
+                        <Link
+                          href={`/att/admin/trials/${trial.id}`}
+                          className="text-xs text-[#64748b] hover:text-[#0369a1] tracking-widest transition-colors"
+                        >
+                          MANAGE / CLOSE →
+                        </Link>
                       </div>
-                    </div>
-                    <span className="text-xs border border-[#15803d] text-[#15803d] px-2 py-0.5">
-                      OPEN
-                    </span>
-                  </a>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
