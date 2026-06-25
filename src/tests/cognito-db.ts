@@ -29,23 +29,31 @@ export async function readConfirmationCode(email: string): Promise<string | null
   if (!dbDir || !poolId) return null
 
   const dbPath = join(dbDir, '.cognito', 'db', `${poolId}.json`)
-  // Retry on read/parse failure — cognito-local can be mid-write when we
-  // peek (file truncated + rewritten as separate ops).
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // cognito-local returns the API response BEFORE it finishes writing the
+  // ConfirmationCode to its db file, so we poll. Two distinct "not ready yet"
+  // cases both retry (this was the flake — the old loop returned null on the
+  // second one without retrying):
+  //   1. read/parse failure — file truncated mid-rewrite.
+  //   2. user present but ConfirmationCode not written yet.
+  // Only after exhausting all attempts do we conclude there's genuinely no code.
+  // ~1s budget (20 × 50ms) so a slow async write under parallel test load
+  // doesn't surface as a spurious null.
+  for (let attempt = 0; attempt < 20; attempt++) {
     try {
       const raw = await readFile(dbPath, 'utf8')
-      if (!raw.trim()) throw new Error('empty')
-      const db = JSON.parse(raw) as {
-        Users?: Record<string, { Attributes?: Array<{ Name: string; Value: string }>; ConfirmationCode?: string }>
+      if (raw.trim()) {
+        const db = JSON.parse(raw) as {
+          Users?: Record<string, { Attributes?: Array<{ Name: string; Value: string }>; ConfirmationCode?: string }>
+        }
+        for (const u of Object.values(db.Users ?? {})) {
+          const userEmail = u.Attributes?.find(a => a.Name === 'email')?.Value
+          if (userEmail === email && u.ConfirmationCode) return u.ConfirmationCode
+        }
       }
-      for (const u of Object.values(db.Users ?? {})) {
-        const userEmail = u.Attributes?.find(a => a.Name === 'email')?.Value
-        if (userEmail === email && u.ConfirmationCode) return u.ConfirmationCode
-      }
-      return null
     } catch {
-      await new Promise(r => setTimeout(r, 25))
+      // fall through to the retry sleep
     }
+    await new Promise(r => setTimeout(r, 50))
   }
   return null
 }
