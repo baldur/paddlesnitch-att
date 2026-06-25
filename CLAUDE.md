@@ -848,6 +848,17 @@ No rounded corners on data elements. Sharp, precise. Mobile-first; tap targets �
 
 ---
 
+## Product analytics (CloudWatch EMF)
+
+Custom product events flow to CloudWatch metrics via **Embedded Metric Format** — `emitMetric(event, props?)` in `src/lib/metrics.ts` writes one EMF JSON line; in the Lambda runtime CloudWatch auto-extracts a `Count` metric (namespace `Paddlesnitch/App`, dimension `Event`) with **no metric filters, no log parsing, no extra IAM**. Locally/in tests it's a harmless `console.log`.
+
+- **Cardinality discipline:** the only metric dimension is `Event` (fixed allowlist in `METRIC_EVENTS`: `pageview`, `signup`, `login`, `upload`, `trial_create`, `course_create`). High-cardinality context (page `path`, session `sid`) is attached as a plain property — queryable in Logs Insights but does **not** create per-value metrics.
+- **Server events** (`signup`, `login`, `upload`) are emitted directly in those routes and are **always on in production** — no flag — so they can't be spoofed and start flowing on first deploy. Cost is ~6 custom metrics (~pennies/month).
+- **Client pageviews:** `src/components/Analytics.tsx` beacons a `pageview` to `POST /att/api/track` on each route change, **gated behind `NEXT_PUBLIC_ANALYTICS=1`** (a build-time inline var) so it stays dark until explicitly enabled. The endpoint drops any event not in the allowlist. No PII: only event, path, and a random per-tab `sid`.
+- **Not built yet (deliberate):** CloudWatch dashboards, alarms, and session heartbeats — add once events are confirmed flowing.
+
+---
+
 ## Cost Model (Production, Low Scale)
 
 < 1000 entries/month:
