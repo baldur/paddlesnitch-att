@@ -3,6 +3,9 @@ import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
 import { getUserClubIds } from '@/lib/clubs'
+import { getRecentSubmissions } from '@/lib/recent'
+import { getPublicProfileLinks } from '@/lib/profile'
+import { formatTime } from '@/lib/geo'
 import AuthNav from '@/components/AuthNav'
 import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
 
@@ -34,7 +37,15 @@ async function getOpenTrials(viewer: AuthUser | null) {
 
 export default async function Home() {
   const viewer = await getAuthUser()
-  const openTrials = await getOpenTrials(viewer)
+  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : new Set<string>()
+  const [openTrials, recent] = await Promise.all([
+    getOpenTrials(viewer),
+    getRecentSubmissions(viewer, viewerClubIds),
+  ])
+  // Link each recent submitter's name to their profile — only when it's public.
+  const profileLinks = Object.fromEntries(
+    await getPublicProfileLinks(recent.map(r => r.userId)),
+  )
 
   return (
     <main className="flex-1 flex flex-col">
@@ -67,43 +78,89 @@ export default async function Home() {
         <p className="text-[#64748b] text-sm">Upload your trace. See your splits.</p>
       </section>
 
-      <section className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
-        <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
-          Open Time Trials
-        </h2>
-        {openTrials.length === 0 ? (
-          <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
-            No open trials yet.{' '}
-            <Link href="/att/admin/trials/new" className="tt-link">
-              Open a trial
-            </Link>{' '}
-            to get started.
+      <section className="flex-1 px-4 py-8 max-w-5xl mx-auto w-full">
+        {/* Two columns side-by-side on desktop; stacked on portrait / phones. */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Open trials */}
+          <div>
+            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
+              Open Time Trials
+            </h2>
+            {openTrials.length === 0 ? (
+              <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+                No open trials yet.{' '}
+                <Link href="/att/admin/trials/new" className="tt-link">
+                  Open a trial
+                </Link>{' '}
+                to get started.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {openTrials.map(({ trial, course }) => (
+                  <a
+                    key={trial.id}
+                    href={`/att/trials/${trial.id}`}
+                    className="border border-[#e2e8f0] px-4 py-4 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
+                  >
+                    <div>
+                      <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
+                        {trial.name}
+                      </div>
+                      <div className="text-xs text-[#64748b] mt-0.5">
+                        {course?.name ?? 'Unknown course'} · {trial.date}
+                        {course && ` · ${course.sport}`}
+                      </div>
+                    </div>
+                    <span className="text-xs border border-[#15803d] text-[#15803d] px-2 py-0.5">
+                      OPEN
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {openTrials.map(({ trial, course }) => (
-              <a
-                key={trial.id}
-                href={`/att/trials/${trial.id}`}
-                className="border border-[#e2e8f0] px-4 py-4 flex items-center justify-between hover:border-[#0369a1] transition-colors group"
-              >
-                <div>
-                  <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">
-                    {trial.name}
-                  </div>
-                  <div className="text-xs text-[#64748b] mt-0.5">
-                    {course?.name ?? 'Unknown course'} · {trial.date}
-                    {course && ` · ${course.sport}`}
-                  </div>
-                </div>
-                <span className="text-xs border border-[#15803d] text-[#15803d] px-2 py-0.5">
-                  OPEN
-                </span>
-              </a>
-            ))}
+
+          {/* Recent submissions */}
+          <div>
+            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-6">
+              Recent Submissions
+            </h2>
+            {recent.length === 0 ? (
+              <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
+                No submissions yet.
+              </div>
+            ) : (
+              <ul className="border border-[#e2e8f0] divide-y divide-[#f1f5f9]">
+                {recent.map(r => (
+                  <li key={r.entryId} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm text-[#0f172a] font-medium truncate">
+                        {profileLinks[r.userId] ? (
+                          <Link href={`/att/u/${profileLinks[r.userId]}`} className="hover:text-[#0369a1] hover:underline transition-colors">
+                            {r.displayName}
+                          </Link>
+                        ) : (
+                          r.displayName
+                        )}
+                      </div>
+                      <div className="text-xs text-[#64748b] mt-0.5 truncate">
+                        <Link href={`/att/trials/${r.trialId}`} className="hover:text-[#0369a1] transition-colors">
+                          {r.courseName}
+                        </Link>{' '}
+                        · {r.raceDate} · {r.boatClass}
+                      </div>
+                    </div>
+                    <span className="text-sm tabular font-bold text-[#0369a1] shrink-0">
+                      {formatTime(r.totalElapsedSeconds)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
-        <div className="mt-8 flex items-center justify-center gap-6">
+        </div>
+
+        <div className="mt-10 flex items-center justify-center gap-6">
           <Link href="/att/courses" className="tt-nav-link text-xs tracking-widest">
             BROWSE ALL COURSES →
           </Link>
