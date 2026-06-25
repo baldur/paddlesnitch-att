@@ -58,6 +58,17 @@ export class AttStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      // We keep old builds' content-hashed assets across deploys (prune:false on
+      // DeployAssets) so in-flight HTML never 404/403s mid-deploy. This rule
+      // sweeps the orphaned old hashes so they don't accumulate forever. Active
+      // assets are re-uploaded every deploy (LastModified refreshed), so only
+      // genuinely-unreferenced hashes age out — 90 days is far longer than any
+      // cached HTML could still point at them.
+      lifecycleRules: [{
+        id: 'expire-orphaned-hashed-assets',
+        prefix: '_assets/_next/static/',
+        expiration: cdk.Duration.days(90),
+      }],
     })
 
     // ---------------------------------------------------------------------------
@@ -326,13 +337,22 @@ export class AttStack extends cdk.Stack {
       },
     })
 
-    // OpenNext v4 assets go under _assets/ in S3
+    // OpenNext v4 assets go under _assets/ in S3.
+    // prune:false is the fix for mid-deploy 403s on CSS/JS: BucketDeployment
+    // defaults to deleting any destination object not in the new build, which
+    // removes the PREVIOUS build's hashed assets. Because a deploy isn't atomic
+    // (the server Lambda begins serving HTML with new asset hashes while old
+    // cached HTML still references old hashes), pruning leaves a window where a
+    // requested /_next/static/<hash> is gone from S3 and the OAC origin returns
+    // 403. Next.js assets are content-hashed + immutable, so old and new coexist
+    // safely; the bucket lifecycle rule above expires the orphans later.
     new s3deploy.BucketDeployment(this, 'DeployAssets', {
       sources: [
         s3deploy.Source.asset(path.join(__dirname, '../../.open-next/assets')),
       ],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_assets',
+      prune: false,
       distribution,
       distributionPaths: ['/_next/*'],
     })
