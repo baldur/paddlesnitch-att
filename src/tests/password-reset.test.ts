@@ -9,10 +9,11 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { POST as requestReset } from '@/app/att/api/auth/password-reset/request/route'
 import { POST as confirmReset } from '@/app/att/api/auth/password-reset/confirm/route'
 import { POST as login } from '@/app/att/api/auth/login/route'
+import * as cognito from '@/lib/cognito'
 
 let dataDir: string
 beforeEach(async () => { dataDir = await makeDataDir() })
-afterEach(async () => { await cleanDataDir(dataDir) })
+afterEach(async () => { await cleanDataDir(dataDir); vi.restoreAllMocks() })
 
 // Real clients post anti-bot fields (an empty honeypot + the elapsed time
 // since the form loaded). Default to a human-like submission so the existing
@@ -46,15 +47,15 @@ describe('POST /att/api/auth/password-reset/request', () => {
 
   it('drops a bot submission (populated honeypot) without emailing a code', async () => {
     const user = await makeUser()
-    // cognito-local leaves the signup verification code on the record, so we
-    // can't assert "no code at all". Instead: a real reset overwrites it with a
-    // fresh random code, so a blocked bot request must leave it UNCHANGED.
-    const before = await readConfirmationCode(user.email)
+    // Deterministic: assert forgotPassword was never invoked, rather than
+    // diffing the cognito-local db file (whose signup ConfirmationCode is
+    // written asynchronously and races with the read — the old flake).
+    const spy = vi.spyOn(cognito, 'forgotPassword').mockResolvedValue({ ok: true })
     const res = await requestReset(jsonReq('http://x', { email: user.email, website: 'http://spam.example' }))
     // Same { ok: true } a real request gets — no signal to the bot...
     expect(res.status).toBe(200)
-    // ...and forgotPassword never ran, so the code is untouched.
-    expect(await readConfirmationCode(user.email)).toBe(before)
+    // ...and the gate dropped it before any Cognito email work.
+    expect(spy).not.toHaveBeenCalled()
   })
 })
 
