@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react'
+import Link from 'next/link'
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
@@ -37,10 +38,15 @@ function seatBadge(
 export default function LeaderboardTable({
   entries,
   uploadHref,
+  profileLinks,
 }: {
   entries: LeaderboardEntry[]
   // If set, the empty state shows an upload CTA. Only pass for open trials.
   uploadHref?: string
+  // userId -> canonical profile path segment (handle or id), present ONLY for
+  // paddlers whose profile is public. A name links to its profile when present,
+  // otherwise renders as plain text (no dead links to private profiles).
+  profileLinks?: Record<string, string>
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [classFilter, setClassFilter] = useState<BoatClass | 'all'>('all')
@@ -115,7 +121,17 @@ export default function LeaderboardTable({
                   >
                     <td className="py-3 pr-4 text-[#64748b] tabular">{i + 1}</td>
                     <td className="py-3 pr-4 text-[#0f172a] font-medium">
-                      {entry.displayName}
+                      {profileLinks?.[entry.userId] ? (
+                        <Link
+                          href={`/att/u/${profileLinks[entry.userId]}`}
+                          onClick={e => e.stopPropagation()}
+                          className="hover:text-[#0369a1] hover:underline transition-colors"
+                        >
+                          {entry.displayName}
+                        </Link>
+                      ) : (
+                        entry.displayName
+                      )}
                       {entry.dateDiscrepancy && (
                         <span
                           title="The race date the athlete picked doesn't match the date in the GPS trace."
