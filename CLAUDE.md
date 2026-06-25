@@ -504,7 +504,7 @@ src/
     page.tsx                   ← Landing page at / — link to /att
     globals.css                ← Tailwind + design tokens
     att/
-      page.tsx                 ← ATT home — server component, lists open trials
+      page.tsx                 ← ATT home — server component; two columns (open trials + recent submissions) side-by-side on desktop, stacked on mobile. Recent submissions come from `getRecentSubmissions` (visibility-filtered) with names linking to public profiles only.
       auth/
         page.tsx               ← Sign in / sign up (tabbed, client component)
       admin/
