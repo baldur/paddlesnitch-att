@@ -4,6 +4,7 @@ import { setAuthCookies } from '@/lib/auth'
 import { recordAcceptance } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
 import { applyPendingInvitations } from '@/lib/pending-invitations'
+import { emitMetric } from '@/lib/metrics'
 
 export async function POST(req: NextRequest) {
   const { email, displayName, password, acceptedTosVersion } = await req.json()
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     console.error('[signup] applyPendingInvitations failed', err)
   }
 
+  emitMetric('signup')
   const res = NextResponse.json(
     { id: created.sub, email: normalised, displayName: String(displayName).trim() },
     { status: 201 }

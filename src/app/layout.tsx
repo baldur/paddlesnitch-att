@@ -5,6 +5,7 @@ import Footer from '@/components/Footer'
 import CookieNotice from '@/components/CookieNotice'
 import FeedbackWidget from '@/components/FeedbackWidget'
 import StravaContactBanner from '@/components/StravaContactBanner'
+import Analytics from '@/components/Analytics'
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Footer />
         <CookieNotice />
         <FeedbackWidget />
+        <Analytics />
       </body>
     </html>
   )

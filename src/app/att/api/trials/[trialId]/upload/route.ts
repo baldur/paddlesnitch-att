@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage } from '@/lib/geo'
+import { emitMetric } from '@/lib/metrics'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
@@ -177,6 +178,7 @@ async function processTrack(
   await putJson(`${basePath}/result.json`, stored)
   await rebuildLeaderboard(trialId)
 
+  emitMetric('upload')
   return NextResponse.json({ entryId, result, dateDiscrepancy: discrepancy }, { status: 201 })
 }
 
