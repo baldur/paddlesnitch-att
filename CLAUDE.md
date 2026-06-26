@@ -538,7 +538,7 @@ src/
     auth.ts                    ← getAuthUser(): reads tt_id, verifies JWT, silent-refreshes via tt_refresh
     cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, refresh, revoke, verifyIdToken
   components/
-    AuthNav.tsx                ← Client component: shows user name + logout, or "SIGN IN" link
+    AuthNav.tsx                ← Client component: signed in → name (links to /att/u/{id} public profile) + ACCOUNT (links to /att/account settings) + SIGN OUT; signed out → "SIGN IN" link
     map/
       DrawingMap.tsx           ← Click-to-place start/finish lines on Leaflet map
       CourseMap.tsx            ← Read-only map: start (green), finish (red), auto-fit bounds

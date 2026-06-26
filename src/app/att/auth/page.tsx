@@ -169,8 +169,10 @@ function AuthForm() {
         CONTINUE WITH STRAVA
       </a>
       <p className="text-xs text-[#94a3b8] mb-6 text-center leading-relaxed">
-        Already have an email account? Sign in below first and connect Strava from your account
-        page — that links them, so Strava sign-in lands on your existing account instead of a new one.
+        Strava doesn&apos;t share your email, so after you continue we&apos;ll ask you to add one — that&apos;s
+        how we reach you about your account and club invitations. Already have an email account here?
+        Sign in below first and connect Strava from your account page, so it links to that account
+        instead of creating a new one.
       </p>
       <div className="flex items-center gap-3 mb-6 text-xs text-[#94a3b8] tracking-widest">
         <span className="flex-1 h-px bg-[#e2e8f0]" />

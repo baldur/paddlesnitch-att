@@ -39,8 +39,11 @@ export default function AuthNav() {
 
   return (
     <>
-      <Link href={`/att/u/${user.id}`} className="text-[#0f172a] hover:text-[#0369a1] transition-colors" title="My profile">
+      <Link href={`/att/u/${user.id}`} className="text-[#0f172a] hover:text-[#0369a1] transition-colors" title="My public profile">
         {user.displayName}
+      </Link>
+      <Link href="/att/account" className="tt-nav-link" title="Account settings — email, Strava, profile, data">
+        ACCOUNT
       </Link>
       <button onClick={logout} className="text-[#64748b] hover:text-[#b91c1c] transition-colors">
         SIGN OUT

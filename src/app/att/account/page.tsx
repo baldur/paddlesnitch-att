@@ -297,10 +297,11 @@ function AccountPageInner() {
                 </h2>
                 <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
                   You signed in with Strava, so the address on your account
-                  ({user.email}) is a placeholder we can&apos;t deliver to. Add a
-                  real email below if you&apos;d like us to send you account or
-                  T&amp;C updates. We&apos;ll never share it. Optional — leave blank
-                  if you prefer.
+                  ({user.email}) is a placeholder we can&apos;t deliver to.
+                  <span className="text-[#9a3412]"> Until you add a real email, we have no way to
+                  reach you</span> — including if our Terms of Service change, or if there&apos;s a
+                  problem with your account or a club invitation. Add one below (we&apos;ll never
+                  share it). It&apos;s optional, but recommended.
                 </p>
                 <form onSubmit={saveContactEmail} className="flex flex-col sm:flex-row gap-2 mb-3">
                   <input
