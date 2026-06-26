@@ -252,11 +252,25 @@ export class AttStack extends cdk.Stack {
       },
     }))
 
-    // Cognito admin operations the app calls (sign-up confirmation +
-    // mark-email-verified at signup so password reset works, token
-    // revocation, GDPR Art. 17 erasure)
+    // Cognito admin operations the app calls. Must list every admin (IAM-gated)
+    // action the server uses — a missing one throws AccessDeniedException at
+    // runtime. The public client APIs (InitiateAuth/RespondToAuthChallenge/
+    // SignUp/ForgotPassword/ConfirmForgotPassword) authenticate with the app
+    // client id, NOT IAM, so they're intentionally absent here.
+    //   ListUsers          — findUserByEmail / findUserBySub (email-merge +
+    //                         Strava sign-in resolving a linked account by sub)
+    //   AdminCreateUser     — create a Cognito user for a new Strava sign-in
+    //   AdminSetUserPassword— set the throwaway password on that created user
+    //   AdminConfirmSignUp / AdminUpdateUserAttributes — confirm + mark email
+    //                         verified at signup so password reset works
+    //   AdminGetUser        — read user state
+    //   AdminDeleteUser     — GDPR Art. 17 erasure
+    //   RevokeToken         — logout
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: [
+        'cognito-idp:ListUsers',
+        'cognito-idp:AdminCreateUser',
+        'cognito-idp:AdminSetUserPassword',
         'cognito-idp:AdminConfirmSignUp',
         'cognito-idp:AdminGetUser',
         'cognito-idp:AdminUpdateUserAttributes',
