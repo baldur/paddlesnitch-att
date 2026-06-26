@@ -9,6 +9,7 @@ import {
 } from '@/lib/strava-storage'
 import {
   findUserByEmail,
+  findUserBySub,
   adminCreateUserForStrava,
   customAuthSignIn,
   verifyIdToken,
@@ -86,17 +87,18 @@ export async function GET(req: NextRequest) {
 
   const linkedUserId = await getUserIdByAthleteId(profile.id)
   if (linkedUserId) {
-    // We have a previous link. Look up the existing user by the email we
-    // just got. If the user changed their Strava email since linking,
-    // linkedUserId still wins; we just need the current Cognito username
-    // for the sign-in call. Synth emails are deterministic so the lookup
-    // matches the prior session by construction.
-    const existing = await findUserByEmail(accountEmail)
+    // Resolve the linked Cognito user by the SUB we stored — NOT by the
+    // synthetic email. A user who linked Strava from a real email/password
+    // account has their real email on the Cognito record, so a synth-email
+    // lookup would miss and wrongly fall through to creating a duplicate
+    // (the bug behind "Could not create an account from your Strava profile"
+    // for already-linked accounts). The sub is stable regardless of email.
+    const existing = await findUserBySub(linkedUserId)
     if (existing) {
       cognitoEmail = existing.email
     } else {
-      // Edge case: the linked Cognito user no longer exists (deleted account?).
-      // Drop the stale index and fall through to create a new one.
+      // The linked Cognito user genuinely no longer exists (deleted account).
+      // Drop the stale link and create a fresh synth-email account.
       console.warn(`[strava signin] athlete ${profile.id} linked to missing user ${linkedUserId}; relinking`)
       cognitoEmail = accountEmail
       const created = await adminCreateUserForStrava(accountEmail, displayName)
