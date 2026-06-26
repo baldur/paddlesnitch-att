@@ -60,8 +60,8 @@ export default function StravaContactBanner() {
   return (
     <div className="border-b border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] text-xs px-4 py-2 flex items-center justify-between gap-4">
       <span>
-        You signed in with Strava and we can&apos;t email you about T&amp;C changes or account
-        events. <Link href="/att/account" className="underline hover:no-underline">Add a contact email</Link>?
+        You signed in with Strava, so we can&apos;t reach you about Terms changes, account problems,
+        or club invitations. <Link href="/att/account" className="underline hover:no-underline">Add a contact email</Link>?
       </span>
       <button
         type="button"
