@@ -63,10 +63,14 @@ export const handler = async (event) => {
   }
 
   // Server-trusted sign-in path (Strava): the caller pre-generates a one-time
-  // token, passes it through ClientMetadata.preset_otp, and uses the same
-  // value as the challenge answer. Skip sending an email — only our backend
-  // can do both halves of the dance, so there's nothing to leak via email.
-  const preset = event.request.clientMetadata?.preset_otp
+  // token and stashes it on the user's `custom:auth_preset` attribute right
+  // before InitiateAuth, then answers the challenge with the same value. We
+  // read it from userAttributes — NOT ClientMetadata — because Cognito does
+  // not forward ClientMetadata to the auth-challenge triggers. The
+  // clientMetadata fallback is only for the local-dev/test harness, which
+  // exercises this Lambda directly. Skip the email entirely: only our backend
+  // can do both halves of the dance, so there's nothing to leak.
+  const preset = event.request.userAttributes['custom:auth_preset'] || event.request.clientMetadata?.preset_otp
   if (preset) {
     event.response.publicChallengeParameters = { email }
     event.response.privateChallengeParameters = { otp: String(preset) }

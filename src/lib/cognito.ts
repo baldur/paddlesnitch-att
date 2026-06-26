@@ -389,11 +389,18 @@ export async function customAuthSignIn(
 ): Promise<TokenPair | { error: CognitoError }> {
   const client = makeClient()
   try {
+    // Stash the one-time token on the user so CreateAuthChallenge can read it
+    // from userAttributes. Cognito does NOT forward ClientMetadata to the
+    // auth-challenge triggers, so the attribute is the only reliable channel.
+    await client.send(new AdminUpdateUserAttributesCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      UserAttributes: [{ Name: 'custom:auth_preset', Value: presetToken }],
+    }))
     const init = await client.send(new InitiateAuthCommand({
       AuthFlow: 'CUSTOM_AUTH',
       ClientId: CLIENT_ID,
       AuthParameters: { USERNAME: email },
-      ClientMetadata: { preset_otp: presetToken },
     }))
     if (!init.Session) return { error: 'unknown' }
     const resp = await client.send(new RespondToAuthChallengeCommand({
@@ -402,6 +409,13 @@ export async function customAuthSignIn(
       Session: init.Session,
       ChallengeResponses: { USERNAME: email, ANSWER: presetToken },
     }))
+    // Clear the one-time token regardless of outcome (best-effort) so it can't
+    // be reused as the expected answer on a later attempt.
+    await client.send(new AdminUpdateUserAttributesCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+      UserAttributes: [{ Name: 'custom:auth_preset', Value: '' }],
+    })).catch(() => {})
     const auth = resp.AuthenticationResult
     if (!auth?.IdToken || !auth?.RefreshToken) return { error: 'unknown' }
     return { idToken: auth.IdToken, refreshToken: auth.RefreshToken }

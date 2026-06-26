@@ -93,6 +93,17 @@ describe('CreateAuthChallenge', () => {
     expect(priv.otp).toBe('deadbeef-server-token')
     expect(out.response.challengeMetadata).toBe('PRESET_TOKEN')
   })
+
+  it('uses custom:auth_preset from userAttributes as the answer (the prod path)', async () => {
+    // Cognito does not forward ClientMetadata to this trigger, so the real
+    // server-trusted path passes the token via the custom attribute instead.
+    const event = blank()
+    event.request.userAttributes = { email: 'alice@example.com', 'custom:auth_preset': 'attr-server-token' }
+    const out = await createAuth(event)
+    const priv = out.response.privateChallengeParameters as { otp: string }
+    expect(priv.otp).toBe('attr-server-token')
+    expect(out.response.challengeMetadata).toBe('PRESET_TOKEN')
+  })
 })
 
 describe('VerifyAuthChallengeResponse', () => {
