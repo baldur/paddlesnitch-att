@@ -7,7 +7,7 @@ import { getUserClubIds } from '@/lib/clubs'
 import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry, ProcessedResult } from '@/lib/types'
 
 type StoredEntry = { result: ProcessedResult }
@@ -46,26 +46,26 @@ export default async function TrialPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att" className="tt-nav-link text-sm shrink-0">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <span className="text-[#0f172a] text-sm truncate">{trial.name.toUpperCase()}</span>
-        </div>
-        <nav className="flex gap-3 text-sm text-[#64748b] items-center shrink-0">
-          <AuthNav />
-          {trial.status === 'open' && (
-            <a
-              href={`/att/trials/${trialId}/upload`}
-              className="text-xs bg-[#0369a1] text-white font-bold px-4 py-1.5 tracking-widest hover:bg-[#0284c7] transition-colors"
-            >
-              UPLOAD TRACE
-            </a>
-          )}
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm shrink-0">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-[#0f172a] text-sm truncate">{trial.name.toUpperCase()}</span>
+          </>
+        }
+      >
+        {trial.status === 'open' && (
+          <a
+            href={`/att/trials/${trialId}/upload`}
+            className="text-xs bg-[#0369a1] text-white font-bold px-4 py-1.5 tracking-widest hover:bg-[#0284c7] transition-colors"
+          >
+            UPLOAD TRACE
+          </a>
+        )}
+      </AppHeader>
 
       <section className="border-b border-[#e2e8f0] px-4 py-8 bg-[#f8fafc]">
         <p className="text-[#64748b] text-xs tracking-[0.2em] uppercase mb-1">

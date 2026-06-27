@@ -3,7 +3,7 @@ import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
 import { getUserClubIds } from '@/lib/clubs'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { CourseMetadata, TrialMetadata, AuthUser } from '@/lib/types'
 
 // Reads live course state from storage on every request — never prerender.
@@ -63,21 +63,21 @@ export default async function CoursesCataloguePage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">COURSES</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <Link href="/att/admin/courses/new" className="tt-nav-link">
-            + NEW COURSE
-          </Link>
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">COURSES</span>
+          </>
+        }
+      >
+        <Link href="/att/admin/courses/new" className="tt-nav-link">
+          + NEW COURSE
+        </Link>
+      </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
         <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-2">COURSE CATALOGUE</h1>

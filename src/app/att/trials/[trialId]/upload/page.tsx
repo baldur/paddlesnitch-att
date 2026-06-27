@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
@@ -338,21 +338,20 @@ export default function UploadPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <a
-            href={`/att/trials/${trialId}`}
-            className="tt-nav-link text-sm"
-          >
-            ← LEADERBOARD
-          </a>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">UPLOAD TRACE</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <a
+              href={`/att/trials/${trialId}`}
+              className="tt-nav-link text-sm"
+            >
+              ← LEADERBOARD
+            </a>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">UPLOAD TRACE</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-xl mx-auto w-full">
         {authUser === null ? (

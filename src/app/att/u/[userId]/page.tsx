@@ -5,7 +5,7 @@ import { getUserClubIds } from '@/lib/clubs'
 import { getProfileSettings, buildProfileStats, resolveToUserId } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -56,10 +56,9 @@ export default async function ProfilePage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between gap-4">
-        <Link href="/att" className="tt-nav-link text-sm shrink-0">← HOME</Link>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center"><AuthNav /></nav>
-      </header>
+      <AppHeader
+        breadcrumb={<Link href="/att" className="tt-nav-link text-sm shrink-0">← HOME</Link>}
+      />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
         <div>

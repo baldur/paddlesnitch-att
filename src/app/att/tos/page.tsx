@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { readTosDoc } from '@/lib/tos'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 
 // Public read-only ToS page. Rendered server-side from legal/tos-{v}.md.
 // We keep this Markdown rather than HTML so versioned diffs are easy to
@@ -12,16 +12,15 @@ export default async function TosPage() {
   const body = await readTosDoc(CURRENT_TOS_VERSION)
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">TERMS OF SERVICE</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">← HOME</Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">TERMS OF SERVICE</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
         <p className="text-xs text-[#64748b] tracking-widest mb-2">

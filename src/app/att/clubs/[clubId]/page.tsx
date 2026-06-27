@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { ClubMetadata, ClubInvitation, AuthUser } from '@/lib/types'
 
 type Invitation = ClubInvitation
@@ -128,16 +128,15 @@ export default function ClubDetailPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att/clubs" className="tt-nav-link text-sm shrink-0">← CLUBS</Link>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <span className="text-[#0f172a] text-sm truncate">{club.name.toUpperCase()}</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att/clubs" className="tt-nav-link text-sm shrink-0">← CLUBS</Link>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-[#0f172a] text-sm truncate">{club.name.toUpperCase()}</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section>
