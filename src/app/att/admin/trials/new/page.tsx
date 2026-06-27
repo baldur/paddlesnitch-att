@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { CourseMetadata } from '@/lib/types'
 
 function NewTrialForm() {
@@ -269,18 +269,17 @@ function NewTrialForm() {
 export default function NewTrialPage() {
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">NEW TRIAL</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">NEW TRIAL</span>
+          </>
+        }
+      />
       <Suspense fallback={null}>
         <NewTrialForm />
       </Suspense>

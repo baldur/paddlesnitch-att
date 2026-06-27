@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 
@@ -240,18 +240,17 @@ function AccountPageInner() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">ACCOUNT</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">ACCOUNT</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-10">
         {user === undefined && (

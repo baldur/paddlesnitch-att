@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getJson, listKeys } from '@/lib/storage'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
 import { canViewCourse, isListedForViewer } from '@/lib/permissions'
@@ -45,23 +45,23 @@ export default async function CourseDetailPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att/courses" className="tt-nav-link text-sm shrink-0">
-            ← COURSES
-          </Link>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0 ml-4">
-          {isOwner && (
-            <Link href={`/att/admin/courses/${course.id}`} className="tt-nav-link">
-              EDIT
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att/courses" className="tt-nav-link text-sm shrink-0">
+              ← COURSES
             </Link>
-          )}
-          <AuthNav />
-        </nav>
-      </header>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
+          </>
+        }
+      >
+        {isOwner && (
+          <Link href={`/att/admin/courses/${course.id}`} className="tt-nav-link">
+            EDIT
+          </Link>
+        )}
+      </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section>

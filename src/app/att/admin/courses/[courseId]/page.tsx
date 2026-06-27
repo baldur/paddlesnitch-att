@@ -3,7 +3,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import { haversine } from '@/lib/geo'
 import type { CourseMetadata, TrialMetadata, Line, LatLng } from '@/lib/types'
 
@@ -198,18 +198,17 @@ export default function CourseAdminPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att" className="tt-nav-link text-sm shrink-0">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0 ml-4">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm shrink-0">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-[#0f172a] text-sm truncate">{course.name.toUpperCase()}</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         {/* Course details — read-only by default. Click "Edit details" to

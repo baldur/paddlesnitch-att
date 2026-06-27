@@ -3,7 +3,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import ReferenceTraceValidator from '@/components/ReferenceTraceValidator'
 import { haversine } from '@/lib/geo'
 import type { LatLng, Line } from '@/lib/types'
@@ -155,18 +155,17 @@ export default function NewCoursePage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">NEW COURSE</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">NEW COURSE</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
         <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-8">CREATE COURSE</h1>

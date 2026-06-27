@@ -6,7 +6,7 @@ import { getUserClubIds } from '@/lib/clubs'
 import { getRecentSubmissions } from '@/lib/recent'
 import { getPublicProfileLinks } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { TrialMetadata, CourseMetadata, AuthUser } from '@/lib/types'
 
 // Reads live trial state from storage on every request — never prerender.
@@ -49,24 +49,24 @@ export default async function Home() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
-          <span className="text-[#64748b] text-xs tracking-widest ml-3 hidden sm:inline">paddlesnitch.com</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <Link href="/att/courses" className="tt-nav-link">
-            COURSES
-          </Link>
-          <Link href="/att/clubs" className="tt-nav-link">
-            CLUBS
-          </Link>
-          <Link href="/att/admin/trials/new" className="tt-nav-link">
-            + NEW TRIAL
-          </Link>
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <span className="text-[#0f172a] font-bold text-lg tracking-widest">ATT</span>
+            <span className="text-[#64748b] text-xs tracking-widest hidden sm:inline">paddlesnitch.com</span>
+          </>
+        }
+      >
+        <Link href="/att/courses" className="tt-nav-link">
+          COURSES
+        </Link>
+        <Link href="/att/clubs" className="tt-nav-link">
+          CLUBS
+        </Link>
+        <Link href="/att/admin/trials/new" className="tt-nav-link">
+          + NEW TRIAL
+        </Link>
+      </AppHeader>
 
       <section className="border-b border-[#e2e8f0] px-4 py-12 text-center bg-[#f8fafc]">
         <p className="text-[#64748b] text-xs tracking-[0.3em] uppercase mb-3">

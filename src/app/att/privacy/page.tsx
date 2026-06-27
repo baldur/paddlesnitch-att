@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 
 export const metadata = {
   title: 'Privacy Policy — paddlesnitch.com',
@@ -8,18 +8,17 @@ export const metadata = {
 export default function PrivacyPolicy() {
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/att" className="tt-nav-link text-sm">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b]">/</span>
-          <span className="text-[#0f172a] text-sm">PRIVACY</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b]">/</span>
+            <span className="text-[#0f172a] text-sm">PRIVACY</span>
+          </>
+        }
+      />
 
       <article className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full text-sm text-[#0f172a] leading-relaxed">
         <h1 className="text-lg font-bold tracking-widest mb-2">PRIVACY POLICY</h1>

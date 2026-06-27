@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
-import AuthNav from '@/components/AuthNav'
+import AppHeader from '@/components/AppHeader'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry } from '@/lib/types'
 import { formatTime } from '@/lib/geo'
 
@@ -133,25 +133,24 @@ export default function TrialAdminPage({
 
   return (
     <main className="flex-1 flex flex-col">
-      <header className="border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/att" className="tt-nav-link text-sm shrink-0">
-            ← HOME
-          </Link>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <a
-            href={`/att/admin/courses/${course.id}`}
-            className="tt-nav-link text-sm truncate"
-          >
-            {course.name.toUpperCase()}
-          </a>
-          <span className="text-[#64748b] shrink-0">/</span>
-          <span className="text-[#0f172a] text-sm shrink-0">{trial.name.toUpperCase()}</span>
-        </div>
-        <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0 ml-4">
-          <AuthNav />
-        </nav>
-      </header>
+      <AppHeader
+        breadcrumb={
+          <>
+            <Link href="/att" className="tt-nav-link text-sm shrink-0">
+              ← HOME
+            </Link>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <a
+              href={`/att/admin/courses/${course.id}`}
+              className="tt-nav-link text-sm truncate"
+            >
+              {course.name.toUpperCase()}
+            </a>
+            <span className="text-[#64748b] shrink-0">/</span>
+            <span className="text-[#0f172a] text-sm shrink-0">{trial.name.toUpperCase()}</span>
+          </>
+        }
+      />
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full space-y-10">
         <section className="flex items-start justify-between gap-4">
