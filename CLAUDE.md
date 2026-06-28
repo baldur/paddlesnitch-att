@@ -219,6 +219,8 @@ Organisers can pre-validate a gate course with a **reference trace**: `Reference
 ### Time Trial
 An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`. Carries a **`groupId`** inherited from its course (phase 2) — a trial belongs to the same group that owns its course, and only that group's owner/admins can open or manage it. Visibility clamps to the course's scope as before.
 
+**`participation`** controls WHO can submit once they can view it (phase 3): `members` (any member of the trial's group — the **new default**), `invitational` (only `invitedUserIds`), or `public` (anyone who can view). The organiser can always submit. Legacy pre-phase-3 `'open'` is treated as `public` at read time and migrated by `scripts/migrate-participation-open-to-public.ts`. The gate lives in `canSubmitToTrial`; the upload route 404s a non-submitter (no leak), and `GET /att/api/trials/[id]/can-submit` lets the upload page show a "join {group} to submit" / "invite-only" CTA instead of a form that would fail.
+
 ### Entry
 A participant's submission for a specific time trial, consisting of:
 - A raw GPS trace file (GPX, FIT, or CSV format)
@@ -300,6 +302,7 @@ courses/validate-trace POST — organiser tool: multipart {file, geometry JSON};
 trials                GET (?courseId=) / POST
 trials/[id]           GET / PATCH (open/close)
 trials/[id]/upload    POST — parse GPX/FIT/CSV (or Strava import via {stravaActivityId}), process, rebuild leaderboard. On a "did not cross the lines" failure, the 422 body carries `diagnostic: { track, course }` (parsed track as [lat,lng] pairs, downsampled to ≤1500 points, plus the course geometry) so the upload page can render a map of the track against the start/finish lines. For gate courses the 422 also carries `diagnostic.gateAnalysis` (see `diagnoseGates`) and the error message names the specific blocking gate. The full-fidelity failing track + course (+ gateAnalysis) is also persisted to `trials/{trialId}/failed-uploads/{userId}/{id}/diagnostic.json` (best-effort; a write error doesn't change the 422) so a failure can be reproduced offline. Failed uploads are otherwise not saved. They ARE covered by GDPR: included in the account export (Art. 15) and removed on account erasure (Art. 17), same as entries.
+trials/[id]/can-submit   GET — phase 3: { canSubmit } for the viewer, or { canSubmit:false, reason:'members'|'invitational', group? } so the upload page can show a join/invite CTA. 404 if the viewer can't even view the trial.
 trials/[id]/leaderboard GET
 strava/connect        GET  — sets state cookie, 302 to Strava authorize URL
 strava/callback       GET  — verifies state, exchanges code, persists tokens, redirects to /att/account?strava=connected
@@ -678,7 +681,7 @@ Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`
 | Listed in catalogue / home | Yes, for everyone | Yes, but only for the owner | — | — |
 | Edit / delete course or trial | Owning group's owner/admins | Owning group's owner/admins | — | — |
 | Create a trial on it | Owning group's owner/admins (phase 2) | Owning group's owner/admins | — | — |
-| Submit a trace | Any viewer (on an open trial) | Owner only | Any viewer | Owner + invitees |
+| Submit a trace | By `participation`: `public`→any viewer · `members`→group members · `invitational`→invitees (organiser always) | Owner only | — | Owner + invitees |
 | Invite / uninvite | — | — | — | Owner only |
 | View leaderboard | Anyone | Owner only | — | Owner + invitees |
 

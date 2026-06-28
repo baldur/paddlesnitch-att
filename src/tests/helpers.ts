@@ -4,7 +4,7 @@ import { join } from 'path'
 import { nanoid } from 'nanoid'
 import { signUp, signIn } from '@/lib/cognito'
 import { putJson } from '@/lib/storage'
-import type { CourseMetadata, TrialMetadata } from '@/lib/types'
+import type { CourseMetadata, TrialMetadata, Participation } from '@/lib/types'
 
 export async function makeDataDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'att-test-'))
@@ -88,9 +88,10 @@ export async function makeTrial(
   status: 'open' | 'closed' = 'open',
   opts: {
     visibility?: 'public' | 'private'
-    participation?: 'open' | 'invitational'
+    participation?: Participation
     invitedUserIds?: string[]
     date?: string
+    groupId?: string
   } = {},
 ): Promise<TrialMetadata> {
   const trial: TrialMetadata = {
@@ -99,9 +100,10 @@ export async function makeTrial(
     name: 'Test Trial',
     date: opts.date ?? '2024-06-01',
     status,
+    ...(opts.groupId ? { groupId: opts.groupId } : {}),
     adminUserId,
     visibility: opts.visibility ?? 'public',
-    participation: opts.participation ?? 'open',
+    participation: opts.participation ?? 'public',
     invitedUserIds: opts.invitedUserIds ?? [],
     createdAt: new Date().toISOString(),
   }

@@ -9,6 +9,7 @@ import { GET as listInvitations, POST as createInvitation } from '@/app/att/api/
 import { DELETE as removeInvitation } from '@/app/att/api/trials/[trialId]/invitations/[userId]/route'
 import { GET as getTrial, PATCH as patchTrial } from '@/app/att/api/trials/[trialId]/route'
 import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
+import { addUserToGroupIndex } from '@/lib/groups'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -184,6 +185,47 @@ describe('uploading to an invitational trial', () => {
   })
 })
 
+describe('uploading to a members trial (phase 3)', () => {
+  const GROUP = 'grp-members-1' // membership is just the reverse-index entry
+
+  it('a member of the trial\'s group can upload', async () => {
+    const owner = await makeUser('Owner')
+    const member = await makeUser('Member')
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'members', groupId: GROUP })
+    await addUserToGroupIndex(member.id, GROUP)
+
+    mockAuth(member.idToken)
+    const res = await upload(new NextRequest('http://x', { method: 'POST', body: new FormData() }),
+      { params: Promise.resolve({ trialId: trial.id }) })
+    // Past the gate (empty form → some other 4xx, just not the 404 the gate returns).
+    expect(res.status).not.toBe(404)
+  })
+
+  it('a non-member is blocked (404 — same as not-found, no leak)', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'members', groupId: GROUP })
+
+    mockAuth(stranger.idToken)
+    const res = await upload(new NextRequest('http://x', { method: 'POST', body: new FormData() }),
+      { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('the organiser can always upload to their members trial', async () => {
+    const owner = await makeUser('Owner')
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'members', groupId: GROUP })
+
+    mockAuth(owner.idToken)
+    const res = await upload(new NextRequest('http://x', { method: 'POST', body: new FormData() }),
+      { params: Promise.resolve({ trialId: trial.id }) })
+    expect(res.status).not.toBe(404)
+  })
+})
+
 describe('viewing a private invitational trial', () => {
   it('an invitee can view the trial detail (widened in phase 2)', async () => {
     const owner = await makeUser('Owner')
@@ -226,10 +268,10 @@ describe('viewing a private invitational trial', () => {
 })
 
 describe('flipping participation', () => {
-  it('the owner can flip a trial from open to invitational', async () => {
+  it('the owner can flip a trial from public to invitational', async () => {
     const owner = await makeUser('Owner')
     const course = await makeCourse(owner.id)
-    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'open' })
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'public' })
 
     mockAuth(owner.idToken)
     const res = await patchTrial(jsonReq('PATCH', { participation: 'invitational' }),
@@ -238,7 +280,7 @@ describe('flipping participation', () => {
     expect((await res.json()).participation).toBe('invitational')
   })
 
-  it('flipping back to open keeps the invitee list intact (so flipping again does not surprise the owner)', async () => {
+  it('flipping back to public keeps the invitee list intact (so flipping again does not surprise the owner)', async () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     const course = await makeCourse(owner.id)
@@ -246,11 +288,11 @@ describe('flipping participation', () => {
       { participation: 'invitational', invitedUserIds: [guest.id] })
 
     mockAuth(owner.idToken)
-    const res = await patchTrial(jsonReq('PATCH', { participation: 'open' }),
+    const res = await patchTrial(jsonReq('PATCH', { participation: 'public' }),
       { params: Promise.resolve({ trialId: trial.id }) })
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.participation).toBe('open')
+    expect(body.participation).toBe('public')
     expect(body.invitedUserIds).toContain(guest.id)
   })
 })

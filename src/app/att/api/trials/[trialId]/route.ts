@@ -12,7 +12,7 @@ function isVisibility(v: unknown): v is Visibility {
 }
 
 function isParticipation(v: unknown): v is Participation {
-  return v === 'open' || v === 'invitational'
+  return v === 'members' || v === 'invitational' || v === 'public'
 }
 
 export async function GET(_: NextRequest, { params }: Params) {

@@ -241,7 +241,7 @@ async function main() {
     groupId,
     adminUserId: admin.id,
     visibility: 'public',
-    participation: 'open',
+    participation: 'public',
     invitedUserIds: [],
     createdAt: '2025-04-01T08:00:00.000Z',
   }
@@ -255,7 +255,7 @@ async function main() {
     groupId,
     adminUserId: admin.id,
     visibility: 'public',
-    participation: 'open',
+    participation: 'public',
     invitedUserIds: [],
     createdAt: '2025-07-01T08:00:00.000Z',
   }
@@ -269,7 +269,7 @@ async function main() {
     groupId,
     adminUserId: admin.id,
     visibility: 'public',
-    participation: 'open',
+    participation: 'members',
     invitedUserIds: [],
     createdAt: '2025-05-20T08:00:00.000Z',
   }

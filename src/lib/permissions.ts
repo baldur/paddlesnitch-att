@@ -90,12 +90,13 @@ export function canCreateCourseInGroup(group: GroupMetadata, viewer: AuthUser | 
   return canManageGroup(group, viewer)
 }
 
-// Can `viewer` submit a trace to this trial?
-//   - You must be able to see the trial.
-//   - Open participation: any viewer who can see it.
-//   - Invitational: viewer must be in invitedUserIds (or be the owner).
-// The trial-open/closed status is separately enforced inside the upload
-// route — this helper deals purely with WHO is allowed, not WHEN.
+// Can `viewer` submit a trace to this trial (phase 3)? You must first be able
+// to see it. Then participation decides WHO:
+//   - public       → any viewer
+//   - invitational → only invitedUserIds
+//   - members      → any member of the trial's group, or an invitee
+// The organiser (creator) can always submit. Trial open/closed status is
+// enforced separately in the upload route — this is purely WHO, not WHEN.
 export function canSubmitToTrial(
   trial: TrialMetadata,
   viewer: AuthUser | null,
@@ -103,9 +104,13 @@ export function canSubmitToTrial(
 ): boolean {
   if (!viewer) return false
   if (!canViewTrial(trial, viewer, viewerGroupIds)) return false
-  if (trial.participation === 'open') return true
   if (viewer.id === trial.adminUserId) return true
-  return trial.invitedUserIds.includes(viewer.id)
+  // Legacy 'open' (pre-phase-3) behaves like 'public'.
+  const participation = (trial.participation as string) === 'open' ? 'public' : trial.participation
+  if (participation === 'public') return true
+  if (participation === 'invitational') return trial.invitedUserIds.includes(viewer.id)
+  // members: a member (owner/admin/member) of the trial's group, or an invitee.
+  return inGroup(trial.groupId, viewerGroupIds) || trial.invitedUserIds.includes(viewer.id)
 }
 
 // Whether the resource should appear in a public listing for `viewer`.

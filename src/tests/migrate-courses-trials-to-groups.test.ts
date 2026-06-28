@@ -32,13 +32,13 @@ describe('migrate-courses-trials-to-groups against storage', () => {
     } satisfies CourseMetadata))
     await putObject('trials/t1/metadata.json', JSON.stringify({
       id: 't1', courseId: 'co1', name: 'Race', date: '2025-04-01', status: 'open',
-      adminUserId: 'u1', visibility: 'public', participation: 'open',
+      adminUserId: 'u1', visibility: 'public', participation: 'public',
       invitedUserIds: [], createdAt: '2025-03-01T00:00:00Z',
     } satisfies TrialMetadata))
     // A trial a different organiser ran on the public course → its own group.
     await putObject('trials/t2/metadata.json', JSON.stringify({
       id: 't2', courseId: 'co1', name: 'Connor TT', date: '2025-05-01', status: 'open',
-      adminUserId: 'u2', visibility: 'public', participation: 'open',
+      adminUserId: 'u2', visibility: 'public', participation: 'public',
       invitedUserIds: [], createdAt: '2025-04-01T00:00:00Z',
     } satisfies TrialMetadata))
   }

@@ -164,6 +164,12 @@ export default function UploadPage({
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
+  // Phase 3: whether this viewer may submit (participation gate). undefined =
+  // still checking. When canSubmit is false we render a join / invite CTA
+  // instead of the form, so a `members` trial doesn't show a form that 404s.
+  const [submitGate, setSubmitGate] = useState<
+    { canSubmit: boolean; reason?: string; group?: { id: string; name: string } } | undefined
+  >(undefined)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
   const [error, setError] = useState('')
   // Set when processing fails because the track didn't cross the lines — drives
@@ -190,6 +196,16 @@ export default function UploadPage({
       .then(setAuthUser)
       .catch(() => setAuthUser(null))
   }, [])
+
+  // Once we know the viewer is signed in, ask the server whether they may
+  // submit (and if not, why) so we can show the right CTA.
+  useEffect(() => {
+    if (!authUser) return
+    fetch(`/att/api/trials/${trialId}/can-submit`)
+      .then(r => (r.ok ? r.json() : { canSubmit: false }))
+      .then(setSubmitGate)
+      .catch(() => setSubmitGate({ canSubmit: false }))
+  }, [authUser, trialId])
 
   // Strava picker: lazy-load status + activities the first time the tab opens.
   // We don't fetch on mount — most uploads are still file/URL and there's no
@@ -367,6 +383,37 @@ export default function UploadPage({
               className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
             >
               SIGN IN / SIGN UP
+            </a>
+          </div>
+        ) : submitGate === undefined ? (
+          <p className="text-sm text-[#64748b]">Checking…</p>
+        ) : submitGate.canSubmit === false ? (
+          // Signed in but not allowed to submit — explain why and point at the
+          // group to join (self-serve join lands in phase 4).
+          <div className="flex flex-col gap-4 text-center">
+            <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
+              {submitGate.reason === 'members' ? 'MEMBERS ONLY' : 'INVITATION ONLY'}
+            </h1>
+            {submitGate.reason === 'members' && submitGate.group ? (
+              <>
+                <p className="text-sm text-[#64748b]">
+                  Only members of <span className="text-[#0f172a] font-bold">{submitGate.group.name}</span> can
+                  submit to this trial. Ask an admin of the group to add you, then come back and upload.
+                </p>
+                <a
+                  href={`/att/groups/${submitGate.group.id}`}
+                  className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
+                >
+                  VIEW GROUP →
+                </a>
+              </>
+            ) : (
+              <p className="text-sm text-[#64748b]">
+                This trial is invitation-only. Ask the organiser for an invite, then come back and upload.
+              </p>
+            )}
+            <a href={`/att/trials/${trialId}`} className="tt-link text-xs tracking-widest">
+              ← BACK TO LEADERBOARD
             </a>
           </div>
         ) : (
