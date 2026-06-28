@@ -43,6 +43,17 @@ jobs:
         with:
           fetch-depth: 0   # full history for diff context
 
+      # Node + pnpm + deps so Claude can actually run `pnpm test` / `pnpm build`
+      # while working (matches the deploy workflow's toolchain versions).
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -50,6 +61,8 @@ jobs:
             You are continuing work on a claimed issue/PR (label: claude-active)
             for the ATT / paddlesnitch repo. A human has just left the latest
             comment or review — read it and act to move the item toward closing.
+            Node, pnpm, and dependencies are already installed, so you can run
+            `pnpm test` / `pnpm build` directly.
 
             FIRST read CLAUDE.md at the repo root — it is the source of truth for
             conventions you MUST follow (test-first; `pnpm test` AND `pnpm build`
@@ -69,4 +82,7 @@ jobs:
               a concise answer or a specific clarifying question — don't guess.
             - Keep replies short. If the work is complete, say so explicitly so a
               human can merge.
-          claude_args: "--max-turns 15 --model claude-sonnet-4-6"
+          # Allow the tools the loop needs to actually work (same trust model as
+          # the scheduled cron routines). The action keeps its own GitHub
+          # progress-comment tool regardless.
+          claude_args: "--max-turns 25 --model claude-sonnet-4-6 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
