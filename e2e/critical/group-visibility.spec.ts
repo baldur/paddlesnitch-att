@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test'
 import {
   signUpFlow,
-  createClubViaApi,
+  createGroupViaApi,
   createCourseViaApi,
   signOut,
 } from '../helpers'
 
-// Critical path #4 of 5: a course scoped to a club is hidden from
+// Critical path #4 of 5: a course scoped to a group is hidden from
 // non-members.
 //
 // Permission-matrix coverage is in vitest (src/lib/permissions.test.ts
-// + src/tests/clubs.test.ts) — this spec just confirms the gate
+// + src/tests/groups.test.ts) — this spec just confirms the gate
 // actually plumbs through to the rendered Server Component. The
 // failure mode we're guarding against is "permission helper says no
 // but page still renders" (or the inverse).
@@ -20,16 +20,16 @@ import {
 // of double the runtime — happy to add it if a regression slips
 // through this one.
 
-test('a club-scoped course returns 404 to an unauthenticated visitor', async ({ page }) => {
-  await signUpFlow(page, { displayName: 'Club Owner' })
+test('a group-scoped course returns 404 to an unauthenticated visitor', async ({ page }) => {
+  await signUpFlow(page, { displayName: 'Group Owner' })
 
-  // Create the club, then a course scoped to it. The owner-creator is
+  // Create the group, then a course scoped to it. The owner-creator is
   // automatically a member, so they CAN view it.
-  const club = await createClubViaApi(page, { name: 'Owner Only Club' })
+  const group = await createGroupViaApi(page, { name: 'Owner Only Group' })
   const course = await createCourseViaApi(page, {
     name: 'Members Only Course',
-    visibility: 'club',
-    visibleToClubId: club.id,
+    visibility: 'group',
+    visibleToGroupId: group.id,
   })
 
   // Sanity: the owner can see the detail page right now.
