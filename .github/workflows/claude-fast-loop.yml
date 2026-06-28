@@ -64,6 +64,14 @@ jobs:
             Node, pnpm, and dependencies are already installed, so you can run
             `pnpm test` / `pnpm build` directly.
 
+            IMPORTANT — how to reply: your final text output is NOT shown to
+            anyone. To communicate you MUST post a GitHub comment yourself with
+            the gh CLI (GITHUB_TOKEN is already in the environment):
+              - on an issue:  gh issue comment <number> --body "..."
+              - on a PR:      gh pr comment <number> --body "..."
+            Determine the number from the event context. ALWAYS post exactly one
+            such comment before you finish — even if it's just a short status.
+
             FIRST read CLAUDE.md at the repo root — it is the source of truth for
             conventions you MUST follow (test-first; `pnpm test` AND `pnpm build`
             must both pass before you push anything; match existing style; the
@@ -74,13 +82,14 @@ jobs:
               your changes to THAT branch — never to `main`, never force-push,
               never merge.
             - Every code change ships with a test and green `pnpm test` +
-              `pnpm build`. If you can't get them green, do NOT push — reply with
-              what's blocking instead.
-            - Out of scope (reply asking the author, don't touch): auth, secrets,
-              billing, or production infra (CDK / SES / Cognito / IAM / deploy).
-            - If the comment is a question or needs a product decision, reply with
-              a concise answer or a specific clarifying question — don't guess.
-            - Keep replies short. If the work is complete, say so explicitly so a
+              `pnpm build`. If you can't get them green, do NOT push — post a
+              comment with what's blocking instead.
+            - Out of scope (post a comment asking the author, don't touch): auth,
+              secrets, billing, or production infra (CDK / SES / Cognito / IAM /
+              deploy).
+            - If the latest comment is a question or needs a product decision,
+              post a concise answer or a specific clarifying question — don't guess.
+            - Keep comments short. If the work is complete, say so explicitly so a
               human can merge.
           # Allow the tools the loop needs to actually work (same trust model as
           # the scheduled cron routines). The action keeps its own GitHub
