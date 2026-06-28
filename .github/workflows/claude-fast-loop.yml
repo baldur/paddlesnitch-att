@@ -1,0 +1,71 @@
+# Fast loop: fires on every comment/review but SKIPS before a runner is
+# allocated unless the issue/PR carries the `claude-active` label. That label is
+# applied by the scheduled triage routines when Claude first engages (comments
+# or opens a PR), so you only pay the fast-loop cost on items Claude has claimed.
+# The slow intake gate stays the /schedule cron routines; this is the quick
+# follow-up loop for items already in flight.
+name: Claude fast loop (claimed items only)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+# Serialise runs per issue/PR so a fast-loop response and the next cron tick
+# can't both drive the same item at once and produce conflicting commits.
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    # Two guards, both required:
+    #  1. Never react to Claude's own (or other bots') output -> loop protection.
+    #  2. Only run on items already labelled claude-active.
+    # `issue_comment` covers PR conversation comments too (PRs are issues
+    # underneath), and labels live on github.event.issue.labels in that case.
+    if: >
+      github.actor != 'claude[bot]' &&
+      github.actor != 'github-actions[bot]' &&
+      (contains(github.event.issue.labels.*.name, 'claude-active') ||
+       contains(github.event.pull_request.labels.*.name, 'claude-active'))
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for diff context
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are continuing work on a claimed issue/PR (label: claude-active)
+            for the ATT / paddlesnitch repo. A human has just left the latest
+            comment or review — read it and act to move the item toward closing.
+
+            FIRST read CLAUDE.md at the repo root — it is the source of truth for
+            conventions you MUST follow (test-first; `pnpm test` AND `pnpm build`
+            must both pass before you push anything; match existing style; the
+            commit-message trailer used in recent commits).
+
+            Rules:
+            - This runs on an existing PR or issue. If a PR branch exists, push
+              your changes to THAT branch — never to `main`, never force-push,
+              never merge.
+            - Every code change ships with a test and green `pnpm test` +
+              `pnpm build`. If you can't get them green, do NOT push — reply with
+              what's blocking instead.
+            - Out of scope (reply asking the author, don't touch): auth, secrets,
+              billing, or production infra (CDK / SES / Cognito / IAM / deploy).
+            - If the comment is a question or needs a product decision, reply with
+              a concise answer or a specific clarifying question — don't guess.
+            - Keep replies short. If the work is complete, say so explicitly so a
+              human can merge.
+          claude_args: "--max-turns 15 --model claude-sonnet-4-6"
