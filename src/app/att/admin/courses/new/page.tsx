@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import ReferenceTraceValidator from '@/components/ReferenceTraceValidator'
@@ -55,11 +55,23 @@ export default function NewCoursePage() {
   const [gates, setGates] = useState<GateData | undefined>()
   const [distanceMetres, setDistanceMetres] = useState<number | null>(null)
   const [visibility, setVisibility] = useState<'public' | 'private' | 'group'>('public')
-  const [visibleToGroupId, setVisibleToGroupId] = useState<string>('')
-  // Groups the user owns or admins, populated lazily when they pick 'group'.
-  const [manageableGroups, setManageableGroups] = useState<Array<{ id: string; name: string }> | null>(null)
+  // Groups the user owns/admins. A course must belong to one of these (phase 2:
+  // only group admins create courses). Fetched on mount; null = still loading.
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }> | null>(null)
+  const [groupId, setGroupId] = useState<string>('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/att/api/groups?role=admin')
+      .then(r => (r.ok ? r.json() : { groups: [] }))
+      .then(data => {
+        const gs: Array<{ id: string; name: string }> = data.groups ?? []
+        setGroups(gs)
+        if (gs.length === 1) setGroupId(gs[0].id) // sensible default
+      })
+      .catch(() => setGroups([]))
+  }, [])
 
   const nameRef = useRef<HTMLInputElement>(null)
   const sportRef = useRef<HTMLSelectElement>(null)
@@ -117,6 +129,7 @@ export default function NewCoursePage() {
     const name = nameRef.current?.value.trim()
     const sport = sportRef.current?.value
     if (!name || !sport) { setError('All fields are required.'); return }
+    if (!groupId) { setError('Pick which group this course belongs to.'); return }
 
     const dist = courseType === 'loop'
       ? (distanceRef.current?.value ? parseInt(distanceRef.current.value, 10) : 0)
@@ -134,8 +147,8 @@ export default function NewCoursePage() {
           ...(isP2P ? { finishLine } : {}),
           distanceMetres: dist,
           minValidSeconds: minValidSecondsRef.current?.value ? parseInt(minValidSecondsRef.current.value, 10) : undefined,
+          groupId,
           visibility,
-          ...(visibility === 'group' && visibleToGroupId ? { visibleToGroupId } : {}),
         }),
       })
       if (!res.ok) {
@@ -170,6 +183,25 @@ export default function NewCoursePage() {
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full">
         <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-8">CREATE COURSE</h1>
 
+        {groups !== null && groups.length === 0 ? (
+          // No group → no creation (phase 2). Point the would-be organiser at
+          // the "create a group" on-ramp instead of a form they can't submit.
+          <div className="border border-[#e2e8f0] bg-[#f8fafc] p-8 text-center flex flex-col gap-4">
+            <p className="text-sm font-bold text-[#0f172a] tracking-widest">CREATE A GROUP FIRST</p>
+            <p className="text-xs text-[#64748b] leading-relaxed">
+              Courses belong to a group — a club, a squad, or just you. Create one to start
+              organising; you’ll be its admin and can add courses and open trials on them.
+            </p>
+            <div>
+              <Link
+                href="/att/groups"
+                className="inline-block px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
+              >
+                + NEW GROUP
+              </Link>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           {/* Name */}
           <div className="flex flex-col gap-1">
@@ -185,6 +217,18 @@ export default function NewCoursePage() {
               <option value="rowing">Rowing</option>
               <option value="both">Both</option>
             </select>
+          </div>
+
+          {/* Group — the owning group (phase 2). Defaults to the user's only group. */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-[#64748b] tracking-widest">GROUP</label>
+            <select value={groupId} onChange={e => setGroupId(e.target.value)} required className={inputClass}>
+              <option value="">{groups === null ? 'Loading…' : '— Pick a group —'}</option>
+              {(groups ?? []).map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[#64748b]">The group that owns this course. Its admins can edit it and open trials on it.</p>
           </div>
 
           {/* Course type */}
@@ -286,62 +330,23 @@ export default function NewCoursePage() {
                 <button
                   key={v}
                   type="button"
-                  onClick={async () => {
-                    setVisibility(v)
-                    if (v === 'group' && manageableGroups === null) {
-                      // Lazy-load: we only fetch the user's groups when they
-                      // pick the group option — keeps the common case fast.
-                      const res = await fetch('/att/api/groups')
-                      if (res.ok) {
-                        const data = await res.json()
-                        // Only groups where the user can scope content are usable
-                        // — we infer that from the role payload by hitting each
-                        // detail. Cheaper: include the user's id with the list
-                        // and let the API tell us, but the dropdown is small
-                        // and groups are few, so a follow-up is fine.
-                        setManageableGroups(data.groups)
-                      }
-                    }
-                  }}
+                  onClick={() => setVisibility(v)}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     visibility === v
                       ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
                       : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
                   }`}
                 >
-                  {v.toUpperCase()}
+                  {v === 'group' ? 'MY GROUP' : v.toUpperCase()}
                 </button>
               ))}
             </div>
-            {visibility === 'group' && (
-              <div className="flex flex-col gap-2 mt-2">
-                {manageableGroups === null ? (
-                  <p className="text-xs text-[#64748b]">Loading groups…</p>
-                ) : manageableGroups.length === 0 ? (
-                  <p className="text-xs text-[#64748b]">
-                    You&apos;re not in any groups yet.{' '}
-                    <Link href="/att/groups" className="tt-link">Create one</Link>.
-                  </p>
-                ) : (
-                  <select
-                    value={visibleToGroupId}
-                    onChange={e => setVisibleToGroupId(e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">— Pick a group —</option>
-                    {manageableGroups.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
             <p className="text-xs text-[#64748b]">
               {visibility === 'public'
-                ? 'Anyone can find this course. Anyone can open a time trial on it.'
+                ? 'Anyone can find this course. Group admins can open time trials on it.'
                 : visibility === 'private'
                   ? 'Only you can see this course and the trials on it. You can change this later.'
-                  : 'Only this group’s members can see this course and any trials on it.'}
+                  : 'Only the owning group’s members can see this course and any trials on it.'}
             </p>
           </div>
 
@@ -357,6 +362,7 @@ export default function NewCoursePage() {
             {saving ? 'SAVING…' : 'CREATE COURSE'}
           </button>
         </form>
+        )}
       </div>
     </main>
   )

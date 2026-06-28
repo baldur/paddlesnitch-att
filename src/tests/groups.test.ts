@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-import { makeDataDir, cleanDataDir, makeUser, makeCourse } from './helpers'
+import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
@@ -11,7 +11,7 @@ import { POST as inviteToGroup, GET as listInvites } from '@/app/att/api/groups/
 import { POST as acceptInvite } from '@/app/att/api/groups/[groupId]/invitations/[invitationId]/accept/route'
 import { DELETE as kickMember } from '@/app/att/api/groups/[groupId]/members/[userId]/route'
 import { GET as getCourse } from '@/app/att/api/courses/[courseId]/route'
-import { PATCH as patchCourse } from '@/app/att/api/courses/[courseId]/route'
+import { POST as createCourse } from '@/app/att/api/courses/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -64,7 +64,7 @@ describe('creating a group', () => {
     mockAuth(u.idToken)
     await createGroup(jsonReq('POST', { name: 'Mine' }))
     mockAuth(u.idToken)
-    const list = await (await listGroups()).json()
+    const list = await (await listGroups(new NextRequest('http://x/att/api/groups'))).json()
     expect(list.groups.map((c: { name: string }) => c.name)).toContain('Mine')
   })
 
@@ -74,7 +74,7 @@ describe('creating a group', () => {
     mockAuth(u.idToken)
     await createGroup(jsonReq('POST', { name: 'Hidden' }))
     mockAuth(stranger.idToken)
-    const list = await (await listGroups()).json()
+    const list = await (await listGroups(new NextRequest('http://x/att/api/groups'))).json()
     expect(list.groups.map((c: { name: string }) => c.name)).not.toContain('Hidden')
   })
 })
@@ -185,7 +185,16 @@ describe('inviting and joining', () => {
 })
 
 describe('group-scoped visibility', () => {
-  it('a group member can view a course scoped to their group', async () => {
+  // Helper: a course owned by `groupId`, scoped to that group's members.
+  function groupCourseBody(groupId: string) {
+    return {
+      name: 'GroupCourse', sport: 'kayak', type: 'point_to_point',
+      startLine: [[0, 0], [0, 0.001]], finishLine: [[0.001, 0], [0.001, 0.001]],
+      distanceMetres: 100, groupId, visibility: 'group',
+    }
+  }
+
+  it('a group member can view a course owned by their group (group visibility)', async () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     mockAuth(owner.idToken)
@@ -199,17 +208,11 @@ describe('group-scoped visibility', () => {
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
       { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
-    // Owner creates a private course, then flips it to group-scope.
-    const course = await makeCourse(owner.id, { visibility: 'private' })
+    // Owner (group admin) creates a course in the group, scoped to it.
     mockAuth(owner.idToken)
-    const flipped = await patchCourse(
-      jsonReq('PATCH', { visibility: 'group', visibleToGroupId: group.id }),
-      { params: Promise.resolve({ courseId: course.id }) }
-    )
-    expect(flipped.status).toBe(200)
-    const got = await flipped.json()
-    expect(got.visibility).toBe('group')
-    expect(got.visibleToGroupId).toBe(group.id)
+    const course = await (await createCourse(jsonReq('POST', groupCourseBody(group.id)))).json()
+    expect(course.visibility).toBe('group')
+    expect(course.visibleToGroupId).toBe(group.id)
 
     // Guest is a member → can see it.
     mockAuth(guest.idToken)
@@ -225,7 +228,7 @@ describe('group-scoped visibility', () => {
     expect(strangerView.status).toBe(404)
   })
 
-  it('a plain member cannot scope a course to the group (only owner/admin can)', async () => {
+  it('a plain member cannot create a course in a group they only belong to (403)', async () => {
     const owner = await makeUser('Owner')
     const member = await makeUser('Member')
     mockAuth(owner.idToken)
@@ -238,18 +241,10 @@ describe('group-scoped visibility', () => {
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
       { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
-    // The member creates their own course and tries to scope it to the group.
-    const memberCourse = await makeCourse(member.id, { visibility: 'private' })
+    // Creation is gated to owner/admins — a plain member is refused.
     mockAuth(member.idToken)
-    const flipped = await patchCourse(
-      jsonReq('PATCH', { visibility: 'group', visibleToGroupId: group.id }),
-      { params: Promise.resolve({ courseId: memberCourse.id }) }
-    )
-    // Should fall back to private — the route doesn't 403, it just refuses
-    // to widen the scope (mirrors what UI tests will check).
-    expect(flipped.status).toBe(200)
-    const got = await flipped.json()
-    expect(got.visibility).toBe('private')
+    const res = await createCourse(jsonReq('POST', groupCourseBody(group.id)))
+    expect(res.status).toBe(403)
   })
 })
 

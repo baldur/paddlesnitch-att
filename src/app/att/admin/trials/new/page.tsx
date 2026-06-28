@@ -16,14 +16,14 @@ function NewTrialForm() {
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [visibility, setVisibility] = useState<'public' | 'private' | 'group'>('public')
-  const [visibleToGroupId, setVisibleToGroupId] = useState<string>('')
-  const [manageableGroups, setManageableGroups] = useState<Array<{ id: string; name: string }> | null>(null)
   const [participation, setParticipation] = useState<'open' | 'invitational'>('open')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/att/api/courses')
+    // Only courses the viewer can manage — opening a trial needs admin of the
+    // course's group (phase 2). A 'group'-scoped trial inherits that group.
+    fetch('/att/api/courses?manageable=1')
       .then(r => r.json())
       .then(setCourses)
       .catch(() => setError('Could not load courses'))
@@ -45,7 +45,6 @@ function NewTrialForm() {
           name: name.trim(),
           date,
           visibility,
-          ...(visibility === 'group' && visibleToGroupId ? { visibleToGroupId } : {}),
           participation,
         }),
       })
@@ -163,60 +162,27 @@ function NewTrialForm() {
                   key={v}
                   type="button"
                   disabled={disabled}
-                  onClick={async () => {
-                    if (disabled) return
-                    setVisibility(v)
-                    if (v === 'group' && manageableGroups === null) {
-                      const res = await fetch('/att/api/groups')
-                      if (res.ok) {
-                        const data = await res.json()
-                        setManageableGroups(data.groups)
-                      }
-                    }
-                  }}
+                  onClick={() => { if (!disabled) setVisibility(v) }}
                   className={`px-4 py-2 text-xs tracking-widest border transition-colors ${
                     active
                       ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
                       : 'border-[#e2e8f0] text-[#64748b] hover:border-[#cbd5e1]'
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
-                  {v.toUpperCase()}
+                  {v === 'group' ? 'GROUP' : v.toUpperCase()}
                 </button>
               )
             })}
           </div>
-          {visibility === 'group' && selectedCourse?.visibility !== 'group' && (
-            <div className="flex flex-col gap-2 mt-2">
-              {manageableGroups === null ? (
-                <p className="text-xs text-[#64748b]">Loading groups…</p>
-              ) : manageableGroups.length === 0 ? (
-                <p className="text-xs text-[#64748b]">
-                  You&apos;re not in any groups yet.{' '}
-                  <Link href="/att/groups" className="tt-link">Create one</Link>.
-                </p>
-              ) : (
-                <select
-                  value={visibleToGroupId}
-                  onChange={e => setVisibleToGroupId(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">— Pick a group —</option>
-                  {manageableGroups.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
           <p className="text-xs text-[#64748b]">
             {selectedCourse?.visibility === 'private'
               ? 'This course is private, so any trial on it must be private too.'
               : selectedCourse?.visibility === 'group'
-                ? 'This course is scoped to a group, so the trial is too.'
+                ? 'This course is scoped to its group, so the trial is too.'
                 : visibility === 'public'
                   ? 'The leaderboard will be visible to anyone.'
                   : visibility === 'group'
-                    ? 'Only this group’s members can see the trial.'
+                    ? 'Only the course’s group members can see the trial.'
                     : 'Only you can see this trial and its leaderboard.'}
           </p>
         </div>

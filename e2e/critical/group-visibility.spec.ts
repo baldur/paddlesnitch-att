@@ -29,7 +29,7 @@ test('a group-scoped course returns 404 to an unauthenticated visitor', async ({
   const course = await createCourseViaApi(page, {
     name: 'Members Only Course',
     visibility: 'group',
-    visibleToGroupId: group.id,
+    groupId: group.id,
   })
 
   // Sanity: the owner can see the detail page right now.

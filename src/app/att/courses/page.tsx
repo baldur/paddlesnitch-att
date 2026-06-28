@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer } from '@/lib/permissions'
-import { getUserGroupIds } from '@/lib/groups'
+import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import AppHeader from '@/components/AppHeader'
 import type { CourseMetadata, TrialMetadata, AuthUser } from '@/lib/types'
 
@@ -59,6 +59,7 @@ function courseTypeLabel(course: CourseMetadata): string {
 
 export default async function CoursesCataloguePage() {
   const viewer = await getAuthUser()
+  const canOrganise = viewer ? (await getUserAdminGroupIds(viewer.id)).size > 0 : false
   const courses = await getCoursesWithCounts(viewer)
 
   return (
@@ -74,24 +75,36 @@ export default async function CoursesCataloguePage() {
           </>
         }
       >
-        <Link href="/att/admin/courses/new" className="tt-nav-link">
-          + NEW COURSE
-        </Link>
+        {canOrganise ? (
+          <Link href="/att/admin/courses/new" className="tt-nav-link">
+            + NEW COURSE
+          </Link>
+        ) : (
+          <Link href="/att/groups" className="tt-nav-link">
+            + NEW GROUP
+          </Link>
+        )}
       </AppHeader>
 
       <div className="flex-1 px-4 py-8 max-w-3xl mx-auto w-full">
         <h1 className="text-lg font-bold text-[#0f172a] tracking-widest mb-2">COURSE CATALOGUE</h1>
         <p className="text-sm text-[#64748b] mb-8">
-          Browse all courses. Any signed-in user can open a new time trial on any course.
+          Browse all courses. Group admins can open time trials on a course; create a group to organise your own.
         </p>
 
         {courses.length === 0 ? (
           <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
-            No courses yet.{' '}
-            <Link href="/att/admin/courses/new" className="tt-link">
-              Create the first one
-            </Link>
-            .
+            {canOrganise ? (
+              <>
+                No courses yet.{' '}
+                <Link href="/att/admin/courses/new" className="tt-link">Create the first one</Link>.
+              </>
+            ) : (
+              <>
+                No courses yet.{' '}
+                <Link href="/att/groups" className="tt-link">Create a group</Link> to add one.
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">

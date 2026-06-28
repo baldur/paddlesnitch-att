@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewCourse, canManageCourse } from '@/lib/permissions'
-import { getGroup, groupRoleOf, getUserGroupIds } from '@/lib/groups'
+import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import { courseHasEntries, geometryChanged, GEOMETRY_FIELDS } from '@/lib/course-entries'
 import type { CourseMetadata, Visibility } from '@/lib/types'
 
@@ -16,37 +16,20 @@ function isSport(v: unknown): v is CourseMetadata['sport'] {
   return v === 'kayak' || v === 'rowing' || v === 'both'
 }
 
-async function userCanScopeToGroup(userId: string, groupId: string): Promise<boolean> {
-  const group = await getGroup(groupId)
-  if (!group) return false
-  const role = groupRoleOf(group, userId)
-  return role === 'owner' || role === 'admin'
-}
-
-// Applies the patch's visibility (+ visibleToGroupId) onto `next`. Pulled out
-// so the in-place edit and the clone branch share the same group-scope guard:
-// switching to `group` requires the editor to be owner/admin of the target
-// group, otherwise we silently drop to `private` rather than carrying a
-// stale groupId or upgrading on bad input.
-async function applyVisibility(
-  next: CourseMetadata,
-  course: CourseMetadata,
-  body: Record<string, unknown>,
-  userId: string,
-): Promise<void> {
+// Applies the patch's visibility onto `next`. 'group' visibility always scopes
+// to the course's OWNING group (course.groupId) — ownership and group-visibility
+// are the same group. If the course has no group yet (legacy), 'group' has
+// nothing to scope to, so we fall back to 'private'.
+function applyVisibility(next: CourseMetadata, course: CourseMetadata, body: Record<string, unknown>): void {
   if (!isVisibility(body.visibility)) return
-  next.visibility = body.visibility
-  if (body.visibility === 'group') {
-    const groupId = typeof body.visibleToGroupId === 'string'
-      ? body.visibleToGroupId
-      : course.visibleToGroupId
-    if (groupId && await userCanScopeToGroup(userId, groupId)) {
-      next.visibleToGroupId = groupId
-    } else {
-      next.visibility = 'private'
-      delete next.visibleToGroupId
-    }
+  if (body.visibility === 'group' && course.groupId) {
+    next.visibility = 'group'
+    next.visibleToGroupId = course.groupId
+  } else if (body.visibility === 'group') {
+    next.visibility = 'private'
+    delete next.visibleToGroupId
   } else {
+    next.visibility = body.visibility
     delete next.visibleToGroupId
   }
 }
@@ -72,7 +55,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { courseId } = await params
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
   if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!canManageCourse(course, user)) {
+  const adminGroupIds = await getUserAdminGroupIds(user.id)
+  if (!canManageCourse(course, user, adminGroupIds)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -95,11 +79,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // Plain in-place edit. Whitelist mutable fields rather than spreading body
-  // so a client can't sneak in adminUserId / id overrides via a PATCH.
+  // so a client can't sneak in adminUserId / id / groupId overrides via a PATCH.
   const next: CourseMetadata = { ...course }
   if (typeof body.name === 'string') next.name = body.name
   if (isSport(body.sport)) next.sport = body.sport
-  await applyVisibility(next, course, body, user.id)
+  applyVisibility(next, course, body)
   // Geometry edits on a course WITHOUT entries are also allowed in place —
   // there's nothing to preserve. Whitelist-merge to keep PATCH safe.
   for (const field of GEOMETRY_FIELDS) {

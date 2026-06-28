@@ -53,15 +53,41 @@ export function canViewTrial(
   return false
 }
 
-// Course / trial mutations stay owner-only even after groups ship. Groups
-// scope WHO CAN SEE the resource, not WHO OWNS it — that's intentional
-// per the design doc (single-user course ownership).
-export function canManageCourse(course: CourseMetadata, viewer: AuthUser | null): boolean {
-  return !!viewer && viewer.id === course.adminUserId
+// Management (edit / delete / open-close / create-trial) belongs to the OWNING
+// GROUP's owner + admins — not the original creator. Callers compute the
+// viewer's manageable-group set once at the request boundary (owner/admin only,
+// see `getUserAdminGroupIds` in src/lib/groups.ts) and pass it down.
+//
+// Pre-migration fallback: a course/trial with no `groupId` yet (legacy data
+// from before phase 2's migration ran) stays manageable by its `adminUserId`,
+// so an owner is never locked out in the deploy→migrate window.
+type AdminGroupIds = Set<string> | undefined
+
+export function canManageCourse(
+  course: CourseMetadata,
+  viewer: AuthUser | null,
+  adminGroupIds?: AdminGroupIds,
+): boolean {
+  if (!viewer) return false
+  if (course.groupId) return !!adminGroupIds && adminGroupIds.has(course.groupId)
+  return viewer.id === course.adminUserId
 }
 
-export function canManageTrial(trial: TrialMetadata, viewer: AuthUser | null): boolean {
-  return !!viewer && viewer.id === trial.adminUserId
+export function canManageTrial(
+  trial: TrialMetadata,
+  viewer: AuthUser | null,
+  adminGroupIds?: AdminGroupIds,
+): boolean {
+  if (!viewer) return false
+  if (trial.groupId) return !!adminGroupIds && adminGroupIds.has(trial.groupId)
+  return viewer.id === trial.adminUserId
+}
+
+// Only a group's owner + admins may create courses/trials in it. (A trial is
+// created on a course; the gate there is `canManageCourse`, since the trial
+// inherits the course's group.)
+export function canCreateCourseInGroup(group: GroupMetadata, viewer: AuthUser | null): boolean {
+  return canManageGroup(group, viewer)
 }
 
 // Can `viewer` submit a trace to this trial?

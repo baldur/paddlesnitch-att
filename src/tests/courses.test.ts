@@ -8,6 +8,7 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 import { GET as listCourses, POST as createCourse } from '@/app/att/api/courses/route'
 import { GET as getCourse, PATCH as patchCourse } from '@/app/att/api/courses/[courseId]/route'
 import { POST as createTrial } from '@/app/att/api/trials/route'
+import { POST as createGroup } from '@/app/att/api/groups/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -29,8 +30,11 @@ function jsonReq(url: string, method: string, body: unknown) {
   })
 }
 
+// Creates a group owned by the caller, then a course in it. Owning the group
+// makes the caller a group admin → they can create + manage the course.
 async function buildCourse(ownerIdToken: string, name = 'Test Course') {
   mockAuth(ownerIdToken)
+  const group = await (await createGroup(jsonReq('http://x/att/api/groups', 'POST', { name: 'G' }))).json()
   const res = await createCourse(jsonReq('http://x/att/api/courses', 'POST', {
     name,
     sport: 'kayak',
@@ -38,6 +42,7 @@ async function buildCourse(ownerIdToken: string, name = 'Test Course') {
     startLine: [[51.5, -0.9], [51.5, -0.89]],
     finishLine: [[51.55, -0.9], [51.55, -0.89]],
     distanceMetres: 5000,
+    groupId: group.id,
   }))
   return await res.json()
 }
@@ -49,7 +54,7 @@ describe('Courses are a public catalogue', () => {
     await buildCourse(owner.idToken, 'B')
 
     mockAuth(null)
-    const res = await listCourses()
+    const res = await listCourses(new NextRequest('http://x/att/api/courses'))
     expect(res.status).toBe(200)
     const list = await res.json()
     expect(list).toHaveLength(2)
@@ -67,7 +72,9 @@ describe('Courses are a public catalogue', () => {
     expect(body.name).toBe('Test Course')
   })
 
-  it('any signed-in user can open a trial on someone else\'s course', async () => {
+  it('a non-group-admin cannot open a trial on someone else\'s public course (403)', async () => {
+    // Phase 2: trial creation is gated to the course\'s group admins. A stranger
+    // who can SEE a public course can no longer open a trial on it.
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     const course = await buildCourse(owner.idToken)
@@ -78,10 +85,23 @@ describe('Courses are a public catalogue', () => {
       name: 'Stranger\'s Trial',
       date: '2026-05-01',
     }))
+    expect(res.status).toBe(403)
+  })
+
+  it('the course\'s group admin can open a trial, which inherits the course\'s group', async () => {
+    const owner = await makeUser('Owner')
+    const course = await buildCourse(owner.idToken)
+
+    mockAuth(owner.idToken)
+    const res = await createTrial(jsonReq('http://x/att/api/trials', 'POST', {
+      courseId: course.id,
+      name: 'Owner\'s Trial',
+      date: '2026-05-01',
+    }))
     expect(res.status).toBe(201)
     const trial = await res.json()
-    expect(trial.adminUserId).toBe(stranger.id)
-    expect(trial.courseId).toBe(course.id)
+    expect(trial.adminUserId).toBe(owner.id)
+    expect(trial.groupId).toBe(course.groupId)
   })
 })
 
@@ -127,6 +147,7 @@ describe('Course edits are owner-only', () => {
 
 async function buildPrivateCourse(ownerIdToken: string, name = 'Private Course') {
   mockAuth(ownerIdToken)
+  const group = await (await createGroup(jsonReq('http://x/att/api/groups', 'POST', { name: 'G' }))).json()
   const res = await createCourse(jsonReq('http://x/att/api/courses', 'POST', {
     name,
     sport: 'kayak',
@@ -134,6 +155,7 @@ async function buildPrivateCourse(ownerIdToken: string, name = 'Private Course')
     startLine: [[51.5, -0.9], [51.5, -0.89]],
     finishLine: [[51.55, -0.9], [51.55, -0.89]],
     distanceMetres: 5000,
+    groupId: group.id,
     visibility: 'private',
   }))
   return await res.json()
@@ -163,7 +185,7 @@ describe('a public course', () => {
     const owner = await makeUser('Owner')
     await buildCourse(owner.idToken, 'Listed')
     mockAuth(null)
-    const list = await (await listCourses()).json()
+    const list = await (await listCourses(new NextRequest('http://x/att/api/courses'))).json()
     expect(list.map((c: { name: string }) => c.name)).toContain('Listed')
   })
 })
@@ -203,7 +225,7 @@ describe('a private course', () => {
     const owner = await makeUser('Owner')
     await buildPrivateCourse(owner.idToken, 'Hidden')
     mockAuth(null)
-    const list = await (await listCourses()).json()
+    const list = await (await listCourses(new NextRequest('http://x/att/api/courses'))).json()
     expect(list.map((c: { name: string }) => c.name)).not.toContain('Hidden')
   })
 
@@ -212,7 +234,7 @@ describe('a private course', () => {
     const stranger = await makeUser('Stranger')
     await buildPrivateCourse(owner.idToken, 'Hidden')
     mockAuth(stranger.idToken)
-    const list = await (await listCourses()).json()
+    const list = await (await listCourses(new NextRequest('http://x/att/api/courses'))).json()
     expect(list.map((c: { name: string }) => c.name)).not.toContain('Hidden')
   })
 
@@ -220,7 +242,7 @@ describe('a private course', () => {
     const owner = await makeUser('Owner')
     await buildPrivateCourse(owner.idToken, 'Mine')
     mockAuth(owner.idToken)
-    const list = await (await listCourses()).json()
+    const list = await (await listCourses(new NextRequest('http://x/att/api/courses'))).json()
     expect(list.map((c: { name: string }) => c.name)).toContain('Mine')
   })
 })

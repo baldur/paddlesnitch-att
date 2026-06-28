@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getJson, listKeys } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { isListedForViewer, canManageTrial } from '@/lib/permissions'
-import { getUserGroupIds } from '@/lib/groups'
+import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import { getRecentSubmissions } from '@/lib/recent'
 import { getPublicProfileLinks } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
@@ -43,6 +43,10 @@ async function getOpenTrials(viewer: AuthUser | null) {
 export default async function Home() {
   const viewer = await getAuthUser()
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : new Set<string>()
+  // Groups the viewer can manage gate the create UI (phase 2). Empty for
+  // paddlers, who see a "create a group" on-ramp instead of create buttons.
+  const adminGroupIds = viewer ? await getUserAdminGroupIds(viewer.id) : new Set<string>()
+  const canOrganise = adminGroupIds.size > 0
   const [openTrials, recent] = await Promise.all([
     getOpenTrials(viewer),
     getRecentSubmissions(viewer, viewerGroupIds),
@@ -68,9 +72,15 @@ export default async function Home() {
         <Link href="/att/groups" className="tt-nav-link">
           GROUPS
         </Link>
-        <Link href="/att/admin/trials/new" className="tt-nav-link">
-          + NEW TRIAL
-        </Link>
+        {canOrganise ? (
+          <Link href="/att/admin/trials/new" className="tt-nav-link">
+            + NEW TRIAL
+          </Link>
+        ) : (
+          <Link href="/att/groups" className="tt-nav-link">
+            + NEW GROUP
+          </Link>
+        )}
       </AppHeader>
 
       <section className="border-b border-[#e2e8f0] px-4 py-12 text-center bg-[#f8fafc]">
@@ -93,11 +103,23 @@ export default async function Home() {
             </h2>
             {openTrials.length === 0 ? (
               <div className="border border-[#e2e8f0] p-8 text-center text-[#64748b] text-sm">
-                No open trials yet.{' '}
-                <Link href="/att/admin/trials/new" className="tt-link">
-                  Open a trial
-                </Link>{' '}
-                to get started.
+                {canOrganise ? (
+                  <>
+                    No open trials yet.{' '}
+                    <Link href="/att/admin/trials/new" className="tt-link">
+                      Open a trial
+                    </Link>{' '}
+                    to get started.
+                  </>
+                ) : (
+                  <>
+                    No open trials yet.{' '}
+                    <Link href="/att/groups" className="tt-link">
+                      Create a group
+                    </Link>{' '}
+                    to run your own.
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -129,7 +151,7 @@ export default async function Home() {
                         OPEN
                       </span>
                     </a>
-                    {canManageTrial(trial, viewer) && (
+                    {canManageTrial(trial, viewer, adminGroupIds) && (
                       <div className="border-t border-[#e2e8f0] px-4 py-2 flex justify-end">
                         <Link
                           href={`/att/admin/trials/${trial.id}`}

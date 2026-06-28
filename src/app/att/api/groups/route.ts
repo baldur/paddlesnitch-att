@@ -5,19 +5,25 @@ import {
   newGroup,
   putGroup,
   getUserGroupIds,
+  getUserAdminGroupIds,
   addUserToGroupIndex,
 } from '@/lib/groups'
 
-// GET /att/api/groups
-// Lists groups the viewer is in (owner / admin / member). Unauthenticated
-// requests get an empty list — groups are not publicly listable to keep
-// member lists private by default.
-export async function GET() {
+// GET /att/api/groups[?role=admin]
+// Lists groups the viewer is in (owner / admin / member). With `?role=admin`
+// it narrows to groups the viewer can MANAGE (owner/admin) — used by the
+// course form to populate its "which group owns this?" selector.
+// Unauthenticated requests get an empty list — groups are not publicly
+// listable to keep member lists private by default.
+export async function GET(req: NextRequest) {
   const viewer = await getAuthUser()
   if (!viewer) return NextResponse.json({ groups: [] })
-  const myGroupIds = await getUserGroupIds(viewer.id)
+  const { searchParams } = new URL(req.url)
+  const ids = searchParams.get('role') === 'admin'
+    ? await getUserAdminGroupIds(viewer.id)
+    : new Set(await getUserGroupIds(viewer.id))
   const all = await listAllGroups()
-  return NextResponse.json({ groups: all.filter(c => myGroupIds.includes(c.id)) })
+  return NextResponse.json({ groups: all.filter(c => ids.has(c.id)) })
 }
 
 // POST /att/api/groups  { name, description? }

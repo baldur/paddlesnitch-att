@@ -173,8 +173,10 @@ A named stretch of water with:
 - **Course type** — determines how the clock start/stop is detected (see below)
 - **Distance** — auto-calculated from start/finish midpoints (`point_to_point`) or entered manually for single-line types
 - **Sport** — `kayak` | `rowing` | `both`
-- Owned by the user who created it (the **course admin**)
-- **Visibility** — `public` | `private` (phase 1). Public courses appear in the catalogue and on detail pages for any visitor; private courses are owner-only. `club` visibility (scoped to a specific club's members) arrives in phase 4. Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
+- **`groupId`** — the owning **group** (phase 2). Management authority (edit / delete / open a trial on it) belongs to that group's owner + admins. `adminUserId` is retained as created-by (audit) but is no longer the manage authority. Set on every course created from phase 2 on; optional only to tolerate pre-migration data (where `adminUserId` is the fallback owner — see `canManageCourse`). Migrate legacy data with `scripts/migrate-courses-trials-to-groups.ts`.
+- **Visibility** — `public` | `private` | `group`. Public courses appear in the catalogue for any visitor; private courses are owner-only; `group` scopes visibility to the owning group's members (`visibleToGroupId === groupId`). Permission checks live in `src/lib/permissions.ts` — never re-implement inline.
+
+**Creation gating (phase 2).** Only a group's owner/admins can create courses (and open trials). A course must carry a `groupId` the creator manages (`canCreateCourseInGroup`); a paddler with no group is steered to a "create a group" on-ramp instead of a create form. The create UI is hidden for non-admins on the home + catalogue pages. See [`groups-and-creation-gating.md`](docs/features/groups-and-creation-gating.md).
 
 #### Geometry lock (course with entries)
 
@@ -215,7 +217,7 @@ Organisers can pre-validate a gate course with a **reference trace**: `Reference
 **Reverse-role fallback (point_to_point only)**: if the forward start→finish search finds nothing — e.g. the athlete crossed the finish line first and never re-crossed it after the start, so the run effectively went finish→start — `processTrace` retries once with the start/finish lines swapped before yielding null. Forward is always preferred (the fallback only fires when the normal pass found nothing), so a properly-directed run is never affected. Guarded by the internal `tryReverse` param to run at most once. See issue #66.
 
 ### Time Trial
-An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`.
+An event on a Course with a date. A course can host many time trials. Has a status: `open` | `closed`. Carries a **`groupId`** inherited from its course (phase 2) — a trial belongs to the same group that owns its course, and only that group's owner/admins can open or manage it. Visibility clamps to the course's scope as before.
 
 ### Entry
 A participant's submission for a specific time trial, consisting of:
@@ -674,8 +676,8 @@ Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`
 |---|---|---|---|---|
 | View | Anyone | Owner only | — | Owner + invitees |
 | Listed in catalogue / home | Yes, for everyone | Yes, but only for the owner | — | — |
-| Edit / delete course or trial | Owner only | Owner only | — | — |
-| Create a trial on it | Any signed-in user | Owner only | — | — |
+| Edit / delete course or trial | Owning group's owner/admins | Owning group's owner/admins | — | — |
+| Create a trial on it | Owning group's owner/admins (phase 2) | Owning group's owner/admins | — | — |
 | Submit a trace | Any viewer (on an open trial) | Owner only | Any viewer | Owner + invitees |
 | Invite / uninvite | — | — | — | Owner only |
 | View leaderboard | Anyone | Owner only | — | Owner + invitees |
@@ -684,7 +686,7 @@ A private invitational trial is visible to its invitees so they can see the lead
 
 Enforced in three layers:
 1. `src/proxy.ts` — rejects unauthenticated **mutations** at the edge (cookie check only). GETs always pass through; gating happens deeper.
-2. `src/lib/permissions.ts` — single source of truth for `canViewCourse`, `canViewTrial`, `canManageCourse`, `canManageTrial`, `canSubmitToTrial`, `isListedForViewer`. All API routes + server pages call into these. **Never re-implement these checks inline.**
+2. `src/lib/permissions.ts` — single source of truth for `canViewCourse`, `canViewTrial`, `canManageCourse`, `canManageTrial`, `canCreateCourseInGroup`, `canSubmitToTrial`, `isListedForViewer`. All API routes + server pages call into these. **Never re-implement these checks inline.** `canManageCourse`/`canManageTrial` take the viewer's manageable-group set (owner/admin only) — fetch it once per request with `getUserAdminGroupIds(userId)` and pass it down (a resource with no `groupId` falls back to its `adminUserId` for the pre-migration window).
 3. API route handlers + Server Components — call `getAuthUser()`, then a permissions helper. Private resources return **404 (not 403)** to non-owners so existence isn't leaked; invitational trials likewise return 404 (not 403) to non-invitees on upload so the guest list isn't leaked.
 
 Story-style permission tests at `src/lib/permissions.test.ts`, `src/tests/courses.test.ts`, `src/tests/trial-visibility.test.ts`, and `src/tests/invitations.test.ts` are the regression net. Test titles mirror the matrix rows; any new permission check gets a paired story.

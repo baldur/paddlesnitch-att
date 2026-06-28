@@ -79,11 +79,14 @@ export async function createCourseViaApi(
   opts: {
     name?: string
     visibility?: 'public' | 'private' | 'group'
-    visibleToGroupId?: string
+    // The owning group (phase 2). Defaults to a fresh group owned by the
+    // current user, so the caller is automatically a group admin.
+    groupId?: string
     sport?: 'kayak' | 'rowing' | 'both'
   } = {},
 ): Promise<{ id: string; name: string }> {
   const name = opts.name ?? `E2E Course ${randomUUID().slice(0, 6)}`
+  const groupId = opts.groupId ?? (await createGroupViaApi(page)).id
   const res = await page.request.post('/att/api/courses', {
     data: {
       name,
@@ -92,8 +95,8 @@ export async function createCourseViaApi(
       startLine: COURSE_START_LINE,
       finishLine: COURSE_FINISH_LINE,
       distanceMetres: 5560,
+      groupId,
       visibility: opts.visibility ?? 'public',
-      ...(opts.visibleToGroupId ? { visibleToGroupId: opts.visibleToGroupId } : {}),
     },
   })
   expect(res.status(), 'createCourseViaApi expects 201').toBe(201)

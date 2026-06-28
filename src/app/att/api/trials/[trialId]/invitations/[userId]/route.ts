@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canManageTrial } from '@/lib/permissions'
+import { getUserAdminGroupIds } from '@/lib/groups'
 import type { TrialMetadata } from '@/lib/types'
 
 type Params = { params: Promise<{ trialId: string; userId: string }> }
@@ -17,7 +18,7 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   const { trialId, userId } = await params
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!canManageTrial(trial, user)) {
+  if (!canManageTrial(trial, user, await getUserAdminGroupIds(user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

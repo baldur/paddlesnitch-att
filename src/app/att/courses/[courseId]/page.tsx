@@ -4,8 +4,8 @@ import { getJson, listKeys } from '@/lib/storage'
 import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
-import { canViewCourse, isListedForViewer } from '@/lib/permissions'
-import { getUserGroupIds } from '@/lib/groups'
+import { canViewCourse, canManageCourse, isListedForViewer } from '@/lib/permissions'
+import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +41,10 @@ export default async function CourseDetailPage({
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const isOwner = user?.id === course.adminUserId
+  // Manage (edit course / open trials on it) belongs to the owning group's
+  // admins (phase 2), not just the original creator.
+  const adminGroupIds = user ? await getUserAdminGroupIds(user.id) : undefined
+  const canManage = canManageCourse(course, user, adminGroupIds)
 
   return (
     <main className="flex-1 flex flex-col">
@@ -56,7 +59,7 @@ export default async function CourseDetailPage({
           </>
         }
       >
-        {isOwner && (
+        {canManage && (
           <Link href={`/att/admin/courses/${course.id}`} className="tt-nav-link">
             EDIT
           </Link>
@@ -80,7 +83,7 @@ export default async function CourseDetailPage({
             <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase">
               Time Trials
             </h2>
-            {user && (
+            {canManage && (
               <Link
                 href={`/att/admin/trials/new?courseId=${course.id}`}
                 className="text-xs tt-link tracking-widest"
@@ -92,7 +95,7 @@ export default async function CourseDetailPage({
           {sortedTrials.length === 0 ? (
             <div className="border border-[#e2e8f0] p-6 text-center text-[#64748b] text-sm">
               No trials on this course yet.
-              {user && (
+              {canManage && (
                 <>
                   {' '}
                   <Link href={`/att/admin/trials/new?courseId=${course.id}`} className="tt-link">

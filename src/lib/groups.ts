@@ -78,6 +78,22 @@ export async function removeUserFromGroupIndex(userId: string, groupId: string):
   await putJson(userGroupsKey(userId), { groupIds: current.filter(id => id !== groupId) })
 }
 
+// The set of groups `userId` can MANAGE (owner or admin) — the authority that
+// gates course/trial creation + management. Walks the per-user reverse index
+// (cheap; groups are few) and keeps only the owner/admin ones. Pass the result
+// to canManageCourse / canManageTrial at the request boundary.
+export async function getUserAdminGroupIds(userId: string): Promise<Set<string>> {
+  const ids = await getUserGroupIds(userId)
+  const groups = await Promise.all(ids.map(id => getGroup(id)))
+  const manageable = new Set<string>()
+  for (const group of groups) {
+    if (!group) continue
+    const role = groupRoleOf(group, userId)
+    if (role === 'owner' || role === 'admin') manageable.add(group.id)
+  }
+  return manageable
+}
+
 // Whether `userId` is the owner, an admin, or a member of `group`. Cheap
 // because the membership lists are inline on the metadata.
 export function groupRoleOf(group: GroupMetadata, userId: string): 'owner' | 'admin' | 'member' | null {
