@@ -13,6 +13,12 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
+  # Manual "pick this up now" kick: apply the `claude-go` label to jump the
+  # daily-cron queue on an urgent item.
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
 
 # Serialise runs per issue/PR so a fast-loop response and the next cron tick
 # can't both drive the same item at once and produce conflicting commits.
@@ -23,16 +29,29 @@ concurrency:
 jobs:
   respond:
     runs-on: ubuntu-latest
-    # Two guards, both required:
-    #  1. Never react to Claude's own (or other bots') output -> loop protection.
-    #  2. Only run on items already labelled claude-active.
-    # `issue_comment` covers PR conversation comments too (PRs are issues
-    # underneath), and labels live on github.event.issue.labels in that case.
+    # Loop protection first: never react to a bot's own output. Then two entry
+    # paths, deliberately split by event so the cron stamping `claude-active`
+    # can NOT trigger this:
+    #   - label events (issues/pull_request): fire ONLY when the label just
+    #     added is `claude-go` (a human kick). A `claude-active` label add does
+    #     not match, so the cron's own labelling never starts a run.
+    #   - comment/review events: fire only on items already carrying
+    #     `claude-active`. (PRs are issues underneath, so the labels live on
+    #     github.event.issue.labels for issue_comment.)
     if: >
       github.actor != 'claude[bot]' &&
       github.actor != 'github-actions[bot]' &&
-      (contains(github.event.issue.labels.*.name, 'claude-active') ||
-       contains(github.event.pull_request.labels.*.name, 'claude-active'))
+      (
+        (
+          (github.event_name == 'issues' || github.event_name == 'pull_request') &&
+          github.event.label.name == 'claude-go'
+        ) ||
+        (
+          github.event_name != 'issues' && github.event_name != 'pull_request' &&
+          (contains(github.event.issue.labels.*.name, 'claude-active') ||
+           contains(github.event.pull_request.labels.*.name, 'claude-active'))
+        )
+      )
     permissions:
       contents: write
       pull-requests: write
@@ -58,9 +77,18 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            You are continuing work on a claimed issue/PR (label: claude-active)
-            for the ATT / paddlesnitch repo. A human has just left the latest
-            comment or review — read it and act to move the item toward closing.
+            You are working an issue/PR for the ATT / paddlesnitch repo. You were
+            triggered one of two ways:
+              - a human left the latest comment/review on a claimed
+                (claude-active) item — read it and act; OR
+              - a human just applied the `claude-go` label to ask you to pick the
+                item up right away — read the whole issue/PR from scratch and
+                start working it toward resolution.
+            In the `claude-go` case, once you've engaged (posted your comment /
+            opened a PR), also run, as your LAST step:
+              gh issue edit <n> --add-label claude-active --remove-label claude-go
+            (or `gh pr edit <n> ...`) so future comments enter the normal fast
+            loop and the kick label is cleared.
             Node, pnpm, and dependencies are already installed, so you can run
             `pnpm test` / `pnpm build` directly.
 
