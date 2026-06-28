@@ -7,6 +7,8 @@ import {
   canCreateCourseInGroup,
   canSubmitToTrial,
   canManageGroup,
+  canManageGroupMembers,
+  canRequestToJoin,
   canDeleteGroup,
   canViewGroup,
   isListedForViewer,
@@ -400,6 +402,34 @@ describe('managing a group', () => {
 
   it('an unauthenticated visitor cannot view a group', () => {
     expect(canViewGroup(makeGroup(), null)).toBe(false)
+  })
+})
+
+describe('self-serve join permissions (phase 4)', () => {
+  const member: AuthUser = { id: 'member-1', email: 'm@x', displayName: 'M' }
+  const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
+
+  it('owner + admins can manage members; plain members + strangers cannot', () => {
+    expect(canManageGroupMembers(makeGroup(), owner)).toBe(true)
+    expect(canManageGroupMembers(makeGroup(), admin)).toBe(true)
+    expect(canManageGroupMembers(makeGroup(), member)).toBe(false)
+    expect(canManageGroupMembers(makeGroup(), other)).toBe(false)
+  })
+
+  it('a signed-in non-member can request to join a request-policy group', () => {
+    expect(canRequestToJoin({ ...makeGroup(), joinPolicy: 'request' }, other)).toBe(true)
+    // Missing joinPolicy defaults to request.
+    expect(canRequestToJoin(makeGroup(), other)).toBe(true)
+  })
+
+  it('nobody can self-serve into an invite-only group', () => {
+    expect(canRequestToJoin({ ...makeGroup(), joinPolicy: 'invite_only' }, other)).toBe(false)
+  })
+
+  it('existing members + an unauthenticated visitor cannot request to join', () => {
+    expect(canRequestToJoin(makeGroup(), member)).toBe(false)
+    expect(canRequestToJoin(makeGroup(), owner)).toBe(false)
+    expect(canRequestToJoin(makeGroup(), null)).toBe(false)
   })
 })
 

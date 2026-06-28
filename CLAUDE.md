@@ -600,6 +600,22 @@ Two paths:
 
 Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/att/auth?next=/att/clubs/{id}` so the recipient lands on the club after signup; resolved invitations link straight to the club page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
 
+### Joining a group — self-serve (phase 4)
+
+Beyond admin invitations, a non-member can join via the group's **`joinPolicy`** (on `GroupMetadata`; missing is treated as `request`, the default for new groups):
+
+- **`invite_only`** — no self-serve; only an admin invitation works.
+- **`request`** — anyone signed-in can request; an admin approves/declines. A pending request is stored at `groups/{groupId}/join-requests/{id}.json` (`JoinRequest`).
+- **`open`** — anyone signed-in joins instantly (no pending record persists).
+
+A group can also carry a **`joinLinkToken`**: anyone signed-in who hits `POST …/join-requests` with a matching token joins **instantly regardless of policy** (the shareable join link is `/att/groups/{id}?join={token}`). Rotate/revoke via PATCH.
+
+Helpers live in `src/lib/groups.ts` (`joinPolicyOf`, `withMember`, join-request CRUD, `findPendingJoinRequest`). Permission checks: `canRequestToJoin` (signed-in non-member, policy ≠ invite_only) and `canManageGroupMembers` (owner/admin) in `src/lib/permissions.ts`.
+
+**Group visibility change for join:** `GET /att/api/groups/[id]` now returns a **limited projection** (name, description, `joinPolicy`, `memberCount`, `viewerStatus`) to non-members instead of 404 — enough to render a join CTA without exposing the member list. Members still get the full payload (+ `viewerStatus`). Groups remain non-enumerable (the catalogue lists only your own), so this is "discoverable by link", not browsable. The upload page's phase-3 "join {group} to submit" CTA links here, closing the loop.
+
+Routes: `POST /att/api/groups/[id]/join-requests` (request/auto-join/by-link), `GET` (admin: pending list, names resolved), `POST …/join-requests/[reqId]/approve` + `…/decline` (admin). `joinPolicy` + join-link are set via `PATCH /att/api/groups/[id]`.
+
 ### Club-scoped visibility on courses + trials
 
 `Visibility` is now `'public' | 'private' | 'club'`. When `visibility === 'club'`, the resource carries a `visibleToClubId` and is visible to that club's members + admins + owner (plus the resource's own admin). The server validates that the editor is an owner / admin of the target club before applying — plain members get silently downgraded to `private` rather than 403'd, so a random member can't broadcast their content to the whole club.

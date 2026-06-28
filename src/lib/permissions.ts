@@ -156,3 +156,24 @@ export function canViewGroup(group: GroupMetadata, viewer: AuthUser | null): boo
     group.memberUserIds.includes(viewer.id)
   )
 }
+
+// Managing membership (approve/decline join requests, kick, invite) is the
+// owner/admin authority — same set as canManageGroup, named for the matrix.
+export function canManageGroupMembers(group: GroupMetadata, viewer: AuthUser | null): boolean {
+  return canManageGroup(group, viewer)
+}
+
+// Whether `viewer` may self-serve request to join (phase 4): signed in, not
+// already in the group, and the group isn't invite-only. (joinPolicy missing
+// is treated as 'request' — the default.)
+export function canRequestToJoin(group: GroupMetadata, viewer: AuthUser | null): boolean {
+  if (!viewer) return false
+  if (
+    viewer.id === group.ownerId ||
+    group.adminUserIds.includes(viewer.id) ||
+    group.memberUserIds.includes(viewer.id)
+  ) {
+    return false
+  }
+  return (group.joinPolicy ?? 'request') !== 'invite_only'
+}

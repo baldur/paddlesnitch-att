@@ -240,6 +240,29 @@ export type GroupMetadata = {
   adminUserIds: string[]
   memberUserIds: string[]
   createdAt: string
+  // How a non-member can join (phase 4). Missing is treated as 'request':
+  //   invite_only — only via an admin invitation (no self-serve)
+  //   request     — anyone can request; an admin approves (default)
+  //   open        — anyone can join instantly, no approval
+  joinPolicy?: JoinPolicy
+  // Optional shareable join link. Anyone signed in who hits the group with a
+  // matching token joins instantly, regardless of joinPolicy. Rotate/clear to
+  // revoke. Absent = no active link.
+  joinLinkToken?: string
+}
+
+export type JoinPolicy = 'invite_only' | 'request' | 'open'
+
+// A self-serve request to join a group (phase 4). Stored at
+// groups/{groupId}/join-requests/{id}.json. Auto-accepted instantly when the
+// group's joinPolicy is 'open' (so a pending record never persists in that
+// case); otherwise it sits 'pending' until an admin approves or declines.
+export type JoinRequest = {
+  id: string
+  groupId: string
+  userId: string                // Cognito sub of the requester
+  requestedAt: string           // ISO 8601
+  status: 'pending' | 'accepted' | 'declined'
 }
 
 // Stored at groups/{groupId}/invitations/{invitationId}.json (resolved invites

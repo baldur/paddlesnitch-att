@@ -17,7 +17,7 @@
 import { createHash } from 'crypto'
 import { nanoid } from 'nanoid'
 import { getJson, putJson, deleteObject, listKeys } from './storage'
-import type { GroupMetadata, GroupInvitation } from './types'
+import type { GroupMetadata, GroupInvitation, JoinRequest, JoinPolicy } from './types'
 
 export function groupMetaKey(groupId: string): string {
   return `groups/${groupId}/metadata.json`
@@ -46,8 +46,11 @@ export async function deleteGroup(groupId: string): Promise<void> {
   // reverse-index entries are cleaned up by the caller — they need to know
   // which subs to update.
   await deleteObject(groupMetaKey(groupId))
-  const inviteKeys = await listKeys(`groups/${groupId}/invitations/`)
-  await Promise.all(inviteKeys.map(k => deleteObject(k)))
+  const subKeys = [
+    ...(await listKeys(`groups/${groupId}/invitations/`)),
+    ...(await listKeys(`groups/${groupId}/join-requests/`)),
+  ]
+  await Promise.all(subKeys.map(k => deleteObject(k)))
 }
 
 export async function listAllGroups(): Promise<GroupMetadata[]> {
@@ -127,6 +130,60 @@ export async function listGroupInvitations(groupId: string): Promise<GroupInvita
   return invites.filter((i): i is GroupInvitation => i !== null)
 }
 
+// ---------------- Join policy + membership ----------------
+
+// A group's effective join policy. Missing (pre-phase-4 groups) is treated as
+// 'request' — the new default. Self-serve checks go through here so the default
+// lives in one place.
+export function joinPolicyOf(group: GroupMetadata): JoinPolicy {
+  return group.joinPolicy ?? 'request'
+}
+
+// Pure: returns `group` with `userId` added as a plain member, unless they're
+// already the owner / an admin / a member. Callers persist with putGroup +
+// addUserToGroupIndex (mirrors the accept-invite flow).
+export function withMember(group: GroupMetadata, userId: string): GroupMetadata {
+  if (group.ownerId === userId || group.adminUserIds.includes(userId) || group.memberUserIds.includes(userId)) {
+    return group
+  }
+  return { ...group, memberUserIds: [...group.memberUserIds, userId] }
+}
+
+// ---------------- Join requests (self-serve) ----------------
+
+function joinRequestKey(groupId: string, id: string): string {
+  return `groups/${groupId}/join-requests/${id}.json`
+}
+
+export async function getJoinRequest(groupId: string, id: string): Promise<JoinRequest | null> {
+  return getJson<JoinRequest>(joinRequestKey(groupId, id))
+}
+
+export async function putJoinRequest(request: JoinRequest): Promise<void> {
+  await putJson(joinRequestKey(request.groupId, request.id), request)
+}
+
+export async function deleteJoinRequest(groupId: string, id: string): Promise<void> {
+  await deleteObject(joinRequestKey(groupId, id))
+}
+
+export async function listJoinRequests(groupId: string): Promise<JoinRequest[]> {
+  const keys = await listKeys(`groups/${groupId}/join-requests/`)
+  const reqs = await Promise.all(keys.map(k => getJson<JoinRequest>(k)))
+  return reqs.filter((r): r is JoinRequest => r !== null)
+}
+
+// The pending join request for `userId` on `groupId`, if any (a user has at
+// most one). Used to surface "you've already requested" and to avoid dupes.
+export async function findPendingJoinRequest(groupId: string, userId: string): Promise<JoinRequest | null> {
+  const all = await listJoinRequests(groupId)
+  return all.find(r => r.userId === userId && r.status === 'pending') ?? null
+}
+
+export function newJoinRequest(groupId: string, userId: string): JoinRequest {
+  return { id: nanoid(), groupId, userId, requestedAt: new Date().toISOString(), status: 'pending' }
+}
+
 // ---------------- Pending email invitations (pre-signup) ----------------
 
 function pendingKey(email: string, invitationId: string): string {
@@ -168,6 +225,7 @@ export function newGroup(input: {
     adminUserIds: [],
     memberUserIds: [],
     createdAt: new Date().toISOString(),
+    joinPolicy: 'request',
   }
 }
 
