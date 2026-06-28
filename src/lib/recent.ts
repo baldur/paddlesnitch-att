@@ -1,6 +1,6 @@
 // Recent submissions feed for the home page. Same privacy rule as everywhere
 // else: a submission is only included if the viewer can see its trial
-// (canViewTrial), so private/club results never surface to people who couldn't
+// (canViewTrial), so private/group results never surface to people who couldn't
 // already see them on the trial's leaderboard.
 //
 // This scans every entry's result.json on each call. Fine at current scale
@@ -35,7 +35,7 @@ type StoredEntry = {
 
 export async function getRecentSubmissions(
   viewer: AuthUser | null,
-  viewerClubIds: Set<string>,
+  viewerGroupIds: Set<string>,
   limit = 8,
 ): Promise<RecentSubmission[]> {
   const keys = (await listKeys('trials/'))
@@ -59,7 +59,7 @@ export async function getRecentSubmissions(
     const trialId = key.split('/')[1] // trials/{trialId}/entries/...
     const trial = await getTrial(trialId)
     if (!trial) continue
-    if (!canViewTrial(trial, viewer, viewerClubIds)) continue
+    if (!canViewTrial(trial, viewer, viewerGroupIds)) continue
     const course = await getCourse(trial.courseId)
     if (!course) continue
 

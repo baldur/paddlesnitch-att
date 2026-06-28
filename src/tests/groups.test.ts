@@ -5,11 +5,11 @@ import { makeDataDir, cleanDataDir, makeUser, makeCourse } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 
-import { GET as listClubs, POST as createClub } from '@/app/att/api/clubs/route'
-import { GET as getClubRoute, PATCH as patchClub, DELETE as deleteClubRoute } from '@/app/att/api/clubs/[clubId]/route'
-import { POST as inviteToClub, GET as listInvites } from '@/app/att/api/clubs/[clubId]/invitations/route'
-import { POST as acceptInvite } from '@/app/att/api/clubs/[clubId]/invitations/[invitationId]/accept/route'
-import { DELETE as kickMember } from '@/app/att/api/clubs/[clubId]/members/[userId]/route'
+import { GET as listGroups, POST as createGroup } from '@/app/att/api/groups/route'
+import { GET as getGroupRoute, PATCH as patchGroup, DELETE as deleteGroupRoute } from '@/app/att/api/groups/[groupId]/route'
+import { POST as inviteToGroup, GET as listInvites } from '@/app/att/api/groups/[groupId]/invitations/route'
+import { POST as acceptInvite } from '@/app/att/api/groups/[groupId]/invitations/[invitationId]/accept/route'
+import { DELETE as kickMember } from '@/app/att/api/groups/[groupId]/members/[userId]/route'
 import { GET as getCourse } from '@/app/att/api/courses/[courseId]/route'
 import { PATCH as patchCourse } from '@/app/att/api/courses/[courseId]/route'
 import { cookies } from 'next/headers'
@@ -32,61 +32,61 @@ function jsonReq(method: string, body?: unknown) {
   })
 }
 
-// Story-style permission tests for phase 4 clubs.
-// docs/features/visibility-clubs-tos.md.
+// Story-style permission tests for phase 4 groups.
+// docs/features/visibility-groups-tos.md.
 
-describe('creating a club', () => {
+describe('creating a group', () => {
   it('any signed-in user can create one and becomes the owner', async () => {
     const founder = await makeUser('Founder')
     mockAuth(founder.idToken)
-    const res = await createClub(jsonReq('POST', { name: 'Founder Club' }))
+    const res = await createGroup(jsonReq('POST', { name: 'Founder Group' }))
     expect(res.status).toBe(201)
-    const club = await res.json()
-    expect(club.ownerId).toBe(founder.id)
-    expect(club.name).toBe('Founder Club')
+    const group = await res.json()
+    expect(group.ownerId).toBe(founder.id)
+    expect(group.name).toBe('Founder Group')
   })
 
   it('an unauthenticated request gets 401', async () => {
     mockAuth(null)
-    const res = await createClub(jsonReq('POST', { name: 'X' }))
+    const res = await createGroup(jsonReq('POST', { name: 'X' }))
     expect(res.status).toBe(401)
   })
 
   it('an empty name is rejected', async () => {
     const u = await makeUser('U')
     mockAuth(u.idToken)
-    const res = await createClub(jsonReq('POST', { name: '   ' }))
+    const res = await createGroup(jsonReq('POST', { name: '   ' }))
     expect(res.status).toBe(400)
   })
 
-  it('appears in the creator\'s own /att/api/clubs list', async () => {
+  it('appears in the creator\'s own /att/api/groups list', async () => {
     const u = await makeUser('U')
     mockAuth(u.idToken)
-    await createClub(jsonReq('POST', { name: 'Mine' }))
+    await createGroup(jsonReq('POST', { name: 'Mine' }))
     mockAuth(u.idToken)
-    const list = await (await listClubs()).json()
-    expect(list.clubs.map((c: { name: string }) => c.name)).toContain('Mine')
+    const list = await (await listGroups()).json()
+    expect(list.groups.map((c: { name: string }) => c.name)).toContain('Mine')
   })
 
   it('does NOT appear in a stranger\'s list', async () => {
     const u = await makeUser('U')
     const stranger = await makeUser('Stranger')
     mockAuth(u.idToken)
-    await createClub(jsonReq('POST', { name: 'Hidden' }))
+    await createGroup(jsonReq('POST', { name: 'Hidden' }))
     mockAuth(stranger.idToken)
-    const list = await (await listClubs()).json()
-    expect(list.clubs.map((c: { name: string }) => c.name)).not.toContain('Hidden')
+    const list = await (await listGroups()).json()
+    expect(list.groups.map((c: { name: string }) => c.name)).not.toContain('Hidden')
   })
 })
 
-describe('viewing a club', () => {
+describe('viewing a group', () => {
   it('a member can view the full payload', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(owner.idToken)
-    const res = await getClubRoute(new NextRequest('http://x'),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(200)
   })
 
@@ -94,20 +94,20 @@ describe('viewing a club', () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(stranger.idToken)
-    const res = await getClubRoute(new NextRequest('http://x'),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(404)
   })
 
   it('an unauthenticated visitor gets 404', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(null)
-    const res = await getClubRoute(new NextRequest('http://x'),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(404)
   })
 })
@@ -117,24 +117,24 @@ describe('inviting and joining', () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(owner.idToken)
-    const inviteRes = await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const inviteRes = await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(inviteRes.status).toBe(201)
     const { invitation, resolved } = await inviteRes.json()
     expect(resolved).toBe(true)
 
     mockAuth(guest.idToken)
     const acceptRes = await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: invitation.id }) })
     expect(acceptRes.status).toBe(200)
 
-    // Guest can now view the club.
+    // Guest can now view the group.
     mockAuth(guest.idToken)
-    const view = await getClubRoute(new NextRequest('http://x'),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const view = await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(view.status).toBe(200)
     const data = await view.json()
     expect(data.memberUserIds).toContain(guest.id)
@@ -143,12 +143,12 @@ describe('inviting and joining', () => {
   it('an unknown email is queued as a pending invitation (not 422)', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(owner.idToken)
-    const res = await inviteToClub(
+    const res = await inviteToGroup(
       jsonReq('POST', { email: `pending-${Date.now()}@example.com` }),
-      { params: Promise.resolve({ clubId: club.id }) }
+      { params: Promise.resolve({ groupId: group.id }) }
     )
     expect(res.status).toBe(201)
     const { resolved } = await res.json()
@@ -159,11 +159,11 @@ describe('inviting and joining', () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(stranger.idToken)
-    const res = await inviteToClub(jsonReq('POST', { email: 'x@example.com' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await inviteToGroup(jsonReq('POST', { email: 'x@example.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect([403, 404]).toContain(res.status)
   })
 
@@ -172,44 +172,44 @@ describe('inviting and joining', () => {
     const guest = await makeUser('Guest')
     const stranger = await makeUser('Stranger')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(owner.idToken)
-    const inv = await (await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })).json()
+    const inv = await (await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
 
     mockAuth(stranger.idToken)
     const stranged = await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: inv.invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
     expect(stranged.status).toBe(404)
   })
 })
 
-describe('club-scoped visibility', () => {
-  it('a club member can view a course scoped to their club', async () => {
+describe('group-scoped visibility', () => {
+  it('a group member can view a course scoped to their group', async () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     // Invite + accept to seed membership.
     mockAuth(owner.idToken)
-    const inv = await (await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })).json()
+    const inv = await (await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
     mockAuth(guest.idToken)
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: inv.invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
-    // Owner creates a private course, then flips it to club-scope.
+    // Owner creates a private course, then flips it to group-scope.
     const course = await makeCourse(owner.id, { visibility: 'private' })
     mockAuth(owner.idToken)
     const flipped = await patchCourse(
-      jsonReq('PATCH', { visibility: 'club', visibleToClubId: club.id }),
+      jsonReq('PATCH', { visibility: 'group', visibleToGroupId: group.id }),
       { params: Promise.resolve({ courseId: course.id }) }
     )
     expect(flipped.status).toBe(200)
     const got = await flipped.json()
-    expect(got.visibility).toBe('club')
-    expect(got.visibleToClubId).toBe(club.id)
+    expect(got.visibility).toBe('group')
+    expect(got.visibleToGroupId).toBe(group.id)
 
     // Guest is a member → can see it.
     mockAuth(guest.idToken)
@@ -225,24 +225,24 @@ describe('club-scoped visibility', () => {
     expect(strangerView.status).toBe(404)
   })
 
-  it('a plain member cannot scope a course to the club (only owner/admin can)', async () => {
+  it('a plain member cannot scope a course to the group (only owner/admin can)', async () => {
     const owner = await makeUser('Owner')
     const member = await makeUser('Member')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(owner.idToken)
-    const inv = await (await inviteToClub(
+    const inv = await (await inviteToGroup(
       jsonReq('POST', { email: member.email, role: 'member' }),
-      { params: Promise.resolve({ clubId: club.id }) })).json()
+      { params: Promise.resolve({ groupId: group.id }) })).json()
     mockAuth(member.idToken)
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: inv.invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
-    // The member creates their own course and tries to scope it to the club.
+    // The member creates their own course and tries to scope it to the group.
     const memberCourse = await makeCourse(member.id, { visibility: 'private' })
     mockAuth(member.idToken)
     const flipped = await patchCourse(
-      jsonReq('PATCH', { visibility: 'club', visibleToClubId: club.id }),
+      jsonReq('PATCH', { visibility: 'group', visibleToGroupId: group.id }),
       { params: Promise.resolve({ courseId: memberCourse.id }) }
     )
     // Should fall back to private — the route doesn't 403, it just refuses
@@ -258,66 +258,66 @@ describe('membership lifecycle', () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(owner.idToken)
-    const inv = await (await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })).json()
+    const inv = await (await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
     mockAuth(guest.idToken)
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: inv.invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
     mockAuth(owner.idToken)
     const res = await kickMember(new NextRequest('http://x', { method: 'DELETE' }),
-      { params: Promise.resolve({ clubId: club.id, userId: guest.id }) })
+      { params: Promise.resolve({ groupId: group.id, userId: guest.id }) })
     expect(res.status).toBe(200)
     const updated = await res.json()
-    expect(updated.club.memberUserIds).not.toContain(guest.id)
+    expect(updated.group.memberUserIds).not.toContain(guest.id)
   })
 
   it('a member can leave themselves', async () => {
     const owner = await makeUser('Owner')
     const guest = await makeUser('Guest')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(owner.idToken)
-    const inv = await (await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })).json()
+    const inv = await (await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
     mockAuth(guest.idToken)
     await acceptInvite(new NextRequest('http://x', { method: 'POST' }),
-      { params: Promise.resolve({ clubId: club.id, invitationId: inv.invitation.id }) })
+      { params: Promise.resolve({ groupId: group.id, invitationId: inv.invitation.id }) })
 
     mockAuth(guest.idToken)
     const res = await kickMember(new NextRequest('http://x', { method: 'DELETE' }),
-      { params: Promise.resolve({ clubId: club.id, userId: guest.id }) })
+      { params: Promise.resolve({ groupId: group.id, userId: guest.id }) })
     expect(res.status).toBe(200)
   })
 
-  it('the owner cannot be kicked from their own club', async () => {
+  it('the owner cannot be kicked from their own group', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(owner.idToken)
     const res = await kickMember(new NextRequest('http://x', { method: 'DELETE' }),
-      { params: Promise.resolve({ clubId: club.id, userId: owner.id }) })
+      { params: Promise.resolve({ groupId: group.id, userId: owner.id }) })
     expect(res.status).toBe(400)
   })
 })
 
-describe('deleting a club', () => {
+describe('deleting a group', () => {
   it('the owner can delete', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(owner.idToken)
-    const res = await deleteClubRoute(new NextRequest('http://x', { method: 'DELETE' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await deleteGroupRoute(new NextRequest('http://x', { method: 'DELETE' }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(200)
 
     mockAuth(owner.idToken)
-    const view = await getClubRoute(new NextRequest('http://x'),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const view = await getGroupRoute(new NextRequest('http://x'),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(view.status).toBe(404)
   })
 
@@ -325,11 +325,11 @@ describe('deleting a club', () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'C' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
 
     mockAuth(stranger.idToken)
-    const res = await deleteClubRoute(new NextRequest('http://x', { method: 'DELETE' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await deleteGroupRoute(new NextRequest('http://x', { method: 'DELETE' }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect([403, 404]).toContain(res.status)
   })
 })

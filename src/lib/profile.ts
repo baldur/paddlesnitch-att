@@ -2,7 +2,7 @@
 // race results across every trial into vanity stats. Two hard rules:
 //   1. Opt-in: a profile is private (owner-only) until the user makes it public.
 //   2. A profile NEVER reveals a result the viewer couldn't already see — every
-//      entry is filtered through canViewTrial, so a private/club result stays
+//      entry is filtered through canViewTrial, so a private/group result stays
 //      hidden exactly as it is on the trial's own leaderboard.
 //
 // Profiles are keyed by userId (/att/u/{userId}); a user may also claim a vanity
@@ -43,7 +43,7 @@ export async function setProfilePublic(userId: string, isPublic: boolean): Promi
 
 // Handles can't shadow sibling routes or look like system paths. Lowercase.
 export const RESERVED_HANDLES = new Set([
-  'account', 'admin', 'api', 'auth', 'new', 'me', 'u', 'clubs', 'club',
+  'account', 'admin', 'api', 'auth', 'new', 'me', 'u', 'groups', 'group',
   'trials', 'trial', 'courses', 'course', 'login', 'logout', 'signin',
   'signup', 'settings', 'help', 'about', 'privacy', 'terms', 'tos',
   'leaderboard', 'upload', 'paddlesnitch', 'support', 'root', 'null',
@@ -168,12 +168,12 @@ type StoredEntry = {
 }
 
 // Aggregate the profile for `userId` as seen by `viewer`. Only entries on trials
-// the viewer can see are counted. Caller resolves viewerClubIds once at the
+// the viewer can see are counted. Caller resolves viewerGroupIds once at the
 // request boundary (as elsewhere in the codebase).
 export async function buildProfileStats(
   userId: string,
   viewer: AuthUser | null,
-  viewerClubIds: Set<string>,
+  viewerGroupIds: Set<string>,
 ): Promise<ProfileStats> {
   // The entry path embeds the userId, so we target the listing directly.
   const entryKeys = (await listKeys('trials/'))
@@ -202,7 +202,7 @@ export async function buildProfileStats(
     const trial = await getTrial(trialId)
     if (!trial) continue
     // The whole point of the privacy guarantee: skip trials the viewer can't see.
-    if (!canViewTrial(trial, viewer, viewerClubIds)) continue
+    if (!canViewTrial(trial, viewer, viewerGroupIds)) continue
     const course = await getCourse(trial.courseId)
     if (!course) continue
 

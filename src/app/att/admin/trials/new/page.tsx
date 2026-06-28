@@ -15,9 +15,9 @@ function NewTrialForm() {
   const [courseId, setCourseId] = useState(presetCourseId)
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [visibility, setVisibility] = useState<'public' | 'private' | 'club'>('public')
-  const [visibleToClubId, setVisibleToClubId] = useState<string>('')
-  const [manageableClubs, setManageableClubs] = useState<Array<{ id: string; name: string }> | null>(null)
+  const [visibility, setVisibility] = useState<'public' | 'private' | 'group'>('public')
+  const [visibleToGroupId, setVisibleToGroupId] = useState<string>('')
+  const [manageableGroups, setManageableGroups] = useState<Array<{ id: string; name: string }> | null>(null)
   const [participation, setParticipation] = useState<'open' | 'invitational'>('open')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -45,7 +45,7 @@ function NewTrialForm() {
           name: name.trim(),
           date,
           visibility,
-          ...(visibility === 'club' && visibleToClubId ? { visibleToClubId } : {}),
+          ...(visibility === 'group' && visibleToGroupId ? { visibleToGroupId } : {}),
           participation,
         }),
       })
@@ -145,16 +145,16 @@ function NewTrialForm() {
           <p className="text-xs text-[#64748b]">When the trial takes place. Defaults to today.</p>
         </div>
 
-        {/* Visibility. The trial's scope can't exceed its course's: club
-            courses force club; private courses force private. The server
+        {/* Visibility. The trial's scope can't exceed its course's: group
+            courses force group; private courses force private. The server
             clamps anyway, but we visually disable to make it obvious. */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
           <div className="flex gap-2">
-            {(['public', 'private', 'club'] as const).map(v => {
+            {(['public', 'private', 'group'] as const).map(v => {
               const courseLocksTo =
                 selectedCourse?.visibility === 'private' ? 'private'
-                : selectedCourse?.visibility === 'club' ? 'club'
+                : selectedCourse?.visibility === 'group' ? 'group'
                 : null
               const disabled = !!courseLocksTo && v !== courseLocksTo
               const active = (courseLocksTo ?? visibility) === v
@@ -166,11 +166,11 @@ function NewTrialForm() {
                   onClick={async () => {
                     if (disabled) return
                     setVisibility(v)
-                    if (v === 'club' && manageableClubs === null) {
-                      const res = await fetch('/att/api/clubs')
+                    if (v === 'group' && manageableGroups === null) {
+                      const res = await fetch('/att/api/groups')
                       if (res.ok) {
                         const data = await res.json()
-                        setManageableClubs(data.clubs)
+                        setManageableGroups(data.groups)
                       }
                     }
                   }}
@@ -185,23 +185,23 @@ function NewTrialForm() {
               )
             })}
           </div>
-          {visibility === 'club' && selectedCourse?.visibility !== 'club' && (
+          {visibility === 'group' && selectedCourse?.visibility !== 'group' && (
             <div className="flex flex-col gap-2 mt-2">
-              {manageableClubs === null ? (
-                <p className="text-xs text-[#64748b]">Loading clubs…</p>
-              ) : manageableClubs.length === 0 ? (
+              {manageableGroups === null ? (
+                <p className="text-xs text-[#64748b]">Loading groups…</p>
+              ) : manageableGroups.length === 0 ? (
                 <p className="text-xs text-[#64748b]">
-                  You&apos;re not in any clubs yet.{' '}
-                  <Link href="/att/clubs" className="tt-link">Create one</Link>.
+                  You&apos;re not in any groups yet.{' '}
+                  <Link href="/att/groups" className="tt-link">Create one</Link>.
                 </p>
               ) : (
                 <select
-                  value={visibleToClubId}
-                  onChange={e => setVisibleToClubId(e.target.value)}
+                  value={visibleToGroupId}
+                  onChange={e => setVisibleToGroupId(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">— Pick a club —</option>
-                  {manageableClubs.map(c => (
+                  <option value="">— Pick a group —</option>
+                  {manageableGroups.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -211,12 +211,12 @@ function NewTrialForm() {
           <p className="text-xs text-[#64748b]">
             {selectedCourse?.visibility === 'private'
               ? 'This course is private, so any trial on it must be private too.'
-              : selectedCourse?.visibility === 'club'
-                ? 'This course is scoped to a club, so the trial is too.'
+              : selectedCourse?.visibility === 'group'
+                ? 'This course is scoped to a group, so the trial is too.'
                 : visibility === 'public'
                   ? 'The leaderboard will be visible to anyone.'
-                  : visibility === 'club'
-                    ? 'Only this club’s members can see the trial.'
+                  : visibility === 'group'
+                    ? 'Only this group’s members can see the trial.'
                     : 'Only you can see this trial and its leaderboard.'}
           </p>
         </div>

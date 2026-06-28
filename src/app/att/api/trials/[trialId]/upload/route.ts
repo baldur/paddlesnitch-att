@@ -11,7 +11,7 @@ import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
 import { canSubmitToTrial } from '@/lib/permissions'
-import { getUserClubIds } from '@/lib/clubs'
+import { getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng } from '@/lib/types'
 
 // Reduce a parsed track to [lat, lng] pairs for the diagnostic map we return
@@ -205,8 +205,8 @@ export async function POST(
   // both "can't see" and "can see but not invited" so the route doesn't
   // distinguish — invitational trials don't leak their guest list through
   // a 403 vs 404 split.
-  const viewerClubIds = new Set(await getUserClubIds(user.id))
-  if (!canSubmitToTrial(trial, user, viewerClubIds)) {
+  const viewerGroupIds = new Set(await getUserGroupIds(user.id))
+  if (!canSubmitToTrial(trial, user, viewerGroupIds)) {
     return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
   }
   if (trial.status !== 'open')

@@ -30,7 +30,7 @@ function jsonReq(method: string, body?: unknown) {
 }
 
 // Story-style permission tests for phase 2 trial invitations. Names map to
-// rows of the permission matrix in docs/features/visibility-clubs-tos.md.
+// rows of the permission matrix in docs/features/visibility-groups-tos.md.
 
 describe('inviting a user to an invitational trial', () => {
   it('the owner can invite a known account by email', async () => {

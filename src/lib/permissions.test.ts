@@ -5,14 +5,14 @@ import {
   canManageCourse,
   canManageTrial,
   canSubmitToTrial,
-  canManageClub,
-  canDeleteClub,
-  canViewClub,
+  canManageGroup,
+  canDeleteGroup,
+  canViewGroup,
   isListedForViewer,
 } from './permissions'
-import type { CourseMetadata, TrialMetadata, ClubMetadata, AuthUser } from './types'
+import type { CourseMetadata, TrialMetadata, GroupMetadata, AuthUser } from './types'
 
-// Permission matrix lives in docs/features/visibility-clubs-tos.md. Story
+// Permission matrix lives in docs/features/visibility-groups-tos.md. Story
 // titles below are deliberate — they read as the matrix rows. If you change
 // a check, the failing test name should already tell the story.
 
@@ -35,10 +35,10 @@ function makeCourse(visibility: 'public' | 'private'): CourseMetadata {
 }
 
 function makeTrial(
-  visibility: 'public' | 'private' | 'club',
+  visibility: 'public' | 'private' | 'group',
   participation: 'open' | 'invitational' = 'open',
   invitedUserIds: string[] = [],
-  visibleToClubId?: string,
+  visibleToGroupId?: string,
 ): TrialMetadata {
   return {
     id: 't1',
@@ -48,33 +48,33 @@ function makeTrial(
     status: 'open',
     adminUserId: owner.id,
     visibility,
-    visibleToClubId,
+    visibleToGroupId,
     participation,
     invitedUserIds,
     createdAt: '2026-01-01T00:00:00Z',
   }
 }
 
-function makeCourseClub(visibleToClubId: string): CourseMetadata {
+function makeCourseGroup(visibleToGroupId: string): CourseMetadata {
   return {
-    id: 'c-club',
-    name: 'Club-only',
+    id: 'c-group',
+    name: 'Group-only',
     sport: 'kayak',
     type: 'point_to_point',
     startLine: [[0, 0], [0, 0.001]],
     finishLine: [[0.001, 0], [0.001, 0.001]],
     distanceMetres: 100,
     adminUserId: owner.id,
-    visibility: 'club',
-    visibleToClubId,
+    visibility: 'group',
+    visibleToGroupId,
     createdAt: '2026-01-01T00:00:00Z',
   }
 }
 
-function makeClub(): ClubMetadata {
+function makeGroup(): GroupMetadata {
   return {
-    id: 'club-1',
-    name: 'Club 1',
+    id: 'group-1',
+    name: 'Group 1',
     description: '',
     ownerId: owner.id,
     adminUserIds: ['admin-1'],
@@ -225,102 +225,102 @@ describe('an invitee of a private invitational trial', () => {
   })
 })
 
-describe('viewing a club-scoped course', () => {
-  const clubId = 'club-1'
+describe('viewing a group-scoped course', () => {
+  const groupId = 'group-1'
 
-  it('a viewer who is in the club can see it', () => {
-    const course = makeCourseClub(clubId)
-    expect(canViewCourse(course, other, new Set([clubId]))).toBe(true)
+  it('a viewer who is in the group can see it', () => {
+    const course = makeCourseGroup(groupId)
+    expect(canViewCourse(course, other, new Set([groupId]))).toBe(true)
   })
 
-  it('a viewer who is NOT in the club gets a flat no', () => {
-    const course = makeCourseClub(clubId)
+  it('a viewer who is NOT in the group gets a flat no', () => {
+    const course = makeCourseGroup(groupId)
     expect(canViewCourse(course, other, new Set())).toBe(false)
   })
 
   it('an unauthenticated visitor cannot see it', () => {
-    const course = makeCourseClub(clubId)
+    const course = makeCourseGroup(groupId)
     expect(canViewCourse(course, null)).toBe(false)
   })
 
-  it('the owner can always see their own club-scoped course', () => {
-    const course = makeCourseClub(clubId)
+  it('the owner can always see their own group-scoped course', () => {
+    const course = makeCourseGroup(groupId)
     expect(canViewCourse(course, owner, new Set())).toBe(true)
   })
 
-  it('a stale viewerClubIds with the wrong club id does NOT widen access', () => {
-    const course = makeCourseClub(clubId)
-    expect(canViewCourse(course, other, new Set(['some-other-club']))).toBe(false)
+  it('a stale viewerGroupIds with the wrong group id does NOT widen access', () => {
+    const course = makeCourseGroup(groupId)
+    expect(canViewCourse(course, other, new Set(['some-other-group']))).toBe(false)
   })
 })
 
-describe('viewing a club-scoped trial', () => {
-  const clubId = 'club-1'
+describe('viewing a group-scoped trial', () => {
+  const groupId = 'group-1'
 
-  it('a viewer who is in the club can see it', () => {
-    const trial = makeTrial('club', 'open', [], clubId)
-    expect(canViewTrial(trial, other, new Set([clubId]))).toBe(true)
+  it('a viewer who is in the group can see it', () => {
+    const trial = makeTrial('group', 'open', [], groupId)
+    expect(canViewTrial(trial, other, new Set([groupId]))).toBe(true)
   })
 
-  it('a viewer who is NOT in the club cannot see it', () => {
-    const trial = makeTrial('club', 'open', [], clubId)
+  it('a viewer who is NOT in the group cannot see it', () => {
+    const trial = makeTrial('group', 'open', [], groupId)
     expect(canViewTrial(trial, other, new Set())).toBe(false)
   })
 
-  it('a club member can submit to a club-scoped open trial', () => {
-    const trial = makeTrial('club', 'open', [], clubId)
-    expect(canSubmitToTrial(trial, other, new Set([clubId]))).toBe(true)
+  it('a group member can submit to a group-scoped open trial', () => {
+    const trial = makeTrial('group', 'open', [], groupId)
+    expect(canSubmitToTrial(trial, other, new Set([groupId]))).toBe(true)
   })
 
-  it('a non-member cannot submit to a club-scoped open trial', () => {
-    const trial = makeTrial('club', 'open', [], clubId)
+  it('a non-member cannot submit to a group-scoped open trial', () => {
+    const trial = makeTrial('group', 'open', [], groupId)
     expect(canSubmitToTrial(trial, other, new Set())).toBe(false)
   })
 
-  it('a club member who is NOT in the invitee list cannot submit to a club-scoped invitational trial', () => {
-    const trial = makeTrial('club', 'invitational', [], clubId)
-    expect(canSubmitToTrial(trial, other, new Set([clubId]))).toBe(false)
+  it('a group member who is NOT in the invitee list cannot submit to a group-scoped invitational trial', () => {
+    const trial = makeTrial('group', 'invitational', [], groupId)
+    expect(canSubmitToTrial(trial, other, new Set([groupId]))).toBe(false)
   })
 
-  it('a club member who IS in the invitee list can submit to a club-scoped invitational trial', () => {
-    const trial = makeTrial('club', 'invitational', [other.id], clubId)
-    expect(canSubmitToTrial(trial, other, new Set([clubId]))).toBe(true)
+  it('a group member who IS in the invitee list can submit to a group-scoped invitational trial', () => {
+    const trial = makeTrial('group', 'invitational', [other.id], groupId)
+    expect(canSubmitToTrial(trial, other, new Set([groupId]))).toBe(true)
   })
 })
 
-describe('managing a club', () => {
+describe('managing a group', () => {
   it('the owner can manage', () => {
-    expect(canManageClub(makeClub(), owner)).toBe(true)
+    expect(canManageGroup(makeGroup(), owner)).toBe(true)
   })
   it('an admin can manage', () => {
     const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
-    expect(canManageClub(makeClub(), admin)).toBe(true)
+    expect(canManageGroup(makeGroup(), admin)).toBe(true)
   })
   it('a plain member cannot manage', () => {
     const member: AuthUser = { id: 'member-1', email: 'm@x', displayName: 'M' }
-    expect(canManageClub(makeClub(), member)).toBe(false)
+    expect(canManageGroup(makeGroup(), member)).toBe(false)
   })
   it('a non-member cannot manage', () => {
-    expect(canManageClub(makeClub(), other)).toBe(false)
+    expect(canManageGroup(makeGroup(), other)).toBe(false)
   })
 
   it('only the owner can delete', () => {
     const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
-    expect(canDeleteClub(makeClub(), owner)).toBe(true)
-    expect(canDeleteClub(makeClub(), admin)).toBe(false)
+    expect(canDeleteGroup(makeGroup(), owner)).toBe(true)
+    expect(canDeleteGroup(makeGroup(), admin)).toBe(false)
   })
 
-  it('any member can view a club', () => {
+  it('any member can view a group', () => {
     const member: AuthUser = { id: 'member-1', email: 'm@x', displayName: 'M' }
-    expect(canViewClub(makeClub(), member)).toBe(true)
+    expect(canViewGroup(makeGroup(), member)).toBe(true)
   })
 
-  it('a non-member cannot view a club', () => {
-    expect(canViewClub(makeClub(), other)).toBe(false)
+  it('a non-member cannot view a group', () => {
+    expect(canViewGroup(makeGroup(), other)).toBe(false)
   })
 
-  it('an unauthenticated visitor cannot view a club', () => {
-    expect(canViewClub(makeClub(), null)).toBe(false)
+  it('an unauthenticated visitor cannot view a group', () => {
+    expect(canViewGroup(makeGroup(), null)).toBe(false)
   })
 })
 

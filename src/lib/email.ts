@@ -1,6 +1,6 @@
 // Thin SES wrapper used for transactional emails sent from the Next.js
 // server function. Cognito-side auth emails (sign-in OTP) live in their
-// own Lambda trigger; this is for app-flows like club invitations.
+// own Lambda trigger; this is for app-flows like group invitations.
 //
 // Local dev no-ops and logs to console so we don't accidentally hit SES
 // from `pnpm dev`. Same `isDev()` check the storage layer uses.

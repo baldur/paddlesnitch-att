@@ -58,9 +58,9 @@ export async function POST(req: NextRequest) {
     console.error('[signup] recordAcceptance failed', err)
   }
 
-  // Pull in any club invitations queued for this email before signup. Done
+  // Pull in any group invitations queued for this email before signup. Done
   // before we return the cookie so the next request the user makes already
-  // shows the clubs they were invited to.
+  // shows the groups they were invited to.
   try {
     await applyPendingInvitations(normalised, created.sub)
   } catch (err) {

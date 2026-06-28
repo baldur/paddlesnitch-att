@@ -30,7 +30,7 @@ function jsonReq(url: string, method: string, body?: unknown) {
 }
 
 // Story-style permission tests for phase 1 trial visibility. Names map to
-// the matrix rows in docs/features/visibility-clubs-tos.md.
+// the matrix rows in docs/features/visibility-groups-tos.md.
 
 describe('a public trial', () => {
   it('is visible to an unauthenticated visitor', async () => {

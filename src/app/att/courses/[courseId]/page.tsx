@@ -5,7 +5,7 @@ import AppHeader from '@/components/AppHeader'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { getAuthUser } from '@/lib/auth'
 import { canViewCourse, isListedForViewer } from '@/lib/permissions'
-import { getUserClubIds } from '@/lib/clubs'
+import { getUserGroupIds } from '@/lib/groups'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -20,10 +20,10 @@ export default async function CourseDetailPage({
   const course = await getJson<CourseMetadata>(`courses/${courseId}/metadata.json`)
   if (!course) notFound()
   const user = await getAuthUser()
-  // Private courses 404 to non-owners; club-scoped courses 404 unless the
-  // viewer is in the club. Single 404 keeps existence private.
-  const viewerClubIds = user ? new Set(await getUserClubIds(user.id)) : undefined
-  if (!canViewCourse(course, user, viewerClubIds)) notFound()
+  // Private courses 404 to non-owners; group-scoped courses 404 unless the
+  // viewer is in the group. Single 404 keeps existence private.
+  const viewerGroupIds = user ? new Set(await getUserGroupIds(user.id)) : undefined
+  if (!canViewCourse(course, user, viewerGroupIds)) notFound()
 
   const trialKeys = await listKeys('trials/')
   const trialMetaKeys = trialKeys.filter(
@@ -35,7 +35,7 @@ export default async function CourseDetailPage({
     // Only surface trials the viewer is allowed to see — so a private
     // trial on a public course doesn't leak through the course detail
     // page.
-    .filter(t => isListedForViewer(t, user, viewerClubIds))
+    .filter(t => isListedForViewer(t, user, viewerGroupIds))
 
   const sortedTrials = [...trials].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

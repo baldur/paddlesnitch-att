@@ -2,23 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
-import { getClub, clubRoleOf, getUserClubIds } from '@/lib/clubs'
+import { getGroup, groupRoleOf, getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
 
 type Params = { params: Promise<{ trialId: string }> }
 
 function isVisibility(v: unknown): v is Visibility {
-  return v === 'public' || v === 'private' || v === 'club'
+  return v === 'public' || v === 'private' || v === 'group'
 }
 
 function isParticipation(v: unknown): v is Participation {
   return v === 'open' || v === 'invitational'
 }
 
-async function userCanScopeToClub(userId: string, clubId: string): Promise<boolean> {
-  const club = await getClub(clubId)
-  if (!club) return false
-  const role = clubRoleOf(club, userId)
+async function userCanScopeToGroup(userId: string, groupId: string): Promise<boolean> {
+  const group = await getGroup(groupId)
+  if (!group) return false
+  const role = groupRoleOf(group, userId)
   return role === 'owner' || role === 'admin'
 }
 
@@ -27,8 +27,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const viewer = await getAuthUser()
-  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : undefined
-  if (!canViewTrial(trial, viewer, viewerClubIds)) {
+  const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
+  if (!canViewTrial(trial, viewer, viewerGroupIds)) {
     // Hide existence of private trials from non-owners.
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -51,8 +51,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // A trial's visibility cannot exceed its parent course's. Private parent
-  // → private trial; club parent → trial inherits the club; otherwise
-  // the trial gets whatever the patch asked for (subject to club-scope
+  // → private trial; group parent → trial inherits the group; otherwise
+  // the trial gets whatever the patch asked for (subject to group-scope
   // permission, see below).
   const course = await getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`)
 
@@ -64,30 +64,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (isVisibility(body.visibility)) {
     // Phase 4 — clamp to the parent course's scope. A trial's visibility
     // can never be wider than its course; private course → private trial;
-    // club course → trial inherits the club; otherwise the trial gets
-    // whatever was asked for (still subject to club-scope permission).
+    // group course → trial inherits the group; otherwise the trial gets
+    // whatever was asked for (still subject to group-scope permission).
     let requested: Visibility = body.visibility
-    let requestedClubId = typeof body.visibleToClubId === 'string' ? body.visibleToClubId : next.visibleToClubId
+    let requestedGroupId = typeof body.visibleToGroupId === 'string' ? body.visibleToGroupId : next.visibleToGroupId
 
     if (course?.visibility === 'private') {
       requested = 'private'
-      requestedClubId = undefined
-    } else if (course?.visibility === 'club') {
-      requested = 'club'
-      requestedClubId = course.visibleToClubId
-    } else if (requested === 'club') {
-      if (requestedClubId && !(await userCanScopeToClub(user.id, requestedClubId))) {
+      requestedGroupId = undefined
+    } else if (course?.visibility === 'group') {
+      requested = 'group'
+      requestedGroupId = course.visibleToGroupId
+    } else if (requested === 'group') {
+      if (requestedGroupId && !(await userCanScopeToGroup(user.id, requestedGroupId))) {
         requested = 'private'
-        requestedClubId = undefined
+        requestedGroupId = undefined
       }
-      if (!requestedClubId) {
+      if (!requestedGroupId) {
         requested = 'private'
       }
     }
 
     // Phase 5 — make-public acknowledgement: a flip TO public (after
     // clamping) requires the owner to explicitly tick the
-    // "I understand performance times will become public" box. Club /
+    // "I understand performance times will become public" box. Group /
     // private widening doesn't trigger this — only the public flip does.
     // The check uses the RESOLVED `requested` value so a request for
     // public that gets clamped to private (because the course is
@@ -104,10 +104,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     next.visibility = requested
-    if (requested === 'club' && requestedClubId) {
-      next.visibleToClubId = requestedClubId
+    if (requested === 'group' && requestedGroupId) {
+      next.visibleToGroupId = requestedGroupId
     } else {
-      delete next.visibleToClubId
+      delete next.visibleToGroupId
     }
   }
   if (isParticipation(body.participation)) {

@@ -74,7 +74,7 @@ export async function DELETE() {
 
   // 6b. Release a claimed vanity handle (the usernames/{slug} index lives
   //     outside users/, so it needs an explicit delete), then wipe the whole
-  //     users/{userId}/ prefix — profile, contact, clubs index, strava tokens,
+  //     users/{userId}/ prefix — profile, contact, groups index, strava tokens,
   //     tos-consent. Previously these survived erasure (GDPR gap).
   const profile = await getJson<{ handle?: string }>(`users/${user.id}/profile.json`)
   if (profile?.handle) await deleteObject(`usernames/${profile.handle}.json`)

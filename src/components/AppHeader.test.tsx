@@ -13,7 +13,7 @@ describe('AppHeader', () => {
     // The reported bug: on a ~426px mobile viewport the breadcrumb and the nav
     // collide because the header never wrapped. The fix is `flex-wrap` on the
     // header element — assert it stays there.
-    const html = renderToStaticMarkup(<AppHeader breadcrumb={<span>CLUBS</span>} />)
+    const html = renderToStaticMarkup(<AppHeader breadcrumb={<span>GROUPS</span>} />)
     expect(html).toContain('<header')
     expect(html).toContain('flex-wrap')
   })

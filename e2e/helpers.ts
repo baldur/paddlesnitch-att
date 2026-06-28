@@ -78,8 +78,8 @@ export async function createCourseViaApi(
   page: Page,
   opts: {
     name?: string
-    visibility?: 'public' | 'private' | 'club'
-    visibleToClubId?: string
+    visibility?: 'public' | 'private' | 'group'
+    visibleToGroupId?: string
     sport?: 'kayak' | 'rowing' | 'both'
   } = {},
 ): Promise<{ id: string; name: string }> {
@@ -93,7 +93,7 @@ export async function createCourseViaApi(
       finishLine: COURSE_FINISH_LINE,
       distanceMetres: 5560,
       visibility: opts.visibility ?? 'public',
-      ...(opts.visibleToClubId ? { visibleToClubId: opts.visibleToClubId } : {}),
+      ...(opts.visibleToGroupId ? { visibleToGroupId: opts.visibleToGroupId } : {}),
     },
   })
   expect(res.status(), 'createCourseViaApi expects 201').toBe(201)
@@ -107,7 +107,7 @@ export async function createTrialViaApi(
   opts: {
     name?: string
     date?: string
-    visibility?: 'public' | 'private' | 'club'
+    visibility?: 'public' | 'private' | 'group'
   } = {},
 ): Promise<{ id: string; name: string }> {
   const name = opts.name ?? `E2E Trial ${randomUUID().slice(0, 6)}`
@@ -124,13 +124,13 @@ export async function createTrialViaApi(
   return { id: body.id, name: body.name }
 }
 
-export async function createClubViaApi(
+export async function createGroupViaApi(
   page: Page,
   opts: { name?: string } = {},
 ): Promise<{ id: string; name: string }> {
-  const name = opts.name ?? `E2E Club ${randomUUID().slice(0, 6)}`
-  const res = await page.request.post('/att/api/clubs', { data: { name } })
-  expect(res.status(), 'createClubViaApi expects 201').toBe(201)
+  const name = opts.name ?? `E2E Group ${randomUUID().slice(0, 6)}`
+  const res = await page.request.post('/att/api/groups', { data: { name } })
+  expect(res.status(), 'createGroupViaApi expects 201').toBe(201)
   const body = await res.json()
   return { id: body.id, name: body.name }
 }

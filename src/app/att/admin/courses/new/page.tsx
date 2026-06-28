@@ -54,10 +54,10 @@ export default function NewCoursePage() {
   const [finishLine, setFinishLine] = useState<Line | undefined>()
   const [gates, setGates] = useState<GateData | undefined>()
   const [distanceMetres, setDistanceMetres] = useState<number | null>(null)
-  const [visibility, setVisibility] = useState<'public' | 'private' | 'club'>('public')
-  const [visibleToClubId, setVisibleToClubId] = useState<string>('')
-  // Clubs the user owns or admins, populated lazily when they pick 'club'.
-  const [manageableClubs, setManageableClubs] = useState<Array<{ id: string; name: string }> | null>(null)
+  const [visibility, setVisibility] = useState<'public' | 'private' | 'group'>('public')
+  const [visibleToGroupId, setVisibleToGroupId] = useState<string>('')
+  // Groups the user owns or admins, populated lazily when they pick 'group'.
+  const [manageableGroups, setManageableGroups] = useState<Array<{ id: string; name: string }> | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -135,7 +135,7 @@ export default function NewCoursePage() {
           distanceMetres: dist,
           minValidSeconds: minValidSecondsRef.current?.value ? parseInt(minValidSecondsRef.current.value, 10) : undefined,
           visibility,
-          ...(visibility === 'club' && visibleToClubId ? { visibleToClubId } : {}),
+          ...(visibility === 'group' && visibleToGroupId ? { visibleToGroupId } : {}),
         }),
       })
       if (!res.ok) {
@@ -282,24 +282,24 @@ export default function NewCoursePage() {
           <div className="flex flex-col gap-2">
             <label className="text-xs text-[#64748b] tracking-widest">VISIBILITY</label>
             <div className="flex gap-2">
-              {(['public', 'private', 'club'] as const).map(v => (
+              {(['public', 'private', 'group'] as const).map(v => (
                 <button
                   key={v}
                   type="button"
                   onClick={async () => {
                     setVisibility(v)
-                    if (v === 'club' && manageableClubs === null) {
-                      // Lazy-load: we only fetch the user's clubs when they
-                      // pick the club option — keeps the common case fast.
-                      const res = await fetch('/att/api/clubs')
+                    if (v === 'group' && manageableGroups === null) {
+                      // Lazy-load: we only fetch the user's groups when they
+                      // pick the group option — keeps the common case fast.
+                      const res = await fetch('/att/api/groups')
                       if (res.ok) {
                         const data = await res.json()
-                        // Only clubs where the user can scope content are usable
+                        // Only groups where the user can scope content are usable
                         // — we infer that from the role payload by hitting each
                         // detail. Cheaper: include the user's id with the list
                         // and let the API tell us, but the dropdown is small
-                        // and clubs are few, so a follow-up is fine.
-                        setManageableClubs(data.clubs)
+                        // and groups are few, so a follow-up is fine.
+                        setManageableGroups(data.groups)
                       }
                     }
                   }}
@@ -313,23 +313,23 @@ export default function NewCoursePage() {
                 </button>
               ))}
             </div>
-            {visibility === 'club' && (
+            {visibility === 'group' && (
               <div className="flex flex-col gap-2 mt-2">
-                {manageableClubs === null ? (
-                  <p className="text-xs text-[#64748b]">Loading clubs…</p>
-                ) : manageableClubs.length === 0 ? (
+                {manageableGroups === null ? (
+                  <p className="text-xs text-[#64748b]">Loading groups…</p>
+                ) : manageableGroups.length === 0 ? (
                   <p className="text-xs text-[#64748b]">
-                    You&apos;re not in any clubs yet.{' '}
-                    <Link href="/att/clubs" className="tt-link">Create one</Link>.
+                    You&apos;re not in any groups yet.{' '}
+                    <Link href="/att/groups" className="tt-link">Create one</Link>.
                   </p>
                 ) : (
                   <select
-                    value={visibleToClubId}
-                    onChange={e => setVisibleToClubId(e.target.value)}
+                    value={visibleToGroupId}
+                    onChange={e => setVisibleToGroupId(e.target.value)}
                     className={inputClass}
                   >
-                    <option value="">— Pick a club —</option>
-                    {manageableClubs.map(c => (
+                    <option value="">— Pick a group —</option>
+                    {manageableGroups.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -341,7 +341,7 @@ export default function NewCoursePage() {
                 ? 'Anyone can find this course. Anyone can open a time trial on it.'
                 : visibility === 'private'
                   ? 'Only you can see this course and the trials on it. You can change this later.'
-                  : 'Only this club’s members can see this course and any trials on it.'}
+                  : 'Only this group’s members can see this course and any trials on it.'}
             </p>
           </div>
 

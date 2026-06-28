@@ -2,41 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { findUserByEmail } from '@/lib/cognito'
 import {
-  getClub,
-  listClubInvitations,
+  getGroup,
+  listGroupInvitations,
   newInvitation,
   putInvitation,
   putPendingInvitation,
-} from '@/lib/clubs'
-import { canManageClub } from '@/lib/permissions'
+} from '@/lib/groups'
+import { canManageGroup } from '@/lib/permissions'
 import { sendEmail } from '@/lib/email'
 import { pendingInviteEmail, existingAccountInviteEmail } from '@/lib/invitation-email'
 import { canonicalBaseUrl } from '@/lib/url'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 
-type Params = { params: Promise<{ clubId: string }> }
+type Params = { params: Promise<{ groupId: string }> }
 
-// GET /att/api/clubs/[clubId]/invitations
+// GET /att/api/groups/[groupId]/invitations
 // Owner / admin only. Returns every outstanding (or finalised) invitation
-// stored under the club. Pending email invitations queued under
+// stored under the group. Pending email invitations queued under
 // pending-invitations/ are NOT included here — they're only surfaced when
 // the matching user signs up.
 export async function GET(_: NextRequest, { params }: Params) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clubId } = await params
-  const club = await getClub(clubId)
-  if (!club) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!canManageClub(club, user)) {
+  const { groupId } = await params
+  const group = await getGroup(groupId)
+  if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!canManageGroup(group, user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const invites = await listClubInvitations(clubId)
+  const invites = await listGroupInvitations(groupId)
   return NextResponse.json({ invitations: invites })
 }
 
-// POST /att/api/clubs/[clubId]/invitations  { email, role?: 'admin' | 'member' }
+// POST /att/api/groups/[groupId]/invitations  { email, role?: 'admin' | 'member' }
 // Owner / admin. If the email matches an existing account, the invite is
 // stored resolved (toUserId set). If not, it's queued as a pending invite
 // keyed by email-hash so the next signup with that address can pick it up.
@@ -46,10 +46,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clubId } = await params
-  const club = await getClub(clubId)
-  if (!club) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!canManageClub(club, user)) {
+  const { groupId } = await params
+  const group = await getGroup(groupId)
+  if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!canManageGroup(group, user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -68,26 +68,26 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const matched = await findUserByEmail(email)
   if (matched) {
-    // Already-an-account invite. Stored resolved under the club so the
-    // recipient can find it by clubId without scanning everything.
+    // Already-an-account invite. Stored resolved under the group so the
+    // recipient can find it by groupId without scanning everything.
     const invitation = newInvitation({
-      clubId,
+      groupId,
       role,
       invitedBy: user.id,
       toUserId: matched.sub,
     })
     await putInvitation(invitation)
     if (inboxIsReal) {
-      const { subject, text } = existingAccountInviteEmail({ club, inviterName, baseUrl, role })
+      const { subject, text } = existingAccountInviteEmail({ group, inviterName, baseUrl, role })
       await sendEmail({ to: email, subject, text })
     }
     return NextResponse.json({ invitation, resolved: true }, { status: 201 })
   }
 
-  // Pre-signup invite. Queued under pending-invitations/clubs/{emailHash}/
-  // and merged into the user's clubs when they sign up.
+  // Pre-signup invite. Queued under pending-invitations/groups/{emailHash}/
+  // and merged into the user's groups when they sign up.
   const invitation = newInvitation({
-    clubId,
+    groupId,
     role,
     invitedBy: user.id,
     toEmail: email,
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Without this email the recipient has no idea they were invited — the
   // whole point of the pending-invitation feature breaks (see #53).
   if (inboxIsReal) {
-    const { subject, text } = pendingInviteEmail({ club, inviterName, baseUrl, role })
+    const { subject, text } = pendingInviteEmail({ group, inviterName, baseUrl, role })
     await sendEmail({ to: email, subject, text })
   }
   return NextResponse.json({ invitation, resolved: false }, { status: 201 })

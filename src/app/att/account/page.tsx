@@ -299,7 +299,7 @@ function AccountPageInner() {
                   ({user.email}) is a placeholder we can&apos;t deliver to.
                   <span className="text-[#9a3412]"> Until you add a real email, we have no way to
                   reach you</span> — including if our Terms of Service change, or if there&apos;s a
-                  problem with your account or a club invitation. Add one below (we&apos;ll never
+                  problem with your account or a group invitation. Add one below (we&apos;ll never
                   share it). It&apos;s optional, but recommended.
                 </p>
                 <form onSubmit={saveContactEmail} className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -401,7 +401,7 @@ function AccountPageInner() {
               </h2>
               <p className="text-sm text-[#64748b] mb-4 leading-relaxed">
                 A public profile page shows your race history, personal bests and stats at a shareable link.
-                It only ever shows results from trials people can already see — private and club-only results stay hidden.
+                It only ever shows results from trials people can already see — private and group-only results stay hidden.
                 Off by default.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
