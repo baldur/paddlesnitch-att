@@ -1,0 +1,61 @@
+# .github/workflows/claude-label-cleanup.yml
+#
+# Drains the `claude-active` label when an issue or PR closes, keeping the
+# active set small so the fast loop stays cheap. On a merged PR it also walks
+# back to any issues the PR closes (Closes #N / Fixes #N) and strips the label
+# there too, so a merge fully retires the item.
+name: Claude label cleanup
+
+on:
+  issues:
+    types: [closed]
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LABEL: claude-active
+    steps:
+      - name: Remove label from the closed item
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            N=${{ github.event.issue.number }}
+            gh issue edit "$N" --repo "$GITHUB_REPOSITORY" --remove-label "$LABEL" || true
+          else
+            N=${{ github.event.pull_request.number }}
+            gh pr edit "$N" --repo "$GITHUB_REPOSITORY" --remove-label "$LABEL" || true
+          fi
+
+      - name: Strip label from linked issues on merge
+        # Only when a PR actually merged (a closed-without-merge PR shouldn't
+        # retire its linked issues).
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+        run: |
+          set -euo pipefail
+          OWNER=${GITHUB_REPOSITORY%/*}
+          REPO=${GITHUB_REPOSITORY#*/}
+          PR=${{ github.event.pull_request.number }}
+
+          # closingIssuesReferences is the reliable source of "this PR closes #N",
+          # derived by GitHub from the closing keywords in the PR body.
+          LINKED=$(gh api graphql -f query='
+            query($owner:String!,$repo:String!,$pr:Int!){
+              repository(owner:$owner,name:$repo){
+                pullRequest(number:$pr){
+                  closingIssuesReferences(first:50){ nodes{ number } }
+                }
+              }
+            }' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].number')
+
+          for ISSUE in $LINKED; do
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label "$LABEL" || true
+          done
