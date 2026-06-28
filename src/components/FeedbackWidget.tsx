@@ -1,9 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { FEEDBACK_OPEN_EVENT } from '@/components/ReportLink'
 
-// Floating "Report an issue" button. Click opens a modal with a text area +
-// optional email. Submission posts to /att/api/feedback which files a GitHub
-// issue tagged `customer-reported`.
+// "Report an issue" modal. Opened by the persistent REPORT link in the header
+// nav (ReportLink) via the FEEDBACK_OPEN_EVENT window event — this component
+// renders nothing until then. Submission posts to /att/api/feedback which files
+// a GitHub issue tagged `customer-reported`. (Was a floating bottom-right
+// button; moved to a header link in #102 so it's always visible and doesn't
+// overlap the Leaflet map controls.)
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
@@ -23,6 +27,13 @@ export default function FeedbackWidget() {
   useEffect(() => {
     if (open) setOpenedAt(Date.now())
   }, [open])
+
+  // The header REPORT link opens this modal by dispatching FEEDBACK_OPEN_EVENT.
+  useEffect(() => {
+    const onOpen = () => setOpen(true)
+    window.addEventListener(FEEDBACK_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(FEEDBACK_OPEN_EVENT, onOpen)
+  }, [])
 
   // Close with Escape
   useEffect(() => {
@@ -70,22 +81,10 @@ export default function FeedbackWidget() {
     }
   }
 
-  // z-[1100] / z-[1500] below: Leaflet renders its panes between z-200
-  // and z-800; our map-control buttons are at z-[1001]. The trigger
-  // needs to clear them both; the modal needs to clear the trigger as
-  // well as everything underneath. Reported in #57.
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-[1100] border border-[#e2e8f0] bg-white shadow-md px-3 py-2 text-xs text-[#64748b] tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
-        aria-label="Report an issue"
-      >
-        REPORT AN ISSUE
-      </button>
-    )
-  }
+  // z-[1500] below: Leaflet renders its panes between z-200 and z-800; our
+  // map-control buttons are at z-[1001]. The modal needs to clear them all.
+  // Reported in #57.
+  if (!open) return null
 
   return (
     <div

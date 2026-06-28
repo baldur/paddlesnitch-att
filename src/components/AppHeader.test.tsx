@@ -30,4 +30,11 @@ describe('AppHeader', () => {
     // AuthNav is always the right-most nav item.
     expect(html.indexOf('EXTRA')).toBeLessThan(html.indexOf('AUTHNAV'))
   })
+
+  it('always renders the persistent REPORT link (#102)', () => {
+    // The "Report an issue" trigger moved from a floating button to a header
+    // link so it's always visible. Every page using AppHeader gets it.
+    const html = renderToStaticMarkup(<AppHeader breadcrumb={<span>HOME</span>} />)
+    expect(html).toContain('REPORT')
+  })
 })

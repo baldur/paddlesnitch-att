@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import AuthNav from '@/components/AuthNav'
+import ReportLink from '@/components/ReportLink'
 
 // Shared page header: a breadcrumb on the left, a nav on the right that always
 // ends with <AuthNav />. The wrapping <header> uses `flex-wrap` so that on a
@@ -19,6 +20,7 @@ export default function AppHeader({
       <div className="flex items-center gap-4 min-w-0">{breadcrumb}</div>
       <nav className="flex gap-4 text-sm text-[#64748b] items-center shrink-0">
         {children}
+        <ReportLink />
         <AuthNav />
       </nav>
     </header>
