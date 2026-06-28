@@ -85,4 +85,4 @@ jobs:
           # Allow the tools the loop needs to actually work (same trust model as
           # the scheduled cron routines). The action keeps its own GitHub
           # progress-comment tool regardless.
-          claude_args: "--max-turns 25 --model claude-sonnet-4-6 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
+          claude_args: "--max-turns 25 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
