@@ -90,13 +90,14 @@ export async function makeTrial(
     visibility?: 'public' | 'private'
     participation?: 'open' | 'invitational'
     invitedUserIds?: string[]
+    date?: string
   } = {},
 ): Promise<TrialMetadata> {
   const trial: TrialMetadata = {
     id: nanoid(),
     courseId,
     name: 'Test Trial',
-    date: '2024-06-01',
+    date: opts.date ?? '2024-06-01',
     status,
     adminUserId,
     visibility: opts.visibility ?? 'public',

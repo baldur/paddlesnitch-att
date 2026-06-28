@@ -21,6 +21,11 @@ async function getOpenTrials(viewer: AuthUser | null) {
     await Promise.all(metaKeys.map(k => getJson<TrialMetadata>(k)))
   ).filter((t): t is TrialMetadata => t !== null && t.status === 'open')
     .filter(t => isListedForViewer(t, viewer, viewerClubIds))
+    // Order by event date (newest first), tie-broken by creation time — so the
+    // list isn't in storage-key (nanoid) order. Matches the createdAt-desc
+    // ordering the course-detail trial lists already use (#103). ISO date and
+    // timestamp strings sort correctly lexicographically.
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
 
   return Promise.all(
     trials.map(async trial => {
