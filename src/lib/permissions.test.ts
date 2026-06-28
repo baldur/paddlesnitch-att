@@ -11,7 +11,7 @@ import {
   canViewGroup,
   isListedForViewer,
 } from './permissions'
-import type { CourseMetadata, TrialMetadata, GroupMetadata, AuthUser } from './types'
+import type { CourseMetadata, TrialMetadata, GroupMetadata, AuthUser, Participation } from './types'
 
 // Permission matrix lives in docs/features/visibility-groups-tos.md. Story
 // titles below are deliberate — they read as the matrix rows. If you change
@@ -37,9 +37,10 @@ function makeCourse(visibility: 'public' | 'private'): CourseMetadata {
 
 function makeTrial(
   visibility: 'public' | 'private' | 'group',
-  participation: 'open' | 'invitational' = 'open',
+  participation: Participation = 'public',
   invitedUserIds: string[] = [],
   visibleToGroupId?: string,
+  groupId?: string,
 ): TrialMetadata {
   return {
     id: 't1',
@@ -47,6 +48,7 @@ function makeTrial(
     name: 'T1',
     date: '2026-01-01',
     status: 'open',
+    groupId,
     adminUserId: owner.id,
     visibility,
     visibleToGroupId,
@@ -216,18 +218,42 @@ describe('managing a trial', () => {
   })
 })
 
-describe('submitting to an open trial', () => {
+describe('submitting to a public trial', () => {
   it('any signed-in viewer can submit', () => {
-    expect(canSubmitToTrial(makeTrial('public', 'open'), other)).toBe(true)
+    expect(canSubmitToTrial(makeTrial('public', 'public'), other)).toBe(true)
   })
   it('the owner can submit', () => {
-    expect(canSubmitToTrial(makeTrial('public', 'open'), owner)).toBe(true)
+    expect(canSubmitToTrial(makeTrial('public', 'public'), owner)).toBe(true)
   })
   it('an unauthenticated visitor cannot submit', () => {
-    expect(canSubmitToTrial(makeTrial('public', 'open'), null)).toBe(false)
+    expect(canSubmitToTrial(makeTrial('public', 'public'), null)).toBe(false)
   })
-  it('a non-owner cannot submit to a private open trial they cannot see', () => {
-    expect(canSubmitToTrial(makeTrial('private', 'open'), other)).toBe(false)
+  it('a non-owner cannot submit to a private public-participation trial they cannot see', () => {
+    expect(canSubmitToTrial(makeTrial('private', 'public'), other)).toBe(false)
+  })
+  it('a legacy "open" participation value is treated as public', () => {
+    // Pre-phase-3 stored value; canSubmitToTrial normalises it.
+    const legacy = { ...makeTrial('public', 'public'), participation: 'open' as unknown as Participation }
+    expect(canSubmitToTrial(legacy, other)).toBe(true)
+  })
+})
+
+describe('submitting to a members trial (phase 3)', () => {
+  const g = 'g1'
+  const member: AuthUser = { id: 'm1', email: 'm@x', displayName: 'M' }
+  it('a member of the trial\'s group can submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'members', [], undefined, g), member, new Set([g]))).toBe(true)
+  })
+  it('a non-member cannot submit', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'members', [], undefined, g), member, new Set())).toBe(false)
+    expect(canSubmitToTrial(makeTrial('public', 'members', [], undefined, g), other, new Set(['g2']))).toBe(false)
+  })
+  it('the organiser can submit even without group membership', () => {
+    expect(canSubmitToTrial(makeTrial('public', 'members', [], undefined, g), owner, new Set())).toBe(true)
+  })
+  it('an invitee can submit to a members trial without being in the group', () => {
+    const inv: AuthUser = { id: 'inv1', email: 'i@x', displayName: 'I' }
+    expect(canSubmitToTrial(makeTrial('public', 'members', [inv.id], undefined, g), inv, new Set())).toBe(true)
   })
 })
 

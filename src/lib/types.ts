@@ -69,10 +69,16 @@ export type CourseMetadata = {
   createdAt: string
 }
 
-// `participation` controls WHO can submit a trace once they can view the
-// trial. `open` is anyone who can view it; `invitational` requires the
-// submitter to be in `invitedUserIds` (or be the owner).
-export type Participation = 'open' | 'invitational'
+// `participation` controls WHO can submit a trace once they can view the trial
+// (phase 3):
+//   members      — any member of the trial's group (or an invitee). New default.
+//   invitational — only users in `invitedUserIds`.
+//   public       — anyone who can view the trial (the escape hatch for open
+//                  community races).
+// The organiser (creator / group admin) can always submit regardless.
+// Legacy note: pre-phase-3 trials stored `'open'`, which is treated as `public`
+// at read time and migrated by scripts/migrate-participation-open-to-public.ts.
+export type Participation = 'members' | 'invitational' | 'public'
 
 export type TrialMetadata = {
   id: string

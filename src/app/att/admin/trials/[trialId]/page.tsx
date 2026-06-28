@@ -82,9 +82,8 @@ export default function TrialAdminPage({
     setTrial(updated)
   }
 
-  const toggleParticipation = async () => {
-    if (!trial) return
-    const next = trial.participation === 'open' ? 'invitational' : 'open'
+  const changeParticipation = async (next: 'members' | 'invitational' | 'public') => {
+    if (!trial || trial.participation === next) return
     const updated = await fetch(`/att/api/trials/${trialId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -202,22 +201,21 @@ export default function TrialAdminPage({
             >
               {trial.visibility === 'public' ? 'PUBLIC ↔ PRIVATE' : 'PRIVATE ↔ PUBLIC'}
             </button>
-            <span
-              className={`text-xs px-2 py-0.5 border ${
-                trial.participation === 'open'
-                  ? 'border-[#15803d] text-[#15803d]'
-                  : 'border-[#0369a1] text-[#0369a1]'
-              }`}
-            >
-              {trial.participation.toUpperCase()}
-            </span>
-            <button
-              type="button"
-              onClick={toggleParticipation}
-              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1] transition-colors"
-            >
-              {trial.participation === 'open' ? 'MAKE INVITATIONAL' : 'MAKE OPEN'}
-            </button>
+            <span className="text-xs text-[#64748b] tracking-widest self-center">SUBMIT:</span>
+            {(['members', 'invitational', 'public'] as const).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => changeParticipation(v)}
+                className={`px-3 py-1.5 text-xs font-bold tracking-widest border transition-colors ${
+                  trial.participation === v
+                    ? 'border-[#0369a1] text-[#0369a1] bg-[#f0f9ff]'
+                    : 'border-[#e2e8f0] text-[#64748b] hover:border-[#0369a1] hover:text-[#0369a1]'
+                }`}
+              >
+                {v.toUpperCase()}
+              </button>
+            ))}
           </div>
         </section>
 

@@ -16,7 +16,7 @@ function NewTrialForm() {
   const [name, setName] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [visibility, setVisibility] = useState<'public' | 'private' | 'group'>('public')
-  const [participation, setParticipation] = useState<'open' | 'invitational'>('open')
+  const [participation, setParticipation] = useState<'members' | 'invitational' | 'public'>('members')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
@@ -187,12 +187,13 @@ function NewTrialForm() {
           </p>
         </div>
 
-        {/* Participation. Open = any viewer can submit; invitational = only
-            users you invite can submit. The owner can always submit. */}
+        {/* Participation (phase 3). Members = anyone in the course's group;
+            invitational = only users you invite; public = anyone who can view.
+            The organiser can always submit. */}
         <div className="flex flex-col gap-2">
           <label className="text-xs text-[#64748b] tracking-widest">WHO CAN SUBMIT</label>
           <div className="flex gap-2">
-            {(['open', 'invitational'] as const).map(v => (
+            {(['members', 'invitational', 'public'] as const).map(v => (
               <button
                 key={v}
                 type="button"
@@ -208,9 +209,11 @@ function NewTrialForm() {
             ))}
           </div>
           <p className="text-xs text-[#64748b]">
-            {participation === 'open'
-              ? 'Anyone who can see the trial can submit a trace.'
-              : 'You will choose who can submit after the trial is created.'}
+            {participation === 'members'
+              ? 'Members of this course’s group can submit a trace.'
+              : participation === 'invitational'
+                ? 'You will choose who can submit after the trial is created.'
+                : 'Anyone who can see the trial can submit a trace.'}
           </p>
         </div>
 

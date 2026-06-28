@@ -11,7 +11,7 @@ function isVisibility(v: unknown): v is Visibility {
 }
 
 function isParticipation(v: unknown): v is Participation {
-  return v === 'open' || v === 'invitational'
+  return v === 'members' || v === 'invitational' || v === 'public'
 }
 
 export async function GET(req: NextRequest) {
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     adminUserId: user.id,
     visibility: resolvedVisibility,
     ...(visibleToGroupId ? { visibleToGroupId } : {}),
-    participation: isParticipation(participation) ? participation : 'open',
+    participation: isParticipation(participation) ? participation : 'members',
     invitedUserIds: [],
     createdAt: new Date().toISOString(),
   }
