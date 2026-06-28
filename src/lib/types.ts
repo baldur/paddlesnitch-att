@@ -56,6 +56,13 @@ export type CourseMetadata = {
   minValidSeconds?: number
   gateDirection?: 1 | -1  // legacy single-gate: derived from gates[0].direction
   gates?: Array<{ line: Line; direction: 1 | -1 }>  // gate type: ordered checkpoints
+  // The owning group. Management authority (edit/delete/create-trial) belongs to
+  // this group's owner + admins. Set on every course created from phase 2 on;
+  // optional only to tolerate pre-migration data, where `adminUserId` is the
+  // fallback owner. See docs/features/groups-and-creation-gating.md.
+  groupId?: string
+  // Created-by, retained for audit. NO LONGER the management authority once
+  // `groupId` is set — that moved to the group's admins.
   adminUserId: string
   visibility: Visibility
   visibleToGroupId?: string // present iff visibility === 'group'
@@ -73,6 +80,11 @@ export type TrialMetadata = {
   name: string
   date: string // ISO date
   status: 'open' | 'closed'
+  // The owning group, inherited from the course at creation. Manage authority
+  // (open/close, edit, invite) belongs to this group's owner + admins. Set on
+  // every trial created from phase 2 on; optional only for pre-migration data.
+  groupId?: string
+  // Created-by, retained for audit (see CourseMetadata.adminUserId).
   adminUserId: string
   visibility: Visibility
   visibleToGroupId?: string  // present iff visibility === 'group'

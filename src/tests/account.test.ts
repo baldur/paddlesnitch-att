@@ -216,7 +216,7 @@ describe('DELETE /att/api/account', () => {
     await deleteAccount()
 
     mockAuth(null)
-    const res = await listCourses()
+    const res = await listCourses(new NextRequest('http://x/att/api/courses'))
     const list = await res.json()
     expect(list).toHaveLength(1)
     expect(list[0].adminUserId).toBe(stranger.id)

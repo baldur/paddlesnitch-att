@@ -17,7 +17,7 @@ import {
 import { parseGpx } from '../src/lib/gpx'
 import { processTrace, haversine } from '../src/lib/geo'
 import { BOAT_CLASS_INFO, expectedSeats } from '../src/lib/types'
-import type { CourseMetadata, TrialMetadata, LeaderboardEntry, BoatClass, CrewMember } from '../src/lib/types'
+import type { CourseMetadata, TrialMetadata, GroupMetadata, LeaderboardEntry, BoatClass, CrewMember } from '../src/lib/types'
 
 const ROOT = path.join(process.cwd(), '.local-data')
 
@@ -178,6 +178,25 @@ async function main() {
 
   const admin = userMap['admin@rrc-tt.is']
 
+  // 1b. A group owns the seeded courses + trials (phase 2: only group admins
+  // create content). Admin is owner; everyone else is a member so phase-3
+  // member-gated submission has demo data to work with.
+  const groupId = nanoid()
+  const group: GroupMetadata = {
+    id: groupId,
+    name: 'Reykjavík Rowing Club',
+    description: 'Demo group that owns the seeded courses and trials.',
+    ownerId: admin.id,
+    adminUserIds: [],
+    memberUserIds: Object.values(userMap).filter(u => u.id !== admin.id).map(u => u.id),
+    createdAt: '2025-02-20T09:00:00.000Z',
+  }
+  await write(`groups/${groupId}/metadata.json`, group)
+  for (const u of Object.values(userMap)) {
+    await write(`users/${u.id}/groups.json`, { groupIds: [groupId] })
+  }
+  console.log(`  group  ${group.name}  (owner: ${admin.displayName}, ${group.memberUserIds.length} members)`)
+
   // 2. Courses
   const c1Id = nanoid()
   const c1: CourseMetadata = {
@@ -188,6 +207,7 @@ async function main() {
     startLine: C1_START,
     finishLine: C1_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C1_START), midpoint(C1_FINISH))),
+    groupId,
     adminUserId: admin.id,
     visibility: 'public',
     createdAt: '2025-03-01T09:00:00.000Z',
@@ -204,6 +224,7 @@ async function main() {
     startLine: C2_START,
     finishLine: C2_FINISH,
     distanceMetres: Math.round(haversine(midpoint(C2_START), midpoint(C2_FINISH))),
+    groupId,
     adminUserId: admin.id,
     visibility: 'public',
     createdAt: '2025-03-15T09:00:00.000Z',
@@ -217,6 +238,7 @@ async function main() {
     id: t1Id, courseId: c1Id,
     name: 'Spring Sprint 2025',
     date: '2025-04-12', status: 'closed',
+    groupId,
     adminUserId: admin.id,
     visibility: 'public',
     participation: 'open',
@@ -230,6 +252,7 @@ async function main() {
     id: t2Id, courseId: c1Id,
     name: 'Summer Championships 2025',
     date: '2025-07-19', status: 'closed',
+    groupId,
     adminUserId: admin.id,
     visibility: 'public',
     participation: 'open',
@@ -243,6 +266,7 @@ async function main() {
     id: t3Id, courseId: c2Id,
     name: 'Harbour Race 2025',
     date: '2025-06-07', status: 'open',
+    groupId,
     adminUserId: admin.id,
     visibility: 'public',
     participation: 'open',

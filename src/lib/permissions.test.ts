@@ -4,6 +4,7 @@ import {
   canViewTrial,
   canManageCourse,
   canManageTrial,
+  canCreateCourseInGroup,
   canSubmitToTrial,
   canManageGroup,
   canDeleteGroup,
@@ -131,7 +132,10 @@ describe('viewing a private trial', () => {
   })
 })
 
-describe('managing a course (edit / delete)', () => {
+// Legacy (pre-migration) management: a course/trial with no groupId yet stays
+// manageable by its original adminUserId, so an owner isn't locked out in the
+// deploy→migrate window.
+describe('managing a legacy course with no group (edit / delete)', () => {
   it('the owner can manage a public course', () => {
     expect(canManageCourse(makeCourse('public'), owner)).toBe(true)
   })
@@ -147,6 +151,55 @@ describe('managing a course (edit / delete)', () => {
   it('an unauthenticated visitor cannot manage any course', () => {
     expect(canManageCourse(makeCourse('public'), null)).toBe(false)
     expect(canManageCourse(makeCourse('private'), null)).toBe(false)
+  })
+})
+
+// Phase 2: a course/trial WITH a groupId is managed by that group's admins —
+// NOT the original creator unless they're also a group admin.
+describe('managing a group-owned course (phase 2)', () => {
+  const groupCourse = (): CourseMetadata => ({ ...makeCourse('public'), groupId: 'g1' })
+  it('an admin of the owning group can manage it', () => {
+    expect(canManageCourse(groupCourse(), other, new Set(['g1']))).toBe(true)
+  })
+  it('a user who does not admin the owning group cannot — even the original creator', () => {
+    // owner is the adminUserId but is NOT in the group-admin set → no longer manages.
+    expect(canManageCourse(groupCourse(), owner, new Set())).toBe(false)
+    expect(canManageCourse(groupCourse(), owner, undefined)).toBe(false)
+  })
+  it('an admin of a DIFFERENT group cannot manage it', () => {
+    expect(canManageCourse(groupCourse(), other, new Set(['g2']))).toBe(false)
+  })
+})
+
+describe('managing a group-owned trial (phase 2)', () => {
+  const groupTrial = (): TrialMetadata => ({ ...makeTrial('public'), groupId: 'g1' })
+  it('an admin of the owning group can manage it', () => {
+    expect(canManageTrial(groupTrial(), other, new Set(['g1']))).toBe(true)
+  })
+  it('a non-admin of the owning group cannot', () => {
+    expect(canManageTrial(groupTrial(), other, new Set(['g2']))).toBe(false)
+    expect(canManageTrial(groupTrial(), owner, new Set())).toBe(false)
+  })
+})
+
+describe('creating a course in a group (phase 2)', () => {
+  const group: GroupMetadata = {
+    id: 'g1', name: 'G', description: '', ownerId: owner.id,
+    adminUserIds: ['admin-1'], memberUserIds: ['member-1'], createdAt: '2026-01-01T00:00:00Z',
+  }
+  const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
+  const member: AuthUser = { id: 'member-1', email: 'm@x', displayName: 'M' }
+  it('the group owner can create', () => {
+    expect(canCreateCourseInGroup(group, owner)).toBe(true)
+  })
+  it('a group admin can create', () => {
+    expect(canCreateCourseInGroup(group, admin)).toBe(true)
+  })
+  it('a plain member cannot create', () => {
+    expect(canCreateCourseInGroup(group, member)).toBe(false)
+  })
+  it('a stranger cannot create', () => {
+    expect(canCreateCourseInGroup(group, other)).toBe(false)
   })
 })
 

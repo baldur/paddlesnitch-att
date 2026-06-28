@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
-import { getGroup, groupRoleOf, getUserGroupIds } from '@/lib/groups'
+import { getUserGroupIds, getUserAdminGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, Visibility, Participation } from '@/lib/types'
 
 type Params = { params: Promise<{ trialId: string }> }
@@ -13,13 +13,6 @@ function isVisibility(v: unknown): v is Visibility {
 
 function isParticipation(v: unknown): v is Participation {
   return v === 'open' || v === 'invitational'
-}
-
-async function userCanScopeToGroup(userId: string, groupId: string): Promise<boolean> {
-  const group = await getGroup(groupId)
-  if (!group) return false
-  const role = groupRoleOf(group, userId)
-  return role === 'owner' || role === 'admin'
 }
 
 export async function GET(_: NextRequest, { params }: Params) {
@@ -43,10 +36,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const trial = await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`)
   if (!trial) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Course admin used to be able to PATCH trials on their course. With
-  // visibility we tighten this to trial-owner-only — the course owner can
-  // still see and manage their own course; trials belong to their organiser.
-  if (!canManageTrial(trial, user)) {
+  // Management belongs to the owning group's owner/admins (phase 2).
+  const adminGroupIds = await getUserAdminGroupIds(user.id)
+  if (!canManageTrial(trial, user, adminGroupIds)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -67,7 +59,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // group course → trial inherits the group; otherwise the trial gets
     // whatever was asked for (still subject to group-scope permission).
     let requested: Visibility = body.visibility
-    let requestedGroupId = typeof body.visibleToGroupId === 'string' ? body.visibleToGroupId : next.visibleToGroupId
+    // The trial's group is fixed (it inherited the course's group); 'group'
+    // visibility always scopes to that owning group — never an arbitrary one.
+    let requestedGroupId = next.groupId ?? course?.groupId ?? course?.visibleToGroupId
 
     if (course?.visibility === 'private') {
       requested = 'private'
@@ -75,14 +69,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     } else if (course?.visibility === 'group') {
       requested = 'group'
       requestedGroupId = course.visibleToGroupId
-    } else if (requested === 'group') {
-      if (requestedGroupId && !(await userCanScopeToGroup(user.id, requestedGroupId))) {
-        requested = 'private'
-        requestedGroupId = undefined
-      }
-      if (!requestedGroupId) {
-        requested = 'private'
-      }
+    } else if (requested === 'group' && !requestedGroupId) {
+      // Group-scoped trial but no owning group to scope to (legacy) → private.
+      requested = 'private'
     }
 
     // Phase 5 — make-public acknowledgement: a flip TO public (after
