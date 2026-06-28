@@ -10,6 +10,9 @@ import { GET as getGroupRoute, PATCH as patchGroup, DELETE as deleteGroupRoute }
 import { POST as inviteToGroup, GET as listInvites } from '@/app/att/api/groups/[groupId]/invitations/route'
 import { POST as acceptInvite } from '@/app/att/api/groups/[groupId]/invitations/[invitationId]/accept/route'
 import { DELETE as kickMember } from '@/app/att/api/groups/[groupId]/members/[userId]/route'
+import { POST as requestJoin, GET as listJoinReqs } from '@/app/att/api/groups/[groupId]/join-requests/route'
+import { POST as approveJoin } from '@/app/att/api/groups/[groupId]/join-requests/[requestId]/approve/route'
+import { POST as declineJoin } from '@/app/att/api/groups/[groupId]/join-requests/[requestId]/decline/route'
 import { GET as getCourse } from '@/app/att/api/courses/[courseId]/route'
 import { POST as createCourse } from '@/app/att/api/courses/route'
 import { cookies } from 'next/headers'
@@ -90,7 +93,7 @@ describe('viewing a group', () => {
     expect(res.status).toBe(200)
   })
 
-  it('a non-member gets 404 (existence hidden)', async () => {
+  it('a non-member gets a limited view — name + counts, but no member list (phase 4)', async () => {
     const owner = await makeUser('Owner')
     const stranger = await makeUser('Stranger')
     mockAuth(owner.idToken)
@@ -98,17 +101,25 @@ describe('viewing a group', () => {
     mockAuth(stranger.idToken)
     const res = await getGroupRoute(new NextRequest('http://x'),
       { params: Promise.resolve({ groupId: group.id }) })
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.name).toBe('C')
+    expect(body.limited).toBe(true)
+    expect(body.viewerStatus).toBe('none')
+    expect(body.memberUserIds).toBeUndefined() // member list stays hidden
   })
 
-  it('an unauthenticated visitor gets 404', async () => {
+  it('an unauthenticated visitor also gets the limited view (discoverable by link)', async () => {
     const owner = await makeUser('Owner')
     mockAuth(owner.idToken)
     const group = await (await createGroup(jsonReq('POST', { name: 'C' }))).json()
     mockAuth(null)
     const res = await getGroupRoute(new NextRequest('http://x'),
       { params: Promise.resolve({ groupId: group.id }) })
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.limited).toBe(true)
+    expect(body.memberUserIds).toBeUndefined()
   })
 })
 
@@ -245,6 +256,117 @@ describe('group-scoped visibility', () => {
     mockAuth(member.idToken)
     const res = await createCourse(jsonReq('POST', groupCourseBody(group.id)))
     expect(res.status).toBe(403)
+  })
+})
+
+describe('self-serve join (phase 4)', () => {
+  async function makeGroupWithPolicy(ownerToken: string, policy: 'invite_only' | 'request' | 'open') {
+    mockAuth(ownerToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'G' }))).json()
+    if (policy !== 'request') {
+      mockAuth(ownerToken)
+      await patchGroup(jsonReq('PATCH', { joinPolicy: policy }), { params: Promise.resolve({ groupId: group.id }) })
+    }
+    return group
+  }
+
+  it("request policy: a stranger's request is pending until an admin approves, then they're a member", async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    const group = await makeGroupWithPolicy(owner.idToken, 'request')
+
+    mockAuth(joiner.idToken)
+    const reqRes = await requestJoin(jsonReq('POST', {}), { params: Promise.resolve({ groupId: group.id }) })
+    expect(reqRes.status).toBe(201)
+    expect((await reqRes.json()).status).toBe('pending')
+
+    mockAuth(owner.idToken)
+    const list = await (await listJoinReqs(new NextRequest('http://x'), { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(list.requests).toHaveLength(1)
+    const reqId = list.requests[0].id
+
+    mockAuth(owner.idToken)
+    const appr = await approveJoin(new NextRequest('http://x', { method: 'POST' }),
+      { params: Promise.resolve({ groupId: group.id, requestId: reqId }) })
+    expect(appr.status).toBe(200)
+    expect((await appr.json()).group.memberUserIds).toContain(joiner.id)
+  })
+
+  it('open policy: a stranger joins instantly', async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    const group = await makeGroupWithPolicy(owner.idToken, 'open')
+
+    mockAuth(joiner.idToken)
+    const res = await requestJoin(jsonReq('POST', {}), { params: Promise.resolve({ groupId: group.id }) })
+    expect(res.status).toBe(200)
+    expect((await res.json()).status).toBe('accepted')
+
+    mockAuth(joiner.idToken)
+    const g = await (await getGroupRoute(new NextRequest('http://x'), { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(g.memberUserIds).toContain(joiner.id)
+  })
+
+  it('invite_only policy: a self-serve request is rejected (403)', async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    const group = await makeGroupWithPolicy(owner.idToken, 'invite_only')
+
+    mockAuth(joiner.idToken)
+    const res = await requestJoin(jsonReq('POST', {}), { params: Promise.resolve({ groupId: group.id }) })
+    expect(res.status).toBe(403)
+  })
+
+  it('a valid join link lets a stranger join instantly, even on a request-policy group', async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    mockAuth(owner.idToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'G' }))).json()
+    mockAuth(owner.idToken)
+    const patched = await (await patchGroup(jsonReq('PATCH', { regenerateJoinLink: true }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(patched.joinLinkToken).toBeTruthy()
+
+    mockAuth(joiner.idToken)
+    const res = await requestJoin(jsonReq('POST', { token: patched.joinLinkToken }),
+      { params: Promise.resolve({ groupId: group.id }) })
+    expect(res.status).toBe(200)
+    expect((await res.json()).status).toBe('accepted')
+  })
+
+  it('a non-admin cannot approve a join request', async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    const stranger = await makeUser('Stranger')
+    const group = await makeGroupWithPolicy(owner.idToken, 'request')
+
+    mockAuth(joiner.idToken)
+    const reqId = (await (await requestJoin(jsonReq('POST', {}),
+      { params: Promise.resolve({ groupId: group.id }) })).json()).request.id
+
+    mockAuth(stranger.idToken)
+    const res = await approveJoin(new NextRequest('http://x', { method: 'POST' }),
+      { params: Promise.resolve({ groupId: group.id, requestId: reqId }) })
+    expect(res.status).toBe(403)
+  })
+
+  it('an admin can decline a request — the requester does not become a member', async () => {
+    const owner = await makeUser('Owner')
+    const joiner = await makeUser('Joiner')
+    const group = await makeGroupWithPolicy(owner.idToken, 'request')
+
+    mockAuth(joiner.idToken)
+    const reqId = (await (await requestJoin(jsonReq('POST', {}),
+      { params: Promise.resolve({ groupId: group.id }) })).json()).request.id
+
+    mockAuth(owner.idToken)
+    const dec = await declineJoin(new NextRequest('http://x', { method: 'POST' }),
+      { params: Promise.resolve({ groupId: group.id, requestId: reqId }) })
+    expect(dec.status).toBe(200)
+
+    mockAuth(owner.idToken)
+    const g = await (await getGroupRoute(new NextRequest('http://x'), { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(g.memberUserIds).not.toContain(joiner.id)
   })
 })
 
