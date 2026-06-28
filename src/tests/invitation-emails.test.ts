@@ -16,8 +16,8 @@ vi.mock('@/lib/email', () => ({
   }),
 }))
 
-import { POST as inviteToClub } from '@/app/att/api/clubs/[clubId]/invitations/route'
-import { POST as createClub } from '@/app/att/api/clubs/route'
+import { POST as inviteToGroup } from '@/app/att/api/groups/[groupId]/invitations/route'
+import { POST as createGroup } from '@/app/att/api/groups/route'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -34,27 +34,27 @@ function mockAuth(idToken: string | null) {
 }
 
 function jsonReq(method: string, body?: unknown) {
-  return new NextRequest('http://x/att/api/clubs/c/invitations', {
+  return new NextRequest('http://x/att/api/groups/c/invitations', {
     method,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     headers: { 'Content-Type': 'application/json' },
   })
 }
 
-// #53 — Baldur invited someone to a club but they had no account; we
+// #53 — Baldur invited someone to a group but they had no account; we
 // never emailed them, so they had no way to learn they were invited.
 // These tests pin the new behaviour: every successful invite sends an
 // email to the recipient, with copy tailored to whether they already
 // have an account.
-describe('#53 — club invitations send email to recipient', () => {
-  it('emails a brand-new address with a signup link that lands on the club page', async () => {
+describe('#53 — group invitations send email to recipient', () => {
+  it('emails a brand-new address with a signup link that lands on the group page', async () => {
     const owner = await makeUser('Captain Cook')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
 
     mockAuth(owner.idToken)
-    const res = await inviteToClub(jsonReq('POST', { email: 'new-user@example.com' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await inviteToGroup(jsonReq('POST', { email: 'new-user@example.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(201)
 
     expect(sentEmails).toHaveLength(1)
@@ -66,40 +66,40 @@ describe('#53 — club invitations send email to recipient', () => {
     // "…invited you to join Endeavour Rowing", which is what we're
     // really asserting here.
     expect(email.subject).toMatch(/invited you to join/)
-    // Signup link includes ?next= so the recipient lands on the club
+    // Signup link includes ?next= so the recipient lands on the group
     // after signup; applyPendingInvitations promotes the pending invite.
     expect(email.text).toMatch(/\/att\/auth\?[^\s]*next=/)
-    expect(email.text).toMatch(/clubs%2F[^\s&]+/)
+    expect(email.text).toMatch(/groups%2F[^\s&]+/)
   })
 
-  it('emails an existing-account recipient with a direct club link (no signup)', async () => {
+  it('emails an existing-account recipient with a direct group link (no signup)', async () => {
     const owner = await makeUser('Captain Cook')
     const guest = await makeUser('Already Member')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
 
     mockAuth(owner.idToken)
-    const res = await inviteToClub(jsonReq('POST', { email: guest.email }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await inviteToGroup(jsonReq('POST', { email: guest.email }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect(res.status).toBe(201)
 
     expect(sentEmails).toHaveLength(1)
     const [email] = sentEmails
     expect(email.to).toBe(guest.email.toLowerCase())
-    // The existing-account email goes straight to the club page — no
+    // The existing-account email goes straight to the group page — no
     // signup detour.
-    expect(email.text).toContain(`/att/clubs/${club.id}`)
+    expect(email.text).toContain(`/att/groups/${group.id}`)
     expect(email.text).not.toContain('?signup=')
   })
 
   it('mentions the admin role in the subject when inviting as an admin', async () => {
     const owner = await makeUser('Captain Cook')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
 
     mockAuth(owner.idToken)
-    await inviteToClub(jsonReq('POST', { email: 'admin-recruit@example.com', role: 'admin' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    await inviteToGroup(jsonReq('POST', { email: 'admin-recruit@example.com', role: 'admin' }),
+      { params: Promise.resolve({ groupId: group.id }) })
 
     expect(sentEmails).toHaveLength(1)
     expect(sentEmails[0].text.toLowerCase()).toContain('admin')
@@ -108,12 +108,12 @@ describe('#53 — club invitations send email to recipient', () => {
   it('skips the send for synthetic Strava emails (no real inbox)', async () => {
     const owner = await makeUser('Captain Cook')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
 
     mockAuth(owner.idToken)
-    const res = await inviteToClub(
+    const res = await inviteToGroup(
       jsonReq('POST', { email: 'strava-12345@noreply.paddlesnitch.com' }),
-      { params: Promise.resolve({ clubId: club.id }) }
+      { params: Promise.resolve({ groupId: group.id }) }
     )
     // The invitation itself still records (admin can still see it in
     // outstanding invites and the user can find it after linking a real
@@ -126,11 +126,11 @@ describe('#53 — club invitations send email to recipient', () => {
     const owner = await makeUser('Captain Cook')
     const stranger = await makeUser('Random')
     mockAuth(owner.idToken)
-    const club = await (await createClub(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
 
     mockAuth(stranger.idToken)
-    const res = await inviteToClub(jsonReq('POST', { email: 'noise@example.com' }),
-      { params: Promise.resolve({ clubId: club.id }) })
+    const res = await inviteToGroup(jsonReq('POST', { email: 'noise@example.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })
     expect([403, 404]).toContain(res.status)
     expect(sentEmails).toHaveLength(0)
   })

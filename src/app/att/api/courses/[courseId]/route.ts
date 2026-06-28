@@ -2,32 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewCourse, canManageCourse } from '@/lib/permissions'
-import { getClub, clubRoleOf, getUserClubIds } from '@/lib/clubs'
+import { getGroup, groupRoleOf, getUserGroupIds } from '@/lib/groups'
 import { courseHasEntries, geometryChanged, GEOMETRY_FIELDS } from '@/lib/course-entries'
 import type { CourseMetadata, Visibility } from '@/lib/types'
 
 type Params = { params: Promise<{ courseId: string }> }
 
 function isVisibility(v: unknown): v is Visibility {
-  return v === 'public' || v === 'private' || v === 'club'
+  return v === 'public' || v === 'private' || v === 'group'
 }
 
 function isSport(v: unknown): v is CourseMetadata['sport'] {
   return v === 'kayak' || v === 'rowing' || v === 'both'
 }
 
-async function userCanScopeToClub(userId: string, clubId: string): Promise<boolean> {
-  const club = await getClub(clubId)
-  if (!club) return false
-  const role = clubRoleOf(club, userId)
+async function userCanScopeToGroup(userId: string, groupId: string): Promise<boolean> {
+  const group = await getGroup(groupId)
+  if (!group) return false
+  const role = groupRoleOf(group, userId)
   return role === 'owner' || role === 'admin'
 }
 
-// Applies the patch's visibility (+ visibleToClubId) onto `next`. Pulled out
-// so the in-place edit and the clone branch share the same club-scope guard:
-// switching to `club` requires the editor to be owner/admin of the target
-// club, otherwise we silently drop to `private` rather than carrying a
-// stale clubId or upgrading on bad input.
+// Applies the patch's visibility (+ visibleToGroupId) onto `next`. Pulled out
+// so the in-place edit and the clone branch share the same group-scope guard:
+// switching to `group` requires the editor to be owner/admin of the target
+// group, otherwise we silently drop to `private` rather than carrying a
+// stale groupId or upgrading on bad input.
 async function applyVisibility(
   next: CourseMetadata,
   course: CourseMetadata,
@@ -36,18 +36,18 @@ async function applyVisibility(
 ): Promise<void> {
   if (!isVisibility(body.visibility)) return
   next.visibility = body.visibility
-  if (body.visibility === 'club') {
-    const clubId = typeof body.visibleToClubId === 'string'
-      ? body.visibleToClubId
-      : course.visibleToClubId
-    if (clubId && await userCanScopeToClub(userId, clubId)) {
-      next.visibleToClubId = clubId
+  if (body.visibility === 'group') {
+    const groupId = typeof body.visibleToGroupId === 'string'
+      ? body.visibleToGroupId
+      : course.visibleToGroupId
+    if (groupId && await userCanScopeToGroup(userId, groupId)) {
+      next.visibleToGroupId = groupId
     } else {
       next.visibility = 'private'
-      delete next.visibleToClubId
+      delete next.visibleToGroupId
     }
   } else {
-    delete next.visibleToClubId
+    delete next.visibleToGroupId
   }
 }
 
@@ -58,8 +58,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   // of private resources.
   if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const viewer = await getAuthUser()
-  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : undefined
-  if (!canViewCourse(course, viewer, viewerClubIds)) {
+  const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
+  if (!canViewCourse(course, viewer, viewerGroupIds)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   return NextResponse.json(course)

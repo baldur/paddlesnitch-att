@@ -122,7 +122,7 @@ describe('Course edits are owner-only', () => {
 
 // ---------------------------------------------------------------------------
 // Phase 1 visibility — story-style permission tests. Story titles mirror
-// rows of the permission matrix in docs/features/visibility-clubs-tos.md.
+// rows of the permission matrix in docs/features/visibility-groups-tos.md.
 // ---------------------------------------------------------------------------
 
 async function buildPrivateCourse(ownerIdToken: string, name = 'Private Course') {

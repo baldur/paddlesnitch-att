@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuthUser } from '@/lib/auth'
-import { getUserClubIds } from '@/lib/clubs'
+import { getUserGroupIds } from '@/lib/groups'
 import { getProfileSettings, buildProfileStats, resolveToUserId } from '@/lib/profile'
 import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
@@ -49,8 +49,8 @@ export default async function ProfilePage({
     redirect(`/att/u/${settings.handle}`)
   }
 
-  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : new Set<string>()
-  const stats = await buildProfileStats(userId, viewer, viewerClubIds)
+  const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : new Set<string>()
+  const stats = await buildProfileStats(userId, viewer, viewerGroupIds)
 
   const name = stats.displayName ?? (isOwner ? viewer!.displayName : 'Paddler')
 

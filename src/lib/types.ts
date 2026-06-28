@@ -40,10 +40,10 @@ export type CourseType =
   | 'point_to_point' | 'loop' | 'gate'
   | 'one_way' | 'out_and_back' | 'lap' | 'figure_eight' // legacy
 
-// Visibility scope. Phase 1 added public / private; phase 4 added `club`
-// (visibility tied to a club's members + admins + owner). `visibleToClubId`
-// MUST be set when visibility === 'club' and absent otherwise.
-export type Visibility = 'public' | 'private' | 'club'
+// Visibility scope. Phase 1 added public / private; phase 4 added `group`
+// (visibility tied to a group's members + admins + owner). `visibleToGroupId`
+// MUST be set when visibility === 'group' and absent otherwise.
+export type Visibility = 'public' | 'private' | 'group'
 
 export type CourseMetadata = {
   id: string
@@ -58,7 +58,7 @@ export type CourseMetadata = {
   gates?: Array<{ line: Line; direction: 1 | -1 }>  // gate type: ordered checkpoints
   adminUserId: string
   visibility: Visibility
-  visibleToClubId?: string // present iff visibility === 'club'
+  visibleToGroupId?: string // present iff visibility === 'group'
   createdAt: string
 }
 
@@ -75,7 +75,7 @@ export type TrialMetadata = {
   status: 'open' | 'closed'
   adminUserId: string
   visibility: Visibility
-  visibleToClubId?: string  // present iff visibility === 'club'
+  visibleToGroupId?: string  // present iff visibility === 'group'
   participation: Participation
   // Cognito subs of invited users. Empty (or absent) for `open` trials.
   invitedUserIds: string[]
@@ -200,21 +200,21 @@ export type StravaActivitySummary = {
 }
 
 // ---------------------------------------------------------------------------
-// Clubs (phase 4)
+// Groups (phase 4)
 // ---------------------------------------------------------------------------
 //
-// A club is an org / community / team that can scope a course or trial's
+// A group is an org / community / team that can scope a course or trial's
 // visibility to its members. Ownership semantics:
 //   - exactly one owner (the creator until explicit transfer)
-//   - zero or more admins (can manage on behalf of the club, can NOT
+//   - zero or more admins (can manage on behalf of the group, can NOT
 //     transfer ownership or delete)
-//   - zero or more members (can see club-visibility resources, can submit
-//     to club-scoped trials, can NOT manage anything)
+//   - zero or more members (can see group-visibility resources, can submit
+//     to group-scoped trials, can NOT manage anything)
 //
-// Stored at clubs/{clubId}/metadata.json. Reverse index per user lives at
-// users/{userId}/clubs.json — see src/lib/clubs.ts.
+// Stored at groups/{groupId}/metadata.json. Reverse index per user lives at
+// users/{userId}/groups.json — see src/lib/groups.ts.
 
-export type ClubMetadata = {
+export type GroupMetadata = {
   id: string
   name: string
   description: string           // free-form, optional in the UI but always present as a string
@@ -224,15 +224,15 @@ export type ClubMetadata = {
   createdAt: string
 }
 
-// Stored at clubs/{clubId}/invitations/{invitationId}.json (resolved invites
+// Stored at groups/{groupId}/invitations/{invitationId}.json (resolved invites
 // for users who already have an account) and at
-// pending-invitations/clubs/{emailHash}/{invitationId}.json (unresolved
+// pending-invitations/groups/{emailHash}/{invitationId}.json (unresolved
 // invites that fire on signup).
 //
 // Pre-signup invites resolve themselves when the matching email signs up.
-export type ClubInvitation = {
+export type GroupInvitation = {
   id: string
-  clubId: string
+  groupId: string
   role: 'admin' | 'member'
   invitedBy: string             // Cognito sub of the inviter
   // Exactly one of these is set. toUserId for resolved invites; toEmail

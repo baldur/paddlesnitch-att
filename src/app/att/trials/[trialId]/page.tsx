@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { getJson } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { canViewTrial } from '@/lib/permissions'
-import { getUserClubIds } from '@/lib/clubs'
+import { getUserGroupIds } from '@/lib/groups'
 import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
@@ -24,8 +24,8 @@ export default async function TrialPage({
   // 404 as a missing trial — no leakage of "this trial exists but you can't
   // see it" through differing copy.
   const viewer = await getAuthUser()
-  const viewerClubIds = viewer ? new Set(await getUserClubIds(viewer.id)) : undefined
-  if (!canViewTrial(trial, viewer, viewerClubIds)) notFound()
+  const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
+  if (!canViewTrial(trial, viewer, viewerGroupIds)) notFound()
 
   const [course, leaderboard] = await Promise.all([
     getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`),

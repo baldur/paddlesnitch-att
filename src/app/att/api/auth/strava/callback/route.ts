@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
       }
       cognitoEmail = accountEmail
       await putAthleteIndex(profile.id, created.sub)
-      // Pull in any club invitations queued for this email before signup.
+      // Pull in any group invitations queued for this email before signup.
       // Synth-email users will hit zero pending invites by construction
       // (nobody invites a strava-{n}@noreply… address), but the call is
       // cheap and the storage layer no-ops when the index is empty.

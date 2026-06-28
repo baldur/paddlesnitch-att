@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export const metadata = {
   title: 'paddlesnitch.com — tools for the river',
-  description: 'A growing suite of software for paddlers, rowers, and river clubs.',
+  description: 'A growing suite of software for paddlers, rowers, and river groups.',
 }
 
 // One available product, then a couple of anonymous teaser slots so the
@@ -49,7 +49,7 @@ export default function LandingPage() {
           A growing suite
         </p>
         <h1 className="text-3xl md:text-5xl font-bold text-[#0f172a] mb-3">
-          Software for paddlers, rowers, and river clubs.
+          Software for paddlers, rowers, and river groups.
         </h1>
         <p className="text-[#64748b] text-sm max-w-xl mx-auto leading-relaxed">
           Practical tools that disappear into the river day. Honest, no-bloat,
