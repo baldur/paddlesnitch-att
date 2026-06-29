@@ -55,14 +55,14 @@ export default function LeaderboardTable({
     return (
       <div className="border border-[#e2e8f0] p-8 flex flex-col items-center gap-4 text-center text-[#64748b] text-sm">
         <p>
-          {uploadHref ? 'No entries yet. Be the first to upload a trace.' : 'No entries.'}
+          {uploadHref ? 'No entries yet. Be the first to submit your entry.' : 'No entries.'}
         </p>
         {uploadHref && (
           <a
             href={uploadHref}
             className="px-4 py-2 bg-[#0369a1] text-white text-xs tracking-widest hover:bg-[#0284c7] transition-colors"
           >
-            UPLOAD TRACE
+            SUBMIT YOUR ENTRY
           </a>
         )}
       </div>
