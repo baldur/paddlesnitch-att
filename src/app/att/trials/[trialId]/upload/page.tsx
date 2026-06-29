@@ -419,7 +419,7 @@ export default function UploadPage({
         ) : (
           <div className="flex flex-col gap-6">
             <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">
-              SUBMIT YOUR ACTIVITY
+              SUBMIT YOUR ENTRY
             </h1>
             <p className="text-sm text-[#64748b] -mt-4">
               Upload your full session — warmup and cooldown included. The system

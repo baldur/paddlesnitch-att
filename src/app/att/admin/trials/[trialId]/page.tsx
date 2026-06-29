@@ -292,7 +292,7 @@ export default function TrialAdminPage({
                 href={`/att/trials/${trialId}/upload`}
                 className="text-xs tt-link"
               >
-                + Upload entry
+                + Submit your entry
               </a>
             )}
           </div>
@@ -304,7 +304,7 @@ export default function TrialAdminPage({
                 <>
                   {' '}
                   <a href={`/att/trials/${trialId}/upload`} className="tt-link">
-                    Upload a trace
+                    Submit your entry
                   </a>{' '}
                   to get started.
                 </>

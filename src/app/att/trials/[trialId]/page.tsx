@@ -62,7 +62,7 @@ export default async function TrialPage({
             href={`/att/trials/${trialId}/upload`}
             className="text-xs bg-[#0369a1] text-white font-bold px-4 py-1.5 tracking-widest hover:bg-[#0284c7] transition-colors"
           >
-            UPLOAD TRACE
+            SUBMIT YOUR ENTRY
           </a>
         )}
       </AppHeader>
