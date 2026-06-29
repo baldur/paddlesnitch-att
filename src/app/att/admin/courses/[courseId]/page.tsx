@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import { haversine } from '@/lib/geo'
 import type { CourseMetadata, TrialMetadata, Line, LatLng } from '@/lib/types'
 
@@ -176,8 +177,8 @@ export default function CourseAdminPage({
 
   if (!course) {
     return (
-      <main className="flex-1 flex items-center justify-center text-[#64748b] text-sm">
-        Loading…
+      <main className="flex-1 flex">
+        <LoadingState />
       </main>
     )
   }

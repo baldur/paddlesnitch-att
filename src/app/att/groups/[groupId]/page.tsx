@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import type { GroupInvitation, JoinPolicy, AuthUser } from '@/lib/types'
 
 type Invitation = GroupInvitation
@@ -71,7 +72,7 @@ export default function GroupDetailPage({
   useEffect(() => { loadAll() }, [groupId])
 
   if (user === undefined || group === undefined) {
-    return <main className="flex-1 flex items-center justify-center text-[#64748b] text-sm">Loading…</main>
+    return <main className="flex-1 flex"><LoadingState /></main>
   }
   if (!user) {
     return (
