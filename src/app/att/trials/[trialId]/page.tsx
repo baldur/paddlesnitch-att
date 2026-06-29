@@ -4,6 +4,7 @@ import { getJson } from '@/lib/storage'
 import { getAuthUser } from '@/lib/auth'
 import { canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
+import { enrichTrialConditions } from '@/lib/conditions'
 import { getPublicProfileLinks } from '@/lib/profile'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable'
 import CourseMapClient from '@/components/map/CourseMapClient'
@@ -26,6 +27,12 @@ export default async function TrialPage({
   const viewer = await getAuthUser()
   const viewerGroupIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : undefined
   if (!canViewTrial(trial, viewer, viewerGroupIds)) notFound()
+
+  // Read-time fallback for entries whose upload-time conditions capture failed
+  // or predate the feature (issue #106). Best-effort and idempotent — fills
+  // missing conditions, persists them, and rebuilds the leaderboard before we
+  // read it. No-ops once every entry has conditions (and under test).
+  await enrichTrialConditions(trialId)
 
   const [course, leaderboard] = await Promise.all([
     getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`),

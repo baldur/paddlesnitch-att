@@ -42,3 +42,28 @@ export function utcDateString(value: Date | string): string {
 export function dateDiscrepancy(raceDateISO: string, traceISO: string | Date): boolean {
   return utcDateString(raceDateISO) !== utcDateString(traceISO)
 }
+
+// WMO weather interpretation code → short label (issue #106). Covers the
+// common buckets; anything unmapped falls back to the numeric code so it's
+// never blank. Lives here (not conditions.ts) so client components can import
+// it without pulling in the server-only storage/fetch code.
+export function weatherCodeLabel(code: number): string {
+  if (code === 0) return 'Clear'
+  if (code <= 2) return 'Partly cloudy'
+  if (code === 3) return 'Overcast'
+  if (code <= 48) return 'Fog'
+  if (code <= 57) return 'Drizzle'
+  if (code <= 67) return 'Rain'
+  if (code <= 77) return 'Snow'
+  if (code <= 82) return 'Showers'
+  if (code <= 86) return 'Snow showers'
+  if (code <= 99) return 'Thunderstorm'
+  return `Code ${code}`
+}
+
+// Wind direction in degrees (the direction it blows FROM) → 8-point compass.
+export function compass8(deg: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const i = Math.round((((deg % 360) + 360) % 360) / 45) % 8
+  return dirs[i]
+}

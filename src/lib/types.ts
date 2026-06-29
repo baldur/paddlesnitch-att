@@ -27,6 +27,44 @@ export type ProcessedResult = {
   // discarded. Used to tell the athlete "best of N runs". Absent on pre-#77
   // entries — treat undefined as a single run.
   runCount?: number
+  // Weather + river flow at this entry's finish time (issue #106). Captured
+  // best-effort at upload time (read-time fallback fills it in later). Absent
+  // when capture failed or hasn't run yet. See src/lib/conditions.ts.
+  conditions?: EntryConditions
+}
+
+// ---------------------------------------------------------------------------
+// Conditions: weather + river flow (issue #106)
+// ---------------------------------------------------------------------------
+//
+// Captured per entry at the finish time so results carry the conditions they
+// were set in (an 8am row and a 3pm row on the same trial can differ). Both
+// sources are open data with no API key: weather from Open-Meteo, river flow
+// from the UK Environment Agency flood-monitoring API. See
+// docs/features/weather-and-river-flow.md.
+
+export type WeatherConditions = {
+  time: string             // ISO 8601 of the hour the reading represents
+  temperatureC: number
+  windSpeedKmh: number
+  windDirectionDeg: number // degrees the wind blows FROM
+  precipitationMm: number
+  weatherCode: number      // WMO weather interpretation code
+}
+
+export type FlowConditions = {
+  stationId: string        // EA station reference (e.g. "2200TH")
+  stationLabel: string     // human-readable station name
+  measureId: string        // EA measure @id the reading came from
+  flowM3s: number          // river flow in cubic metres per second
+  time: string             // ISO 8601 of the reading
+}
+
+export type EntryConditions = {
+  capturedAt: string       // ISO 8601 when we fetched
+  location: LatLng         // the lat/lng we queried (course start-line midpoint)
+  weather?: WeatherConditions // absent if the weather fetch failed
+  flow?: FlowConditions       // absent if no nearby flow station / fetch failed
 }
 
 // Canonical types (new courses):
@@ -185,6 +223,9 @@ export type LeaderboardEntry = {
   // fastest. Shown as "best of N runs" when > 1. Undefined for pre-#77
   // entries (treat as a single run).
   runCount?: number
+  // Weather + river flow at this entry's finish time (issue #106). Carried
+  // from the stored result; absent until capture succeeds.
+  conditions?: EntryConditions
 }
 
 export type AuthUser = {

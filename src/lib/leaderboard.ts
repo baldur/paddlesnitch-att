@@ -39,6 +39,7 @@ export async function rebuildLeaderboard(trialId: string): Promise<void> {
       totalElapsedSeconds: e.result.totalElapsedSeconds,
       splits: e.result.splits,
       ...(e.result.runCount && e.result.runCount > 1 ? { runCount: e.result.runCount } : {}),
+      ...(e.result.conditions ? { conditions: e.result.conditions } : {}),
     }))
     .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)
 

@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
 import { processTrace, diagnoseGates, gateDiagnosisMessage } from '@/lib/geo'
+import { captureConditions, midpoint } from '@/lib/conditions'
 import { emitMetric } from '@/lib/metrics'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
@@ -150,6 +151,12 @@ async function processTrack(
       { status: 422 }
     )
   }
+
+  // Capture weather + river flow at the finish time, against the course's
+  // start-line midpoint (issue #106). Best-effort: a failure leaves
+  // conditions absent for the read-time fallback to fill in later.
+  const conditions = await captureConditions(midpoint(course.startLine), result.finishTimestamp)
+  if (conditions) result.conditions = conditions
 
   // The trace's recorded date is the UTC date of the first track point.
   // If the user-picked race date differs from this, flag a discrepancy.
