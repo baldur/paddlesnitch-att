@@ -541,6 +541,7 @@ src/
     cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, refresh, revoke, verifyIdToken
   components/
     AuthNav.tsx                ← Client component: signed in → name (links to /att/u/{id} public profile) + ACCOUNT (links to /att/account settings) + SIGN OUT; signed out → "SIGN IN" link
+    LoadingState.tsx           ← Shared centered loading indicator (three blinking blue blocks + label) for client pages while data fetches; replaces the bare "Loading…" text node. Defaults to filling its flex parent (`flex-1`); pass `className`/`label` to tune. See #121.
     map/
       DrawingMap.tsx           ← Click-to-place start/finish lines on Leaflet map
       CourseMap.tsx            ← Read-only map: start (green), finish (red), auto-fit bounds

@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
@@ -386,7 +387,7 @@ export default function UploadPage({
             </a>
           </div>
         ) : submitGate === undefined ? (
-          <p className="text-sm text-[#64748b]">Checking…</p>
+          <LoadingState label="Checking…" className="py-16" />
         ) : submitGate.canSubmit === false ? (
           // Signed in but not allowed to submit — explain why and point at the
           // group to join (self-serve join lands in phase 4).

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 
@@ -253,9 +254,7 @@ function AccountPageInner() {
       />
 
       <div className="flex-1 px-4 py-8 max-w-2xl mx-auto w-full space-y-10">
-        {user === undefined && (
-          <p className="text-sm text-[#64748b]">Loading…</p>
-        )}
+        {user === undefined && <LoadingState className="py-16" />}
 
         {user === null && (
           <div className="flex flex-col gap-4 text-center pt-16">

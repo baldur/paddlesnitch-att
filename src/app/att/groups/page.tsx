@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import type { GroupMetadata } from '@/lib/types'
 
 // /att/groups — the viewer's groups and a quick-create form.
@@ -69,9 +70,7 @@ export default function GroupsCataloguePage() {
             Groups scope courses and trials to a closed group of members.
           </p>
 
-          {groups === null && (
-            <div className="text-xs text-[#64748b]">Loading…</div>
-          )}
+          {groups === null && <LoadingState className="py-8" />}
           {groups && groups.length === 0 && (
             <div className="border border-[#e2e8f0] p-6 text-center text-[#64748b] text-sm">
               You&apos;re not in any groups yet. Create one below, or wait for an invitation.
