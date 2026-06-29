@@ -84,8 +84,11 @@ jobs:
               - a human just applied the `claude-go` label to ask you to pick the
                 item up right away — read the whole issue/PR from scratch and
                 start working it toward resolution.
-            In the `claude-go` case, once you've engaged (posted your comment /
-            opened a PR), also run, as your LAST step:
+            In the `claude-go` case, post a one-line acknowledgement comment as
+            your VERY FIRST step (e.g. "On it — picking this up now.") so there's
+            a visible trace even if the work runs long, THEN do the work.
+            Once you've engaged (posted your comment / opened a PR), also run,
+            as your LAST step:
               gh issue edit <n> --add-label claude-active --remove-label claude-go
             (or `gh pr edit <n> ...`) so future comments enter the normal fast
             loop and the kick label is cleared.
@@ -122,4 +125,9 @@ jobs:
           # Allow the tools the loop needs to actually work (same trust model as
           # the scheduled cron routines). The action keeps its own GitHub
           # progress-comment tool regardless.
-          claude_args: "--max-turns 25 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
+          # max-turns 25 was too low for a cold `claude-go` pickup (read issue →
+          # write test → implement → pnpm test + build → commit/push → PR →
+          # comment → relabel easily exceeds 25, and the action exits non-zero
+          # with NO comment posted on `error_max_turns`, so it looks dead). 50
+          # gives comfortable headroom for a full fix.
+          claude_args: "--max-turns 50 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
