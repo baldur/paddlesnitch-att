@@ -84,16 +84,26 @@ jobs:
               - a human just applied the `claude-go` label to ask you to pick the
                 item up right away — read the whole issue/PR from scratch and
                 start working it toward resolution.
-            In the `claude-go` case, post a one-line acknowledgement comment as
-            your VERY FIRST step (e.g. "On it — picking this up now.") so there's
-            a visible trace even if the work runs long, THEN do the work.
-            Once you've engaged (posted your comment / opened a PR), also run,
-            as your LAST step:
-              gh issue edit <n> --add-label claude-active --remove-label claude-go
-            (or `gh pr edit <n> ...`) so future comments enter the normal fast
-            loop and the kick label is cleared.
+            CRITICAL — leave a durable artifact EARLY. You have a finite turn
+            budget and may be cut off mid-work; the steps below are ordered so a
+            partial run still leaves something reviewable. Do them in THIS order:
+              1. (claude-go only) Post a one-line ack comment FIRST
+                 (e.g. "On it — picking this up now.").
+              2. (claude-go only) Claim the item NOW, not at the end:
+                   gh issue edit <n> --add-label claude-active --remove-label claude-go
+                 (or `gh pr edit <n> ...`). This is safe — the loop only
+                 auto-fires on a `claude-go` label, never on `claude-active`.
+              3. If you will change code: create the branch, commit the first
+                 thing (even just a failing test or a stub), push, and OPEN A
+                 DRAFT PR immediately (`gh pr create --draft --title ... --body
+                 "WIP — Closes #<n>"`). THEN keep committing/pushing to it as you
+                 work. This way, even if you run out of turns, a draft PR with
+                 partial work exists instead of nothing.
+              4. Do the actual work, pushing commits as you go.
+              5. When done (or blocked), post a status comment and, if green,
+                 mark the PR ready (`gh pr ready <pr>`).
             Node, pnpm, and dependencies are already installed, so you can run
-            `pnpm test` / `pnpm build` directly.
+            `pnpm test` / `pnpm build` directly. Don't reinstall deps.
 
             IMPORTANT — how to reply: your final text output is NOT shown to
             anyone. To communicate you MUST post a GitHub comment yourself with
@@ -120,6 +130,12 @@ jobs:
               deploy).
             - If the latest comment is a question or needs a product decision,
               post a concise answer or a specific clarifying question — don't guess.
+              (A pure Q&A reply needs no branch/PR — just comment.)
+            - Scope to the turn budget. If the issue is a LARGE feature that
+              clearly won't fit, do NOT try to half-build all of it. Open a draft
+              PR with a small, coherent, tested first slice (or a `docs/features`
+              spec), and comment with the plan for the rest. A reviewable draft PR
+              beats an over-limit run that leaves nothing.
             - Keep comments short. If the work is complete, say so explicitly so a
               human can merge.
           # Allow the tools the loop needs to actually work (same trust model as
@@ -130,4 +146,10 @@ jobs:
           # comment → relabel easily exceeds 25, and the action exits non-zero
           # with NO comment posted on `error_max_turns`, so it looks dead). 50
           # gives comfortable headroom for a full fix.
-          claude_args: "--max-turns 50 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
+          # 50 still wasn't enough — a test-first PR (read → failing test →
+          # implement → pnpm test + build, iterating on failures → commit → push
+          # → PR) blew past 50 even on small issues (#106/#107/#123 all died at
+          # turn 51 with NO PR). 80 buys headroom; the "open a draft PR early"
+          # ordering above is the real safety net so a cut-off run still leaves
+          # a reviewable PR.
+          claude_args: "--max-turns 80 --model claude-opus-4-8 --allowedTools Bash,Read,Edit,Write,Glob,Grep"
