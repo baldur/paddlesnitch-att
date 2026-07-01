@@ -185,6 +185,10 @@ export type LeaderboardEntry = {
   // fastest. Shown as "best of N runs" when > 1. Undefined for pre-#77
   // entries (treat as a single run).
   runCount?: number
+  // Set only when the entry was imported from Strava — the source activity id,
+  // so the leaderboard can link "View on Strava" back to it (Strava brand
+  // guidelines, #107). Derived from the stored trace filename.
+  stravaActivityId?: number
 }
 
 export type AuthUser = {

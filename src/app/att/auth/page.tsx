@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import StravaButton from '@/components/strava/StravaButton'
 
 function AuthForm() {
   const router = useRouter()
@@ -162,12 +163,9 @@ function AuthForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <a
-        href={stravaHref}
-        className="flex items-center justify-center gap-2 px-6 py-2.5 mb-2 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
-      >
-        CONTINUE WITH STRAVA
-      </a>
+      <div className="flex justify-center mb-2">
+        <StravaButton href={stravaHref} />
+      </div>
       <p className="text-xs text-[#94a3b8] mb-6 text-center leading-relaxed">
         Strava doesn&apos;t share your email, so after you continue we&apos;ll ask you to add one — that&apos;s
         how we reach you about your account and group invitations. Already have an email account here?

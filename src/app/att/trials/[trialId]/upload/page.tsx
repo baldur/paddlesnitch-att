@@ -4,6 +4,9 @@ import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
 import CourseMapClient from '@/components/map/CourseMapClient'
+import StravaButton from '@/components/strava/StravaButton'
+import PoweredByStrava from '@/components/strava/PoweredByStrava'
+import ViewOnStrava from '@/components/strava/ViewOnStrava'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
 import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
 
@@ -553,12 +556,7 @@ export default function UploadPage({
                     <p className="text-sm text-[#0f172a]">
                       Connect Strava once and you can import any recent water-sport activity straight into a time trial.
                     </p>
-                    <a
-                      href={`/att/api/strava/connect`}
-                      className="self-start px-4 py-2 bg-[#fc4c02] text-white text-xs tracking-widest hover:bg-[#e34402] transition-colors"
-                    >
-                      CONNECT STRAVA
-                    </a>
+                    <StravaButton href="/att/api/strava/connect" className="self-start" />
                     <p className="text-xs text-[#64748b]">
                       You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
                       <a href="/att/account" className="tt-link">account page</a>.
@@ -608,10 +606,18 @@ export default function UploadPage({
                                   </span>
                                 </span>
                               </label>
+                              {/* Attribution link back to the source activity (outside
+                                  the selecting label so it doesn't toggle the radio). */}
+                              <div className="px-3 pb-2 -mt-1">
+                                <ViewOnStrava activityId={a.id} className="tt-link text-xs" />
+                              </div>
                             </li>
                           )
                         })}
                       </ul>
+                    )}
+                    {stravaActivities !== undefined && stravaActivities.length > 0 && (
+                      <PoweredByStrava className="mt-2 self-start" />
                     )}
                   </div>
                 )}
