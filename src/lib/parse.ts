@@ -2,10 +2,13 @@ import type { TrackPoint } from './types'
 import { parseGpx } from './gpx'
 import { parseFit } from './fit'
 import { parseCsv } from './csv'
+import { readZip } from './unzip'
 
 export type ParseResult =
   | { ok: true; track: TrackPoint[] }
   | { ok: false; reason: 'unknown_format' | 'parse_error' | 'empty' }
+
+const TRACE_EXTS = ['gpx', 'fit', 'csv']
 
 export async function parseTrace(filename: string, data: ArrayBuffer): Promise<ParseResult> {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -26,6 +29,15 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
       const text = new TextDecoder().decode(data)
       const track = parseCsv(text)
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
+    }
+
+    // Fitness apps (e.g. Garmin Connect) export a single activity wrapped in a
+    // zip. Unwrap it and parse the first supported trace file inside.
+    if (ext === 'zip') {
+      const entries = readZip(data)
+      const inner = entries.find((e) => TRACE_EXTS.includes(e.filename.split('.').pop()?.toLowerCase() ?? ''))
+      if (!inner) return { ok: false, reason: 'unknown_format' }
+      return parseTrace(inner.filename, inner.data)
     }
 
     return { ok: false, reason: 'unknown_format' }
