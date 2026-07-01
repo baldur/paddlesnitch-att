@@ -563,6 +563,9 @@ Binary. `fit-file-parser` npm package. Returns `position_lat`/`position_long` al
 ### CSV
 Comma-separated. Flexible column detection (case-insensitive, ignores spaces/underscores): lat/latitude, lon/lng/longitude, time/timestamp/datetime (unix seconds, unix ms, ISO 8601, `YYYY-MM-DD HH:MM:SS`). Optional: hr/heartrate/bpm, cadence/cad/strokerate. Parser: `src/lib/csv.ts`.
 
+### ZIP (fitness-app export wrapper)
+Garmin Connect (and others) export an activity as a single trace file wrapped in a `.zip`. `parseTrace` detects `.zip`, unwraps it via `readZip` (`src/lib/unzip.ts` — zero-dep central-directory reader + `zlib.inflateRawSync`; Garmin local headers use a data descriptor with zeroed sizes, so the central directory is the reliable source of sizes), finds the first entry with a supported extension (`gpx`/`fit`/`csv`), and recurses. A zip with no supported file → `unknown_format`; a corrupt zip → `parse_error`. Regression fixture: `src/tests/fixtures/garmin-activity-export.zip` (a real Garmin `*_ACTIVITY.fit` export). See issue #130.
+
 ### Unknown formats
 Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces this as a 422 to the user. Future formats can be added to `src/lib/parse.ts` without touching any other file.
 
