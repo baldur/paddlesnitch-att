@@ -1,27 +1,25 @@
 # Strava brand assets
 
-Strava's [brand guidelines](https://developers.strava.com/guidelines/) require
-apps to use **Strava's official button and logo artwork** — you may not recreate
-or recolour the marks. The files in this folder are **non-official placeholders**
-so the UI renders and reviews correctly; **before submitting for Strava app
-approval, replace each one with the official download** from the guidelines page.
-The filenames below are what the code references, so it's a straight swap.
+These are Strava's **official** brand assets, vendored so the app follows
+Strava's [brand guidelines](https://developers.strava.com/guidelines/) (#107).
+They are rendered as-is via `<img>` and are never recoloured or restyled in
+code (the guidelines forbid altering the marks).
 
-| File here (placeholder) | Replace with official asset | Used for |
-|---|---|---|
-| `connect-with-strava.svg` | "Connect with Strava" button (orange) | account + upload "connect" |
-| `sign-in-with-strava.svg` | "Sign in with Strava" button (orange) | `/att/auth` sign-in |
-| `powered-by-strava.svg` | "Powered by Strava" logo, horizontal (orange on light) | attribution on any view built from Strava data |
+| File | Official source (from Strava's brand bundle) |
+|---|---|
+| `connect-with-strava.svg` | `1.1 Connect with Strava Buttons / Connect with Strava Orange / btn_strava_connect_with_orange.svg` |
+| `powered-by-strava.svg` | `1.2 Strava API Logos / Powered by Strava / pwrdBy_strava_orange / api_logo_pwrdBy_strava_horiz_orange.svg` |
 
-The official assets are provided by Strava as SVG/PNG on the guidelines page and
-in the brand-assets bundle. Keep the "Connect/Sign in with Strava" wording, the
-orange `#FC4C02`, and the required clear space exactly as supplied.
+Strava ships a single **"Connect with Strava"** button (no separate "Sign in"
+button), so it's used for both first-time connect and Strava sign-in.
 
-Compliance rules the code already follows (so a swap is all that's left):
-- Branded button artwork for every sign-in / connect action (not custom text).
-- "Powered by Strava" attribution wherever Strava data is displayed
-  (the account activity picker, the upload Strava tab, and leaderboard rows that
-  came from a Strava import).
-- "View on Strava" links back to the source activity
-  (`https://www.strava.com/activities/{id}`) on Strava-imported data.
-- Marks are shown as-is via `<img>` — never recoloured or altered in code.
+Where they appear:
+- **"Connect with Strava"** button — the sign-in option on `/att/auth`, and the
+  connect controls on `/att/account` and the upload Strava tab.
+- **"Powered by Strava"** attribution — the account connection row, the upload
+  activity list, and leaderboard rows imported from Strava.
+- **"View on Strava"** links Strava-imported data back to its source activity
+  (`https://www.strava.com/activities/{id}`).
+
+To refresh to a newer Strava bundle, replace these two files with the same-named
+official assets; no code changes needed.

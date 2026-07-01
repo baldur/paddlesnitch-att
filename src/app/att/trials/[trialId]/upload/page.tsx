@@ -555,7 +555,7 @@ export default function UploadPage({
                     <p className="text-sm text-[#0f172a]">
                       Connect Strava once and you can import any recent water-sport activity straight into a time trial.
                     </p>
-                    <StravaButton variant="connect" href="/att/api/strava/connect" className="self-start" />
+                    <StravaButton href="/att/api/strava/connect" className="self-start" />
                     <p className="text-xs text-[#64748b]">
                       You&apos;ll be redirected to Strava to approve. Manage the connection any time from your{' '}
                       <a href="/att/account" className="tt-link">account page</a>.

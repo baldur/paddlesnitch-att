@@ -9,17 +9,17 @@ import ViewOnStrava from './ViewOnStrava'
 // later swap to the official files (same filenames) stays wired correctly.
 
 describe('Strava brand components (#107)', () => {
-  it('the sign-in button uses the sign-in artwork and links to the auth flow', () => {
-    const html = renderToStaticMarkup(
-      <StravaButton variant="login" href="/att/api/auth/strava/init?next=%2Fatt" />,
-    )
-    expect(html).toContain('/strava/sign-in-with-strava.svg')
-    expect(html).toContain('alt="Sign in with Strava"')
+  it('the button on the auth flow uses the official "Connect with Strava" artwork', () => {
+    // Strava ships a single "Connect with Strava" button (no separate sign-in
+    // button), so the auth page uses it too.
+    const html = renderToStaticMarkup(<StravaButton href="/att/api/auth/strava/init?next=%2Fatt" />)
+    expect(html).toContain('/strava/connect-with-strava.svg')
+    expect(html).toContain('alt="Connect with Strava"')
     expect(html).toContain('href="/att/api/auth/strava/init?next=%2Fatt"')
   })
 
-  it('the connect button uses the connect artwork', () => {
-    const html = renderToStaticMarkup(<StravaButton variant="connect" href="/att/api/strava/connect" />)
+  it('the connect button links to the connect flow with the same artwork', () => {
+    const html = renderToStaticMarkup(<StravaButton href="/att/api/strava/connect" />)
     expect(html).toContain('/strava/connect-with-strava.svg')
     expect(html).toContain('alt="Connect with Strava"')
     expect(html).toContain('href="/att/api/strava/connect"')

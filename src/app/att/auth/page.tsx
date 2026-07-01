@@ -164,7 +164,7 @@ function AuthForm() {
   return (
     <div className="w-full max-w-sm">
       <div className="flex justify-center mb-2">
-        <StravaButton variant="login" href={stravaHref} />
+        <StravaButton href={stravaHref} />
       </div>
       <p className="text-xs text-[#94a3b8] mb-6 text-center leading-relaxed">
         Strava doesn&apos;t share your email, so after you continue we&apos;ll ask you to add one — that&apos;s

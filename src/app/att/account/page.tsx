@@ -364,7 +364,7 @@ function AccountPageInner() {
               )}
 
               {strava && !strava.connected && (
-                <StravaButton variant="connect" href="/att/api/strava/connect" />
+                <StravaButton href="/att/api/strava/connect" />
               )}
 
               {strava && strava.connected && (
