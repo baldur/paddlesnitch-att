@@ -32,6 +32,15 @@ export default function FeedbackWidget() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  // Let any "report" trigger elsewhere (the always-visible header REPORT link)
+  // open this modal by dispatching a window event, so the modal state stays in
+  // one place rather than being lifted/shared across components (#102).
+  useEffect(() => {
+    const openIt = () => setOpen(true)
+    window.addEventListener('att:open-feedback', openIt)
+    return () => window.removeEventListener('att:open-feedback', openIt)
+  }, [])
+
   const reset = () => {
     setDescription('')
     setEmail('')
