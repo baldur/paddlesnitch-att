@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20" viewBox="0 0 140 20" role="img" aria-label="Powered by Strava">
+  <!-- PLACEHOLDER — replace with Strava's official "Powered by Strava" logo
+       (horizontal, orange on light). See public/strava/README.md. Generic
+       (no Strava logo) to avoid recreating trademarked artwork. -->
+  <text x="0" y="15" font-family="Helvetica, Arial, sans-serif" font-size="12" letter-spacing="0.4" fill="#64748b">Powered by </text>
+  <text x="76" y="15" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="0.6" fill="#FC4C02">STRAVA</text>
+</svg>

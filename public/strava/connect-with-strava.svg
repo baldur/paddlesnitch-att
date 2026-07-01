@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="193" height="48" viewBox="0 0 193 48" role="img" aria-label="Connect with Strava">
+  <!-- PLACEHOLDER — replace with Strava's official "Connect with Strava" button.
+       See public/strava/README.md. Generic (no Strava logo) to avoid recreating
+       trademarked artwork. -->
+  <rect width="193" height="48" rx="4" fill="#FC4C02"/>
+  <text x="96.5" y="30" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.5" fill="#FFFFFF">Connect with Strava</text>
+</svg>

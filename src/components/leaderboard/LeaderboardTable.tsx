@@ -5,6 +5,8 @@ import { formatTime } from '@/lib/geo'
 import { paceFor500m, speedKmh, speedMs } from '@/lib/format'
 import { BOAT_CLASSES, BOAT_CLASS_INFO } from '@/lib/types'
 import type { LeaderboardEntry, BoatClass, CrewMember } from '@/lib/types'
+import PoweredByStrava from '@/components/strava/PoweredByStrava'
+import ViewOnStrava from '@/components/strava/ViewOnStrava'
 
 // Sort crew so bow comes first, stroke last, cox last of all.
 function seatSort(a: CrewMember, b: CrewMember): number {
@@ -155,6 +157,11 @@ export default function LeaderboardTable({
                   {isOpen && (
                     <tr key={`${entry.entryId}-splits`} className="border-b border-[#f1f5f9] bg-[#f8fafc]">
                       <td colSpan={6} className="px-4 py-3">
+                        {entry.stravaActivityId != null && (
+                          <div className="mb-4 text-xs text-[#64748b]">
+                            Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" />
+                          </div>
+                        )}
                         {entry.runCount && entry.runCount > 1 && (
                           <div className="mb-4 text-xs text-[#64748b]">
                             Best of {entry.runCount} runs in this upload — the fastest is shown.
@@ -222,6 +229,12 @@ export default function LeaderboardTable({
             })}
           </tbody>
         </table>
+        {entries.some(e => e.stravaActivityId != null) && (
+          // Attribution required wherever we display Strava-imported data (#107).
+          <div className="mt-3 flex justify-end">
+            <PoweredByStrava />
+          </div>
+        )}
       </div>
     </div>
   )

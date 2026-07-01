@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
+import StravaButton from '@/components/strava/StravaButton'
+import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 
@@ -362,12 +364,7 @@ function AccountPageInner() {
               )}
 
               {strava && !strava.connected && (
-                <a
-                  href="/att/api/strava/connect"
-                  className="inline-block px-6 py-2.5 bg-[#fc4c02] text-white font-bold text-sm tracking-widest hover:bg-[#e34402] transition-colors"
-                >
-                  CONNECT STRAVA
-                </a>
+                <StravaButton variant="connect" href="/att/api/strava/connect" />
               )}
 
               {strava && strava.connected && (
@@ -386,6 +383,8 @@ function AccountPageInner() {
                       {working === 'strava' ? 'DISCONNECTING…' : 'DISCONNECT'}
                     </button>
                   </div>
+                  {/* Attribution: this row shows the athlete's Strava profile name. */}
+                  <PoweredByStrava className="mt-2" />
                   <p className="text-xs text-[#64748b] mt-2">
                     You can now use <span className="text-[#fc4c02]">Continue with Strava</span> on the
                     sign-in page to log in to this account. Disconnecting stops both activity import and
