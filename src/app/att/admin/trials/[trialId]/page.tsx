@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useEffect, useState, use } from 'react'
 import AppHeader from '@/components/AppHeader'
+import LoadingState from '@/components/LoadingState'
 import type { TrialMetadata, CourseMetadata, LeaderboardEntry } from '@/lib/types'
 import { formatTime } from '@/lib/geo'
 
@@ -124,8 +125,8 @@ export default function TrialAdminPage({
 
   if (!trial || !course) {
     return (
-      <main className="flex-1 flex items-center justify-center text-[#64748b] text-sm">
-        Loading…
+      <main className="flex-1 flex">
+        <LoadingState />
       </main>
     )
   }

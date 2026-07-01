@@ -152,15 +152,13 @@ When fixing a bug in any uncovered area, add a regression test at the same time.
 
 **ATT — Automated Time Trials.** A web application for managing GPS-timed river time trials for kayaking and rowing. Organisers define courses by drawing start/finish lines on a map; participants upload GPS traces from fitness apps; the system calculates elapsed time, 500 m splits, and any available biometric data.
 
-## In-flight feature work
-
-- [`groups-and-creation-gating.md`](docs/features/groups-and-creation-gating.md) — 🚧 settled design, building. Rename club→group; only group admins create courses/trials (every course/trial gets a `groupId`); explicit "create a group" on-ramp; member-gated submission with per-trial scope (members/invitational/public); invite + self-serve join; migrate existing individually-owned items into personal groups. 5 phases.
+## Feature design records
 
 Shipped specs are retained under `docs/features/` as design records — the
-sections below are the authoritative source for *current* behaviour (which the
-in-flight spec above will change):
+sections below are the authoritative source for *current* behaviour.
 - [`courses-and-entries.md`](docs/features/courses-and-entries.md) — ✅ shipped 2026-05-31. Shared course catalogue, organiser/paddler UX, HR/cadence stripped from entries, boat class + crew, pace variants + date picker.
-- [`visibility-clubs-tos.md`](docs/features/visibility-clubs-tos.md) — ✅ shipped 2026-06-13. Public/private/club visibility, clubs with delegated admins, invitational trials, make-public acknowledgement, versioned Terms of Service.
+- [`visibility-clubs-tos.md`](docs/features/visibility-clubs-tos.md) — ✅ shipped 2026-06-13. Public/private/club visibility, clubs with delegated admins, invitational trials, make-public acknowledgement, versioned Terms of Service. (The club→group rename + creation gating below superseded the "club" terminology — this record keeps the original naming.)
+- [`groups-and-creation-gating.md`](docs/features/groups-and-creation-gating.md) — ✅ shipped 2026-06-29. Renamed club→group; gated course/trial creation to group admins (every course/trial has a `groupId`); "create a group" on-ramp; member-gated submission (`participation: members|invitational|public`); invite + self-serve join (`joinPolicy`, join requests, join links). 5 phases, all merged.
 
 ---
 
@@ -543,6 +541,7 @@ src/
     cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, refresh, revoke, verifyIdToken
   components/
     AuthNav.tsx                ← Client component: signed in → name (links to /att/u/{id} public profile) + ACCOUNT (links to /att/account settings) + SIGN OUT; signed out → "SIGN IN" link
+    LoadingState.tsx           ← Shared centered loading indicator (three blinking blue blocks + label) for client pages while data fetches; replaces the bare "Loading…" text node. Defaults to filling its flex parent (`flex-1`); pass `className`/`label` to tune. See #121.
     map/
       DrawingMap.tsx           ← Click-to-place start/finish lines on Leaflet map
       CourseMap.tsx            ← Read-only map: start (green), finish (red), auto-fit bounds
@@ -564,6 +563,9 @@ Binary. `fit-file-parser` npm package. Returns `position_lat`/`position_long` al
 ### CSV
 Comma-separated. Flexible column detection (case-insensitive, ignores spaces/underscores): lat/latitude, lon/lng/longitude, time/timestamp/datetime (unix seconds, unix ms, ISO 8601, `YYYY-MM-DD HH:MM:SS`). Optional: hr/heartrate/bpm, cadence/cad/strokerate. Parser: `src/lib/csv.ts`.
 
+### ZIP (fitness-app export wrapper)
+Garmin Connect (and others) export an activity as a single trace file wrapped in a `.zip`. `parseTrace` detects `.zip`, unwraps it via `readZip` (`src/lib/unzip.ts` — zero-dep central-directory reader + `zlib.inflateRawSync`; Garmin local headers use a data descriptor with zeroed sizes, so the central directory is the reliable source of sizes), finds the first entry with a supported extension (`gpx`/`fit`/`csv`), and recurses. A zip with no supported file → `unknown_format`; a corrupt zip → `parse_error`. Regression fixture: `src/tests/fixtures/garmin-activity-export.zip` (a real Garmin `*_ACTIVITY.fit` export). See issue #130.
+
 ### Unknown formats
 Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces this as a 422 to the user. Future formats can be added to `src/lib/parse.ts` without touching any other file.
 
@@ -574,31 +576,32 @@ Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces th
 A profile page at `/att/u/{userId}` shows one paddler's vanity stats — totals (races, courses, distance, since), personal best per course, best pace/speed, boat-class counts, and race history. Two invariants, both enforced in `src/lib/profile.ts`:
 
 1. **Opt-in.** A profile is private until the user flips it public (account page → Public profile → `PATCH /att/api/account/profile`). Setting stored at `users/{userId}/profile.json` (`{ public: boolean }`, default false). A private profile returns **404** to everyone but its owner (the owner sees their own with a "only you can see this" banner) — same no-leak pattern as private courses/trials.
-2. **No visibility leak.** `buildProfileStats(userId, viewer, viewerClubIds)` scans the user's `entries/*/result.json`, but counts a race **only if `canViewTrial(trial, viewer, viewerClubIds)`** passes — so a profile never reveals a result the viewer couldn't already see on that trial's leaderboard. Stats are recomputed per-viewer.
+2. **No visibility leak.** `buildProfileStats(userId, viewer, viewerGroupIds)` scans the user's `entries/*/result.json`, but counts a race **only if `canViewTrial(trial, viewer, viewerGroupIds)`** passes — so a profile never reveals a result the viewer couldn't already see on that trial's leaderboard. Stats are recomputed per-viewer.
 
-A user may also claim a **vanity handle** so their profile lives at `/att/u/baldur`. Handle logic is in `src/lib/profile.ts`: `normaliseHandle` (lowercase, 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, not in `RESERVED_HANDLES`), `claimHandle` / `releaseHandle` (maintains a `usernames/{slug}.json → { userId }` reverse index; changing a handle frees the old slug; taken handles are rejected), and `resolveToUserId(segment)` (a known handle wins, else the segment is treated as a userId so old `/att/u/{userId}` links keep working). The profile page redirects to the canonical `/att/u/{handle}` when one exists. Managed from the account page → Public profile → Profile handle (`GET ?check=` / `PUT` / `DELETE /att/api/account/handle`). Account erasure releases the handle index and wipes the whole `users/{userId}/` prefix (profile, contact, clubs index, strava, tos-consent — previously these survived deletion).
+A user may also claim a **vanity handle** so their profile lives at `/att/u/baldur`. Handle logic is in `src/lib/profile.ts`: `normaliseHandle` (lowercase, 3–30 chars, `[a-z0-9-]`, no leading/trailing hyphen, not in `RESERVED_HANDLES`), `claimHandle` / `releaseHandle` (maintains a `usernames/{slug}.json → { userId }` reverse index; changing a handle frees the old slug; taken handles are rejected), and `resolveToUserId(segment)` (a known handle wins, else the segment is treated as a userId so old `/att/u/{userId}` links keep working). The profile page redirects to the canonical `/att/u/{handle}` when one exists. Managed from the account page → Public profile → Profile handle (`GET ?check=` / `PUT` / `DELETE /att/api/account/handle`). Account erasure releases the handle index and wipes the whole `users/{userId}/` prefix (profile, contact, groups index, strava, tos-consent — previously these survived deletion).
 
 **Discoverability.** A signed-in user reaches their own profile via their name in `AuthNav`. On a trial leaderboard, an athlete's name links to their profile **only when that profile is public** — `getPublicProfileLinks(userIds)` returns `userId → handle-or-id` for public profiles only, and `LeaderboardTable` renders a link when present, plain text otherwise (no dead links to private/opt-out profiles). The owner's own race history links back to each trial.
 
 ---
 
-## Clubs
+## Groups
 
-A **club** is an organisation / community / team. Stored at `clubs/{clubId}/metadata.json`. Has:
+A **group** is an organisation / community / team — a club, a squad, or just one person. It owns courses + trials (their `groupId`) and scopes their visibility. Stored at `groups/{groupId}/metadata.json`. Has:
 
 - `ownerId` (exactly one; cannot be removed without explicit transfer)
-- `adminUserIds` — manage on behalf of the club; cannot delete or transfer ownership
-- `memberUserIds` — see club-visibility resources
+- `adminUserIds` — manage on behalf of the group + create/manage its courses & trials; cannot delete or transfer ownership
+- `memberUserIds` — see group-visibility resources + submit to `members` trials
+- `joinPolicy` + `joinLinkToken?` — see "Joining a group" below
 
-Reverse index at `users/{userId}/clubs.json` keeps membership checks O(1) without scanning every club. Updated on join + leave + accept-invitation + club-delete.
+Reverse index at `users/{userId}/groups.json` keeps membership checks O(1) without scanning every group. Updated on join + leave + accept-invitation + group-delete. `getUserGroupIds(userId)` returns all groups you're in; `getUserAdminGroupIds(userId)` returns the owner/admin subset (gates creation + management).
 
 ### Invitations
 
 Two paths:
-- **Resolved** (recipient has an account) — stored at `clubs/{clubId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
-- **Pending email** (recipient doesn't yet) — stored at `pending-invitations/clubs/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each club, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
+- **Resolved** (recipient has an account) — stored at `groups/{groupId}/invitations/{id}.json` with `toUserId`. Recipient sees it and POSTs `/accept` or `/decline`.
+- **Pending email** (recipient doesn't yet) — stored at `pending-invitations/groups/{sha256(email)}/{id}.json`. On signup (email AND Strava paths), `applyPendingInvitations(email, sub)` (in `src/lib/pending-invitations.ts`) scans the matching folder, adds the new user to each group, and deletes the pending records. Email is hashed with sha-256 so the bucket directory listing doesn't leak unverified emails.
 
-Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/att/auth?next=/att/clubs/{id}` so the recipient lands on the club after signup; resolved invitations link straight to the club page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
+Both paths trigger a transactional email via SES on creation (`src/lib/email.ts` wraps SES, `src/lib/invitation-email.ts` holds the templates). Pending invitations link to `/att/auth?next=/att/groups/{id}` so the recipient lands on the group after signup; resolved invitations link straight to the group page. Synthetic Strava `strava-{id}@noreply.paddlesnitch.com` addresses are skipped (no inbox). Email send failures are swallowed — the invite record is already persisted and can be re-sent. Local dev (`USE_LOCAL_STORAGE=true`) no-ops SES and logs to stdout instead.
 
 ### Joining a group — self-serve (phase 4)
 
@@ -616,15 +619,15 @@ Helpers live in `src/lib/groups.ts` (`joinPolicyOf`, `withMember`, join-request 
 
 Routes: `POST /att/api/groups/[id]/join-requests` (request/auto-join/by-link), `GET` (admin: pending list, names resolved), `POST …/join-requests/[reqId]/approve` + `…/decline` (admin). `joinPolicy` + join-link are set via `PATCH /att/api/groups/[id]`.
 
-### Club-scoped visibility on courses + trials
+### Group-scoped visibility on courses + trials
 
-`Visibility` is now `'public' | 'private' | 'club'`. When `visibility === 'club'`, the resource carries a `visibleToClubId` and is visible to that club's members + admins + owner (plus the resource's own admin). The server validates that the editor is an owner / admin of the target club before applying — plain members get silently downgraded to `private` rather than 403'd, so a random member can't broadcast their content to the whole club.
+`Visibility` is `'public' | 'private' | 'group'`. When `visibility === 'group'`, the resource carries a `visibleToGroupId` and is visible to that group's members + admins + owner. From phase 2, a course is always *owned* by a group (its `groupId`), so `group` visibility scopes to the owning group — `visibleToGroupId === groupId`.
 
 Trials inherit their course's scope when it's tighter than what was requested:
 - Course `private` → trial forced `private`.
-- Course `club` → trial forced `club` with the course's `visibleToClubId`.
+- Course `group` → trial forced `group` with the course's `visibleToGroupId`.
 
-Permission helpers (`canViewCourse`, `canViewTrial`, `canSubmitToTrial`, `isListedForViewer`) take an optional `viewerClubIds: Set<string>` argument; callers fetch it once at the request boundary via `getUserClubIds()` and pass it down. Undefined behaves like "in no clubs."
+Permission helpers (`canViewCourse`, `canViewTrial`, `canSubmitToTrial`, `isListedForViewer`) take an optional `viewerGroupIds: Set<string>` argument; callers fetch it once at the request boundary via `getUserGroupIds()` and pass it down. Undefined behaves like "in no groups."
 
 ---
 
@@ -649,7 +652,7 @@ Versioned markdown at `legal/tos-{version}.md`. The current version constant is 
 
 ## Make-public acknowledgement
 
-Flipping a trial from `private` (or `club`) to `public` via PATCH requires `acknowledged: true` in the request body. Without it, the route returns 422 with `{ code: 'make_public_ack_required' }`. The owner has to explicitly tick a box; the ToS warns participants that performance times may become public, so we don't chase individual consents at the moment of the flip. Public → private and public → public are exempt — the gate only fires when widening visibility.
+Flipping a trial from `private` (or `group`) to `public` via PATCH requires `acknowledged: true` in the request body. Without it, the route returns 422 with `{ code: 'make_public_ack_required' }`. The owner has to explicitly tick a box; the ToS warns participants that performance times may become public, so we don't chase individual consents at the moment of the flip. Public → private and public → public are exempt — the gate only fires when widening visibility.
 
 ---
 
@@ -689,7 +692,7 @@ CDK does NOT automate this — an AwsCustomResource that flips the active set wo
 
 ## Roles & Permissions
 
-Authoritative permission matrix lives in `docs/features/visibility-clubs-tos.md`. Day-to-day summary:
+Authoritative permission matrix lives in `docs/features/groups-and-creation-gating.md` (the original visibility/clubs rules are in `visibility-clubs-tos.md`, superseded by the club→group rename + creation gating). Day-to-day summary:
 
 | Action | Public | Private | Open trial | Invitational trial |
 |---|---|---|---|---|

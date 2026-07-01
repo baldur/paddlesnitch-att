@@ -1,6 +1,6 @@
 # Feature spec: Groups own courses & trials (creation gating)
 
-**Status:** settled design, ready to build. Designed 2026-06-28. Phased rollout; each phase its own PR.
+**Status:** ✅ shipped 2026-06-29. Designed 2026-06-28; rolled out in 5 PRs (#117 club→group rename, #118 creation gating, #119 member-gated submission, #120 self-serve join, + this FAQ/finalise PR). This file is now a design record; current behaviour lives in CLAUDE.md.
 **Owners:** Baldur (product), Claude (implementation).
 
 ## Why
