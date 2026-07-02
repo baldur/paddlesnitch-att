@@ -8,6 +8,12 @@ import type { LeaderboardEntry, BoatClass, CrewMember } from '@/lib/types'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
 import ViewOnStrava from '@/components/strava/ViewOnStrava'
 
+// Compass point for a wind direction in degrees (meteorological "from"). #106.
+function compass(deg: number): string {
+  const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  return points[Math.round((((deg % 360) + 360) % 360) / 45) % 8]
+}
+
 // Sort crew so bow comes first, stroke last, cox last of all.
 function seatSort(a: CrewMember, b: CrewMember): number {
   if (a.seat === 'C') return 1
@@ -114,12 +120,21 @@ export default function LeaderboardTable({
           <tbody>
             {filtered.map((entry, i) => {
               const hasSplits = entry.splits.length > 0
+              // The row expands when there's ANYTHING to show — not just splits.
+              // Short (<500 m) entries have no splits but can still carry crew,
+              // conditions (#106), a Strava link (#107), or a runCount note.
+              const hasDetail =
+                hasSplits ||
+                (entry.crew?.length ?? 0) > 1 ||
+                !!entry.conditions ||
+                entry.stravaActivityId != null ||
+                (entry.runCount ?? 0) > 1
               const isOpen = expanded === entry.entryId
               return (
                 <React.Fragment key={entry.entryId}>
                   <tr
-                    onClick={() => hasSplits && setExpanded(isOpen ? null : entry.entryId)}
-                    className={`border-b border-[#f1f5f9] transition-colors ${hasSplits ? 'cursor-pointer hover:bg-[#f8fafc]' : ''}`}
+                    onClick={() => hasDetail && setExpanded(isOpen ? null : entry.entryId)}
+                    className={`border-b border-[#f1f5f9] transition-colors ${hasDetail ? 'cursor-pointer hover:bg-[#f8fafc]' : ''}`}
                   >
                     <td className="py-3 pr-4 text-[#64748b] tabular">{i + 1}</td>
                     <td className="py-3 pr-4 text-[#0f172a] font-medium">
@@ -151,7 +166,7 @@ export default function LeaderboardTable({
                       {entry.raceDate ?? new Date(entry.submittedAt).toLocaleDateString()}
                     </td>
                     <td className="py-3 text-[#64748b] text-xs text-right">
-                      {hasSplits ? (isOpen ? '▲' : '▼') : ''}
+                      {hasDetail ? (isOpen ? '▲' : '▼') : ''}
                     </td>
                   </tr>
                   {isOpen && (
@@ -180,6 +195,38 @@ export default function LeaderboardTable({
                             </div>
                           </div>
                         )}
+                        {entry.conditions && (
+                          <div className="mb-4">
+                            <div className="text-[#64748b] text-xs tracking-wider mb-1.5">
+                              CONDITIONS AT FINISH
+                            </div>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#0f172a] tabular">
+                              {entry.conditions.weather?.temperatureC != null && (
+                                <span><span className="text-[#64748b] mr-1">temp</span>{entry.conditions.weather.temperatureC.toFixed(1)}°C</span>
+                              )}
+                              {entry.conditions.weather?.windSpeedKmh != null && (
+                                <span>
+                                  <span className="text-[#64748b] mr-1">wind</span>
+                                  {entry.conditions.weather.windSpeedKmh.toFixed(0)} km/h
+                                  {entry.conditions.weather.windDirectionDeg != null && ` ${compass(entry.conditions.weather.windDirectionDeg)}`}
+                                </span>
+                              )}
+                              {entry.conditions.weather?.precipitationMm != null && (
+                                <span><span className="text-[#64748b] mr-1">rain</span>{entry.conditions.weather.precipitationMm.toFixed(1)} mm</span>
+                              )}
+                              {entry.conditions.flow?.valueM3s != null && (
+                                <span>
+                                  <span className="text-[#64748b] mr-1">flow</span>
+                                  {entry.conditions.flow.valueM3s.toFixed(1)} m³/s
+                                  {entry.conditions.flow.stationLabel && (
+                                    <span className="text-[#64748b]"> · {entry.conditions.flow.stationLabel}</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {entry.splits.length > 0 && (
                         <table className="text-xs border-collapse">
                           <thead>
                             <tr className="text-[#64748b] tracking-wider">
@@ -221,6 +268,7 @@ export default function LeaderboardTable({
                             })}
                           </tbody>
                         </table>
+                        )}
                       </td>
                     </tr>
                   )}

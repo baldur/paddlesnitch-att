@@ -6,6 +6,12 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180
 }
 
+// Midpoint of a line's two endpoints. Used as a course's representative
+// location (weather + nearest flow station) — see #106.
+export function lineMidpoint(line: Line): LatLng {
+  return [(line[0][0] + line[1][0]) / 2, (line[0][1] + line[1][1]) / 2]
+}
+
 export function haversine(a: LatLng, b: LatLng): number {
   const dLat = toRad(b[0] - a[0])
   const dLng = toRad(b[1] - a[1])
