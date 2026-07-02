@@ -36,9 +36,3 @@ export function utcDateString(value: Date | string): string {
   const d = value instanceof Date ? value : new Date(value)
   return d.toISOString().slice(0, 10)
 }
-
-// True if the two dates differ by ≥ 1 calendar day in UTC.
-// Used to flag a possible mis-typed race date or wrong-file upload.
-export function dateDiscrepancy(raceDateISO: string, traceISO: string | Date): boolean {
-  return utcDateString(raceDateISO) !== utcDateString(traceISO)
-}

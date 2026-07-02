@@ -171,12 +171,9 @@ export type LeaderboardEntry = {
   userId: string
   displayName: string
   submittedAt: string
-  // raceDate is the date the user picked (YYYY-MM-DD, UTC).
+  // raceDate is inferred server-side from the trace's first timestamp
+  // (YYYY-MM-DD, UTC), falling back to the trial date (#123).
   raceDate: string
-  // dateDiscrepancy is true when raceDate disagrees with the date recorded in
-  // the GPS trace itself — surfaced as a warning badge on the leaderboard so
-  // viewers know there may be a wrong-file or wrong-date issue.
-  dateDiscrepancy?: boolean
   boatClass: BoatClass
   crew: CrewMember[]
   totalElapsedSeconds: number
