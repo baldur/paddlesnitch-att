@@ -17,7 +17,7 @@ async function plant(trialId: string, userId: string, opts: { submittedAt: strin
   await putJson(`trials/${trialId}/entries/${userId}/${entryId}/result.json`, {
     entryId, userId, displayName: 'Pat',
     submittedAt: opts.submittedAt,
-    filename: 'r.gpx', raceDate: '2026-06-01', traceRecordedDate: '2026-06-01',
+    filename: 'r.gpx', raceDate: '2026-06-01',
     boatClass: opts.boatClass ?? 'K1', crew: [{ seat: 1, name: 'Pat' }],
     result: { startTimestamp: '', finishTimestamp: '', totalElapsedSeconds: opts.seconds ?? 60, splits: [] },
   })

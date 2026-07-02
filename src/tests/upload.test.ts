@@ -27,7 +27,6 @@ function mockAuth(idToken: string | null) {
 function uploadReq(trialId: string, file: File, opts: {
   boatClass?: string
   crew?: Array<{ name: string; seat: number | 'C' }>
-  raceDate?: string | null  // null = omit
 } = {}) {
   const boatClass = opts.boatClass ?? 'K1'
   const form = new FormData()
@@ -38,9 +37,7 @@ function uploadReq(trialId: string, file: File, opts: {
     ? [{ name: 'Soloist', seat: 1 as const }]
     : undefined)
   if (defaultCrew) form.append('crew', JSON.stringify(defaultCrew))
-  // Default raceDate matches makeTestTrack's recorded date (2024-06-01) so
-  // tests don't accidentally flag a discrepancy. Pass null to omit.
-  if (opts.raceDate !== null) form.append('raceDate', opts.raceDate ?? '2024-06-01')
+  // No raceDate: it's inferred server-side from the trace (#123).
   return new NextRequest(`http://x/att/api/trials/${trialId}/upload`, {
     method: 'POST',
     body: form,
@@ -303,65 +300,24 @@ describe('POST /att/api/trials/[trialId]/upload', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 400 when raceDate is missing', async () => {
+  it('infers raceDate from the trace, not a user-supplied field (#123)', async () => {
     const user = await makeUser()
     const course = await makeCourse(user.id)
-    const trial = await makeTrial(course.id, user.id, 'open')
-    mockAuth(user.idToken)
-
-    const gpx = makeGpxBuffer(makeTestTrack())
-    const res = await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: null }),
-      { params: Promise.resolve({ trialId: trial.id }) },
-    )
-    expect(res.status).toBe(400)
-    const body = await res.json()
-    expect(body.error).toContain('Race date')
-  })
-
-  it('returns 400 when raceDate is not YYYY-MM-DD', async () => {
-    const user = await makeUser()
-    const course = await makeCourse(user.id)
-    const trial = await makeTrial(course.id, user.id, 'open')
-    mockAuth(user.idToken)
-
-    const gpx = makeGpxBuffer(makeTestTrack())
-    const res = await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024/06/01' }),
-      { params: Promise.resolve({ trialId: trial.id }) },
-    )
-    expect(res.status).toBe(400)
-  })
-
-  it('does not flag discrepancy when raceDate matches the trace date', async () => {
-    const user = await makeUser()
-    const course = await makeCourse(user.id)
-    const trial = await makeTrial(course.id, user.id, 'open')
+    // Trial date deliberately differs from the trace date to prove we use the
+    // trace, not the trial, when the trace has a timestamp.
+    const trial = await makeTrial(course.id, user.id, 'open', { date: '2020-01-01' })
     mockAuth(user.idToken)
 
     const gpx = makeGpxBuffer(makeTestTrack())  // trace recorded 2024-06-01
     const res = await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024-06-01' }),
+      uploadReq(trial.id, new File([gpx], 'run.gpx')),
       { params: Promise.resolve({ trialId: trial.id }) },
     )
     expect(res.status).toBe(201)
-    const body = await res.json()
-    expect(body.dateDiscrepancy).toBe(false)
-  })
-
-  it('flags discrepancy when raceDate differs from the trace date', async () => {
-    const user = await makeUser()
-    const course = await makeCourse(user.id)
-    const trial = await makeTrial(course.id, user.id, 'open')
-    mockAuth(user.idToken)
-
-    const gpx = makeGpxBuffer(makeTestTrack())  // trace recorded 2024-06-01
-    const res = await upload(
-      uploadReq(trial.id, new File([gpx], 'run.gpx'), { raceDate: '2024-06-05' }),
-      { params: Promise.resolve({ trialId: trial.id }) },
+    const { entryId } = await res.json()
+    const stored = await getJson<{ raceDate: string }>(
+      `trials/${trial.id}/entries/${user.id}/${entryId}/result.json`,
     )
-    expect(res.status).toBe(201)
-    const body = await res.json()
-    expect(body.dateDiscrepancy).toBe(true)
+    expect(stored?.raceDate).toBe('2024-06-01')
   })
 })

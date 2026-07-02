@@ -9,8 +9,6 @@ type StoredEntry = {
   submittedAt: string
   filename: string
   raceDate: string
-  traceRecordedDate: string
-  dateDiscrepancy: boolean
   boatClass: BoatClass
   crew: CrewMember[]
   result: ProcessedResult
@@ -42,7 +40,6 @@ export async function rebuildLeaderboard(trialId: string): Promise<void> {
       displayName: e.displayName,
       submittedAt: e.submittedAt,
       raceDate: e.raceDate,
-      ...(e.dateDiscrepancy ? { dateDiscrepancy: true } : {}),
       boatClass: e.boatClass,
       crew: e.crew,
       totalElapsedSeconds: e.result.totalElapsedSeconds,

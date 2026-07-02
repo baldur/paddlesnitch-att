@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { paceFor500m, speedKmh, speedMs, dateDiscrepancy, utcDateString } from './format'
+import { paceFor500m, speedKmh, speedMs, utcDateString } from './format'
 
 describe('paceFor500m', () => {
   it('returns "2:00.0" for 500m in 120s', () => {
@@ -67,20 +67,3 @@ describe('utcDateString', () => {
   })
 })
 
-describe('dateDiscrepancy', () => {
-  it('false when dates match', () => {
-    expect(dateDiscrepancy('2024-06-01', '2024-06-01T10:00:00Z')).toBe(false)
-  })
-
-  it('true when dates differ by 1 day', () => {
-    expect(dateDiscrepancy('2024-06-01', '2024-06-02T10:00:00Z')).toBe(true)
-  })
-
-  it('true when dates differ by months', () => {
-    expect(dateDiscrepancy('2024-06-01', '2024-12-25T10:00:00Z')).toBe(true)
-  })
-
-  it('false when raceDate matches the UTC date of an end-of-day trace', () => {
-    expect(dateDiscrepancy('2024-06-01', '2024-06-01T23:59:00Z')).toBe(false)
-  })
-})

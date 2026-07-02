@@ -24,8 +24,6 @@ function storedEntry(entryId: string, elapsed: number, runCount?: number) {
     submittedAt: '2026-06-01T10:05:00.000Z',
     filename: 'trace.gpx',
     raceDate: '2026-06-01',
-    traceRecordedDate: '2026-06-01',
-    dateDiscrepancy: false,
     boatClass: 'K1' as const,
     crew: [{ name: 'Solo', seat: 1 as const }],
     result,

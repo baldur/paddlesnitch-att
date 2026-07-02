@@ -128,7 +128,6 @@ export async function plantEntry(trialId: string, userId: string): Promise<void>
     submittedAt: new Date().toISOString(),
     filename: 'planted.gpx',
     raceDate: '2024-06-01',
-    traceRecordedDate: '2024-06-01',
     boatClass: 'K1',
     crew: [{ seat: 1, name: 'planted' }],
     result: { startTimestamp: '2024-06-01T10:00:00Z', finishTimestamp: '2024-06-01T10:01:00Z', totalElapsedSeconds: 60, splits: [] },

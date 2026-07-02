@@ -32,7 +32,6 @@ async function plantResult(trialId: string, userId: string, opts: {
     submittedAt: opts.submittedAt ?? new Date().toISOString(),
     filename: 'r.gpx',
     raceDate: opts.raceDate,
-    traceRecordedDate: opts.raceDate,
     boatClass: opts.boatClass ?? 'K1',
     crew: [{ seat: 1, name: 'Pat' }],
     result: { startTimestamp: '', finishTimestamp: '', totalElapsedSeconds: opts.seconds, splits: [] },
