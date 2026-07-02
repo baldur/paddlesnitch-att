@@ -1,5 +1,5 @@
 import { getJson, putJson, listKeys } from './storage'
-import type { LeaderboardEntry, ProcessedResult, BoatClass, CrewMember } from './types'
+import type { LeaderboardEntry, ProcessedResult, BoatClass, CrewMember, EntryConditions } from './types'
 
 // Stored shape of an entry's result.json — see upload route.
 type StoredEntry = {
@@ -14,6 +14,7 @@ type StoredEntry = {
   boatClass: BoatClass
   crew: CrewMember[]
   result: ProcessedResult
+  conditions?: EntryConditions
 }
 
 // Strava imports save their trace as `strava-{activityId}.json` (see the upload
@@ -50,6 +51,7 @@ export async function rebuildLeaderboard(trialId: string): Promise<void> {
       ...(stravaActivityIdFromFilename(e.filename) !== undefined
         ? { stravaActivityId: stravaActivityIdFromFilename(e.filename) }
         : {}),
+      ...(e.conditions ? { conditions: e.conditions } : {}),
     }))
     .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)
 

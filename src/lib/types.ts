@@ -189,6 +189,29 @@ export type LeaderboardEntry = {
   // so the leaderboard can link "View on Strava" back to it (Strava brand
   // guidelines, #107). Derived from the stored trace filename.
   stravaActivityId?: number
+  // Weather + river flow at this entry's finish time (#106). Best-effort; may
+  // be absent (capture failed) or partial.
+  conditions?: EntryConditions
+}
+
+// Weather + river-flow at an entry's finish time + course location (#106).
+// Captured once, best-effort, then frozen onto the entry. Partial is valid
+// (weather present, flow absent, or vice-versa).
+export type EntryConditions = {
+  capturedAt: string          // ISO — when we fetched
+  at: string                  // ISO — the instant the conditions describe (entry finish)
+  weather?: {
+    temperatureC?: number
+    precipitationMm?: number
+    windSpeedKmh?: number
+    windDirectionDeg?: number
+  }
+  flow?: {
+    stationId: string
+    stationLabel?: string
+    valueM3s?: number
+    at?: string               // reading timestamp (nearest to `at`)
+  }
 }
 
 export type AuthUser = {

@@ -44,4 +44,26 @@ describe('rebuildLeaderboard carries the Strava activity id (#107)', () => {
     expect(strava!.stravaActivityId).toBe(555)
     expect(file!.stravaActivityId).toBeUndefined()
   })
+
+  it('carries a stored conditions snapshot onto the leaderboard entry (#106)', async () => {
+    const conditions = {
+      capturedAt: '2025-01-01T10:05:00Z', at: '2025-01-01T10:01:00Z',
+      weather: { temperatureC: 12, windSpeedKmh: 18 },
+      flow: { stationId: 'm1', valueM3s: 23.4 },
+    }
+    await putJson('trials/t1/entries/u1/e-cond/result.json', {
+      entryId: 'e-cond', userId: 'u1', displayName: 'P', submittedAt: '2025-01-01T00:00:00Z',
+      filename: 'run.gpx', raceDate: '2025-01-01', traceRecordedDate: '2025-01-01', dateDiscrepancy: false,
+      boatClass: 'K1', crew: [{ seat: 1, name: 'P' }],
+      result: { startTimestamp: '2025-01-01T10:00:00Z', finishTimestamp: '2025-01-01T10:01:00Z', totalElapsedSeconds: 60, splits: [] },
+      conditions,
+    })
+    await plant('e-plain', 'plain.gpx')
+
+    await rebuildLeaderboard('t1')
+
+    const board = await getJson<LeaderboardEntry[]>('trials/t1/leaderboard.json')
+    expect(board!.find(e => e.entryId === 'e-cond')!.conditions).toEqual(conditions)
+    expect(board!.find(e => e.entryId === 'e-plain')!.conditions).toBeUndefined()
+  })
 })

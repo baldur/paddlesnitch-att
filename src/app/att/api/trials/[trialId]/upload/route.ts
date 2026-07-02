@@ -3,7 +3,8 @@ import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson, putObject } from '@/lib/storage'
 import { parseTrace } from '@/lib/parse'
-import { processTrace, diagnoseGates, gateDiagnosisMessage } from '@/lib/geo'
+import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from '@/lib/geo'
+import { captureConditions } from '@/lib/conditions'
 import { emitMetric } from '@/lib/metrics'
 import { isBoatClass, validateCrew } from '@/lib/types'
 import { dateDiscrepancy, utcDateString } from '@/lib/format'
@@ -12,7 +13,7 @@ import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
 import { canSubmitToTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
-import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng } from '@/lib/types'
+import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng, EntryConditions } from '@/lib/types'
 
 // Reduce a parsed track to [lat, lng] pairs for the diagnostic map we return
 // when processing fails. Strava streams can be many thousands of points; ~1500
@@ -41,6 +42,7 @@ type StoredEntry = {
   boatClass: BoatClass
   crew: CrewMember[]
   result: ProcessedResult
+  conditions?: EntryConditions   // weather + river flow at finish time (#106)
 }
 
 function resolveActivityUrl(url: string): string | null {
@@ -162,6 +164,12 @@ async function processTrack(
 
   await putObject(`${basePath}/trace.${ext}`, rawBlob)
 
+  // Best-effort weather + river-flow snapshot at the finish time and the course
+  // location (start-line midpoint). Never let a conditions failure affect the
+  // upload — swallow everything. See #106.
+  const [clat, clng] = lineMidpoint(course.startLine)
+  const conditions = await captureConditions(clat, clng, result.finishTimestamp).catch(() => null)
+
   const stored: StoredEntry = {
     entryId,
     userId: user.id,
@@ -174,6 +182,7 @@ async function processTrack(
     boatClass,
     crew,
     result,
+    ...(conditions ? { conditions } : {}),
   }
   await putJson(`${basePath}/result.json`, stored)
   await rebuildLeaderboard(trialId)
