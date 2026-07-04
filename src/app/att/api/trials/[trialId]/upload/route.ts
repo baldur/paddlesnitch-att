@@ -165,9 +165,13 @@ async function processTrack(
 
   // Best-effort weather + river-flow snapshot at the finish time and the course
   // location (start-line midpoint). Never let a conditions failure affect the
-  // upload — swallow everything. See #106.
+  // upload — swallow everything. See #106. Skipped under vitest so the upload
+  // tests don't make live Open-Meteo / EA calls (slow + flaky); the conditions
+  // clients have their own unit tests with mocked fetch.
   const [clat, clng] = lineMidpoint(course.startLine)
-  const conditions = await captureConditions(clat, clng, result.finishTimestamp).catch(() => null)
+  const conditions = process.env.VITEST
+    ? null
+    : await captureConditions(clat, clng, result.finishTimestamp).catch(() => null)
 
   const stored: StoredEntry = {
     entryId,
