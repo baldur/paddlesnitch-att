@@ -149,14 +149,6 @@ export default function LeaderboardTable({
                       ) : (
                         entry.displayName
                       )}
-                      {entry.dateDiscrepancy && (
-                        <span
-                          title="The race date the athlete picked doesn't match the date in the GPS trace."
-                          className="ml-2 text-[10px] tracking-widest text-[#b91c1c] border border-[#b91c1c] px-1.5 py-0.5"
-                        >
-                          DATE !
-                        </span>
-                      )}
                     </td>
                     <td className="py-3 pr-4 text-[#64748b] tabular text-xs">{entry.boatClass}</td>
                     <td className="py-3 pr-4 text-right tabular font-bold text-[#0369a1] text-base">

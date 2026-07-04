@@ -26,7 +26,7 @@ describe('rebuildLeaderboard carries the Strava activity id (#107)', () => {
     return putJson(`trials/t1/entries/u1/${entryId}/result.json`, {
       entryId, userId: 'u1', displayName: 'Paddler',
       submittedAt: '2025-01-01T00:00:00Z', filename,
-      raceDate: '2025-01-01', traceRecordedDate: '2025-01-01', dateDiscrepancy: false,
+      raceDate: '2025-01-01',
       boatClass: 'K1', crew: [{ seat: 1, name: 'Paddler' }],
       result: { startTimestamp: '2025-01-01T10:00:00Z', finishTimestamp: '2025-01-01T10:01:00Z', totalElapsedSeconds: 60, splits: [] },
     })
@@ -53,7 +53,7 @@ describe('rebuildLeaderboard carries the Strava activity id (#107)', () => {
     }
     await putJson('trials/t1/entries/u1/e-cond/result.json', {
       entryId: 'e-cond', userId: 'u1', displayName: 'P', submittedAt: '2025-01-01T00:00:00Z',
-      filename: 'run.gpx', raceDate: '2025-01-01', traceRecordedDate: '2025-01-01', dateDiscrepancy: false,
+      filename: 'run.gpx', raceDate: '2025-01-01',
       boatClass: 'K1', crew: [{ seat: 1, name: 'P' }],
       result: { startTimestamp: '2025-01-01T10:00:00Z', finishTimestamp: '2025-01-01T10:01:00Z', totalElapsedSeconds: 60, splits: [] },
       conditions,

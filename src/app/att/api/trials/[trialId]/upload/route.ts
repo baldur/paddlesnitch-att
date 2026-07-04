@@ -7,7 +7,7 @@ import { processTrace, diagnoseGates, gateDiagnosisMessage, lineMidpoint } from 
 import { captureConditions } from '@/lib/conditions'
 import { emitMetric } from '@/lib/metrics'
 import { isBoatClass, validateCrew } from '@/lib/types'
-import { dateDiscrepancy, utcDateString } from '@/lib/format'
+import { utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
@@ -36,9 +36,7 @@ type StoredEntry = {
   displayName: string
   submittedAt: string
   filename: string
-  raceDate: string                 // ISO date (YYYY-MM-DD) — user-picked
-  traceRecordedDate: string        // ISO date — derived from the first GPS point
-  dateDiscrepancy: boolean         // true if raceDate and traceRecordedDate differ
+  raceDate: string                 // ISO date (YYYY-MM-DD) — inferred from the trace (#123)
   boatClass: BoatClass
   crew: CrewMember[]
   result: ProcessedResult
@@ -85,7 +83,7 @@ async function processBuffer(
   trialId: string,
   boatClass: BoatClass,
   crew: CrewMember[],
-  raceDate: string,
+  trialDate: string,
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
   if (!parseResult.ok) {
@@ -94,7 +92,7 @@ async function processBuffer(
       { status: 422 }
     )
   }
-  return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, raceDate)
+  return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, trialDate)
 }
 
 // Shared backend for file uploads, URL fetches, and Strava imports. Takes an
@@ -108,7 +106,7 @@ async function processTrack(
   trialId: string,
   boatClass: BoatClass,
   crew: CrewMember[],
-  raceDate: string,
+  trialDate: string,
 ): Promise<NextResponse> {
   const result = processTrace(track, course.startLine, course.finishLine, course.type, course.minValidSeconds ?? 0, course.gateDirection, course.gates)
   if (!result) {
@@ -153,10 +151,11 @@ async function processTrack(
     )
   }
 
-  // The trace's recorded date is the UTC date of the first track point.
-  // If the user-picked race date differs from this, flag a discrepancy.
-  const traceRecordedDate = utcDateString(track[0].timestamp)
-  const discrepancy = dateDiscrepancy(raceDate, traceRecordedDate)
+  // The race date is inferred from the trace itself — the UTC date of the first
+  // track point — falling back to the trial's date only if the trace has no
+  // usable timestamp. There's no user-entered date to reconcile against, so the
+  // old discrepancy warning is gone (#123).
+  const raceDate = utcDateString(track[0].timestamp) || trialDate
 
   const entryId = nanoid()
   const ext = filename.split('.').pop()?.toLowerCase() ?? 'bin'
@@ -177,8 +176,6 @@ async function processTrack(
     submittedAt: new Date().toISOString(),
     filename,
     raceDate,
-    traceRecordedDate,
-    dateDiscrepancy: discrepancy,
     boatClass,
     crew,
     result,
@@ -188,16 +185,7 @@ async function processTrack(
   await rebuildLeaderboard(trialId)
 
   emitMetric('upload')
-  return NextResponse.json({ entryId, result, dateDiscrepancy: discrepancy }, { status: 201 })
-}
-
-// raceDate must be YYYY-MM-DD. Returns the normalised string or null if invalid.
-function normaliseRaceDate(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
-  const d = new Date(`${raw}T00:00:00Z`)
-  if (isNaN(d.getTime())) return null
-  return raw
+  return NextResponse.json({ entryId, result }, { status: 201 })
 }
 
 export async function POST(
@@ -228,7 +216,7 @@ export async function POST(
 
   if (contentType.includes('application/json')) {
     const body = await req.json()
-    const { url, stravaActivityId, boatClass, crew: rawCrew, raceDate: rawRaceDate } = body
+    const { url, stravaActivityId, boatClass, crew: rawCrew } = body
     if (!url && !stravaActivityId) {
       return NextResponse.json({ error: 'No URL or Strava activity provided' }, { status: 400 })
     }
@@ -239,8 +227,6 @@ export async function POST(
     if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
     const crewError = validateCrew(boatClass, crew)
     if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
-    const raceDate = normaliseRaceDate(rawRaceDate)
-    if (!raceDate) return NextResponse.json({ error: 'Race date is required (YYYY-MM-DD)' }, { status: 400 })
 
     // Strava-import branch: fetch the user's stored tokens, refresh if needed,
     // pull the streams, hand them straight to processTrack.
@@ -272,7 +258,7 @@ export async function POST(
         time: streams.time,
       }))
       const filename = `strava-${idNum}.json`
-      return processTrack(track, snapshot, filename, course, user, trialId, boatClass, crew, raceDate)
+      return processTrack(track, snapshot, filename, course, user, trialId, boatClass, crew, trial.date)
     }
 
     const resolvedUrl = resolveActivityUrl(url)
@@ -303,7 +289,7 @@ export async function POST(
     }
 
     const arrayBuffer = await fetchRes.arrayBuffer()
-    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass, crew, raceDate)
+    return processBuffer(arrayBuffer, 'activity.gpx', course, user, trialId, boatClass, crew, trial.date)
   }
 
   // File upload (multipart/form-data)
@@ -318,9 +304,7 @@ export async function POST(
   if ('error' in crew) return NextResponse.json({ error: crew.error }, { status: 400 })
   const crewError = validateCrew(boatClassRaw, crew)
   if (crewError) return NextResponse.json({ error: crewError }, { status: 400 })
-  const raceDate = normaliseRaceDate(formData.get('raceDate'))
-  if (!raceDate) return NextResponse.json({ error: 'Race date is required (YYYY-MM-DD)' }, { status: 400 })
 
   const arrayBuffer = await file.arrayBuffer()
-  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw, crew, raceDate)
+  return processBuffer(arrayBuffer, file.name, course, user, trialId, boatClassRaw, crew, trial.date)
 }
