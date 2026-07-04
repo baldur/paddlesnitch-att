@@ -164,6 +164,9 @@ export default function LeaderboardTable({
                   {isOpen && (
                     <tr key={`${entry.entryId}-splits`} className="border-b border-[#f1f5f9] bg-[#f8fafc]">
                       <td colSpan={6} className="px-4 py-3">
+                        <div className="mb-4 text-xs">
+                          <Link href={`/att/entries/${entry.entryId}`} className="tt-link tracking-widest">VIEW ENTRY →</Link>
+                        </div>
                         {entry.stravaActivityId != null && (
                           <div className="mb-4 text-xs text-[#64748b]">
                             Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" />

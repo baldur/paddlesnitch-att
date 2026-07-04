@@ -124,6 +124,7 @@ export async function getPublicProfileLinks(userIds: string[]): Promise<Map<stri
 }
 
 export type ProfileRace = {
+  entryId: string          // links to the per-entry permalink /att/entries/{id} (#105)
   trialId: string
   trialName: string
   courseId: string
@@ -159,6 +160,7 @@ export type ProfileStats = {
 }
 
 type StoredEntry = {
+  entryId: string
   userId: string
   displayName: string
   submittedAt: string
@@ -213,6 +215,7 @@ export async function buildProfileStats(
     }
 
     races.push({
+      entryId: entry.entryId,
       trialId,
       trialName: trial.name,
       courseId: course.id,
