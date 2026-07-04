@@ -18,6 +18,7 @@ vi.mock('@/lib/email', () => ({
 
 import { POST as inviteToGroup } from '@/app/att/api/groups/[groupId]/invitations/route'
 import { POST as createGroup } from '@/app/att/api/groups/route'
+import { sendEmail } from '@/lib/email'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -120,6 +121,46 @@ describe('#53 — group invitations send email to recipient', () => {
     // address) — but no email goes out because the address is a placeholder.
     expect(res.status).toBe(201)
     expect(sentEmails).toHaveLength(0)
+  })
+
+  // The SES grant on the server Lambda was too narrow, so sendEmail failed
+  // silently in prod and invites went un-notified. The route now returns
+  // `emailSent` so the UI can warn instead of the failure being invisible.
+  it('reports emailSent:true when the send succeeds', async () => {
+    const owner = await makeUser('Captain Cook')
+    mockAuth(owner.idToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+
+    mockAuth(owner.idToken)
+    const data = await (await inviteToGroup(jsonReq('POST', { email: 'new-user@example.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(data.emailSent).toBe(true)
+  })
+
+  it('reports emailSent:false (but still 201) when the send fails', async () => {
+    const owner = await makeUser('Captain Cook')
+    mockAuth(owner.idToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+
+    vi.mocked(sendEmail).mockResolvedValueOnce(false)
+    mockAuth(owner.idToken)
+    const res = await inviteToGroup(jsonReq('POST', { email: 'new-user@example.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })
+    // The invite still persists — a failed email must not lose the invitation.
+    expect(res.status).toBe(201)
+    expect((await res.json()).emailSent).toBe(false)
+  })
+
+  it('reports emailSent:null when no real inbox is emailed (synthetic Strava address)', async () => {
+    const owner = await makeUser('Captain Cook')
+    mockAuth(owner.idToken)
+    const group = await (await createGroup(jsonReq('POST', { name: 'Endeavour Rowing' }))).json()
+
+    mockAuth(owner.idToken)
+    const data = await (await inviteToGroup(
+      jsonReq('POST', { email: 'strava-12345@noreply.paddlesnitch.com' }),
+      { params: Promise.resolve({ groupId: group.id }) })).json()
+    expect(data.emailSent).toBeNull()
   })
 
   it('a 403/404 invite does not trigger any email', async () => {

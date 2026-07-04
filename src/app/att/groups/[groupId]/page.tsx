@@ -47,6 +47,10 @@ export default function GroupDetailPage({
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState('')
+  // Set when the invite was saved but its email couldn't be sent, so the
+  // organiser knows to resend or share the link directly instead of assuming
+  // the recipient was notified.
+  const [inviteWarning, setInviteWarning] = useState('')
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState('')
 
@@ -173,6 +177,7 @@ export default function GroupDetailPage({
     e.preventDefault()
     setInviting(true)
     setInviteError('')
+    setInviteWarning('')
     try {
       const res = await fetch(`/att/api/groups/${groupId}/invitations`, {
         method: 'POST',
@@ -184,8 +189,14 @@ export default function GroupDetailPage({
         throw new Error(data.error ?? 'Could not invite')
       }
       const data = await res.json()
+      const invited = inviteEmail.trim()
       setInviteEmail('')
       if (data.resolved) setInvitations(prev => [...prev, data.invitation])
+      // The invite is saved either way, but if the notification email failed we
+      // tell the organiser so the recipient doesn't silently go un-notified.
+      if (data.emailSent === false) {
+        setInviteWarning(`Invitation to ${invited} saved, but the email couldn’t be sent. Try again, or share the group link with them directly.`)
+      }
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : 'Could not invite')
     } finally {
@@ -332,6 +343,7 @@ export default function GroupDetailPage({
               </button>
             </form>
             {inviteError && <div className="border border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[#b91c1c] text-xs mt-3">{inviteError}</div>}
+            {inviteWarning && <div className="border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-[#9a3412] text-xs mt-3">{inviteWarning}</div>}
             <p className="text-xs text-[#64748b] mt-3">If the email has no account yet, the invitation will activate the moment they sign up.</p>
           </section>
         )}
