@@ -349,6 +349,21 @@ export class AttStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
+        // Static files under public/ (OpenNext copies public/ into the assets
+        // bundle, deployed to S3 under _assets/). Without an explicit behavior
+        // these hit the default server origin and 404 — which is why the Strava
+        // brand images (public/strava/*.svg) showed as broken in prod (#135).
+        // Add a behavior per public subdirectory the app actually fetches.
+        '/strava/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+        '/data/*': {
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
       },
     })
 
@@ -369,7 +384,9 @@ export class AttStack extends cdk.Stack {
       destinationKeyPrefix: '_assets',
       prune: false,
       distribution,
-      distributionPaths: ['/_next/*'],
+      // Invalidate the public-asset paths too so previously-cached 404s (from
+      // before the /strava + /data behaviors existed) are purged (#135).
+      distributionPaths: ['/_next/*', '/strava/*', '/data/*'],
     })
 
     // ---------------------------------------------------------------------------
