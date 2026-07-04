@@ -134,13 +134,13 @@ export default async function ProfilePage({
               <div className="border border-[#e2e8f0]">
                 {stats.races.map(r => (
                   <Link
-                    key={r.trialId}
-                    href={`/att/trials/${r.trialId}`}
+                    key={r.entryId}
+                    href={`/att/entries/${r.entryId}`}
                     className="flex items-center justify-between px-4 py-2 border-b border-[#f1f5f9] last:border-b-0 hover:bg-[#f8fafc] transition-colors"
                   >
                     <span className="min-w-0">
                       <span className="block text-sm text-[#0f172a] truncate">{r.courseName}</span>
-                      <span className="block text-xs text-[#64748b] tabular">{r.raceDate} · {r.boatClass}</span>
+                      <span className="block text-xs text-[#64748b] tabular">{r.trialName} · {r.raceDate} · {r.boatClass}</span>
                     </span>
                     <span className="text-sm text-[#0369a1] tabular shrink-0 ml-3">{formatTime(r.totalElapsedSeconds)}</span>
                   </Link>

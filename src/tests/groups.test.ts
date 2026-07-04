@@ -450,3 +450,44 @@ describe('deleting a group', () => {
     expect([403, 404]).toContain(res.status)
   })
 })
+
+describe('group directory (#99)', () => {
+  async function makeGroupWithPolicy(ownerToken: string, name: string, policy: 'open' | 'request' | 'invite_only') {
+    mockAuth(ownerToken)
+    const group = await (await createGroup(jsonReq('POST', { name }))).json()
+    if (policy !== 'request') {
+      mockAuth(ownerToken)
+      await patchGroup(jsonReq('PATCH', { joinPolicy: policy }), { params: Promise.resolve({ groupId: group.id }) })
+    }
+    return group
+  }
+
+  it('lists open + request groups as a limited projection, excludes invite_only, works unauthenticated', async () => {
+    const owner = await makeUser('Owner')
+    await makeGroupWithPolicy(owner.idToken, 'Open Club', 'open')
+    await makeGroupWithPolicy(owner.idToken, 'Request Club', 'request')
+    await makeGroupWithPolicy(owner.idToken, 'Secret Club', 'invite_only')
+
+    mockAuth(null) // the directory is public
+    const res = await listGroups(new NextRequest('http://x/att/api/groups?directory=1'))
+    expect(res.status).toBe(200)
+    const { groups } = await res.json()
+    const names = groups.map((g: { name: string }) => g.name)
+    expect(names).toContain('Open Club')
+    expect(names).toContain('Request Club')
+    expect(names).not.toContain('Secret Club')
+    // Limited projection — the member list is never exposed in the directory.
+    expect(groups[0].memberUserIds).toBeUndefined()
+    expect(groups.find((g: { name: string }) => g.name === 'Open Club').joinPolicy).toBe('open')
+  })
+
+  it('flags groups the viewer already belongs to with isMember', async () => {
+    const owner = await makeUser('Owner')
+    const group = await makeGroupWithPolicy(owner.idToken, 'My Open Club', 'open')
+
+    mockAuth(owner.idToken)
+    const res = await listGroups(new NextRequest('http://x/att/api/groups?directory=1'))
+    const { groups } = await res.json()
+    expect(groups.find((g: { id: string }) => g.id === group.id).isMember).toBe(true)
+  })
+})
