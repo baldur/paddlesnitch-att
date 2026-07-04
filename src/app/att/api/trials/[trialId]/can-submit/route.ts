@@ -16,7 +16,7 @@ type Params = { params: Promise<{ trialId: string }> }
 //   { canSubmit: true }
 //   { canSubmit: false, reason: 'members', group?: { id, name } }   // not a member
 //   { canSubmit: false, reason: 'invitational' }                    // not invited
-export async function GET(_: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
   const { trialId } = await params
   const viewer = await getAuthUser()
   if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,7 +29,12 @@ export async function GET(_: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  if (canSubmitToTrial(trial, viewer, viewerGroupIds)) {
+  // A valid shareable submit token lets a signed-in viewer submit even on a
+  // members/invitational trial (they still had to be able to view it).
+  const invite = new URL(req.url).searchParams.get('invite')
+  const tokenOk = !!trial.submitToken && invite === trial.submitToken
+
+  if (tokenOk || canSubmitToTrial(trial, viewer, viewerGroupIds)) {
     return NextResponse.json({ canSubmit: true })
   }
 

@@ -9,7 +9,8 @@ import { GET as listInvitations, POST as createInvitation } from '@/app/att/api/
 import { DELETE as removeInvitation } from '@/app/att/api/trials/[trialId]/invitations/[userId]/route'
 import { GET as getTrial, PATCH as patchTrial } from '@/app/att/api/trials/[trialId]/route'
 import { POST as upload } from '@/app/att/api/trials/[trialId]/upload/route'
-import { addUserToGroupIndex } from '@/lib/groups'
+import { GET as canSubmit } from '@/app/att/api/trials/[trialId]/can-submit/route'
+import { addUserToGroupIndex, newGroup, putGroup } from '@/lib/groups'
 import { cookies } from 'next/headers'
 
 let dataDir: string
@@ -223,6 +224,85 @@ describe('uploading to a members trial (phase 3)', () => {
     const res = await upload(new NextRequest('http://x', { method: 'POST', body: new FormData() }),
       { params: Promise.resolve({ trialId: trial.id }) })
     expect(res.status).not.toBe(404)
+  })
+})
+
+describe('shareable submit link (invite token)', () => {
+  const params = (trialId: string) => ({ params: Promise.resolve({ trialId }) })
+
+  // A real group the owner actually admins — so the owner can mint the token
+  // (canManageTrial checks group admin), while a stranger is not a member
+  // (canSubmitToTrial 'members' stays blocked until the token bypasses it).
+  async function ownerWithGroup() {
+    const owner = await makeUser('Owner')
+    const group = newGroup({ name: 'G', ownerId: owner.id })
+    await putGroup(group)
+    await addUserToGroupIndex(owner.id, group.id)
+    return { owner, groupId: group.id }
+  }
+
+  async function membersTrialWithToken() {
+    const { owner, groupId } = await ownerWithGroup()
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'members', groupId })
+    mockAuth(owner.idToken)
+    const patched = await (await patchTrial(jsonReq('PATCH', { regenerateSubmitToken: true }), params(trial.id))).json()
+    return { trial, token: patched.submitToken as string }
+  }
+
+  it('a non-manager cannot mint a token', async () => {
+    const owner = await makeUser('Owner')
+    const stranger = await makeUser('Stranger')
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open')
+    mockAuth(stranger.idToken)
+    const res = await patchTrial(jsonReq('PATCH', { regenerateSubmitToken: true }), params(trial.id))
+    expect(res.status).toBe(403)
+  })
+
+  it('a valid token lets a non-member submit to a members trial; wrong/absent token does not', async () => {
+    const { trial, token } = await membersTrialWithToken()
+    expect(token).toBeTruthy()
+    const stranger = await makeUser('Stranger')
+    mockAuth(stranger.idToken)
+
+    // No token → blocked.
+    const blocked = await upload(new NextRequest('http://x', { method: 'POST', body: new FormData() }), params(trial.id))
+    expect(blocked.status).toBe(404)
+    // Wrong token → blocked.
+    const wrong = await upload(new NextRequest('http://x?invite=nope', { method: 'POST', body: new FormData() }), params(trial.id))
+    expect(wrong.status).toBe(404)
+    // Valid token → past the gate (empty form → some other 4xx, not the 404 the gate returns).
+    const ok = await upload(new NextRequest(`http://x?invite=${token}`, { method: 'POST', body: new FormData() }), params(trial.id))
+    expect(ok.status).not.toBe(404)
+  })
+
+  it('can-submit reports canSubmit with a valid token, and members-blocked without', async () => {
+    const { trial, token } = await membersTrialWithToken()
+    const stranger = await makeUser('Stranger')
+    mockAuth(stranger.idToken)
+
+    const without = await (await canSubmit(new NextRequest('http://x'), params(trial.id))).json()
+    expect(without.canSubmit).toBe(false)
+    expect(without.reason).toBe('members')
+
+    const withTok = await (await canSubmit(new NextRequest(`http://x?invite=${token}`), params(trial.id))).json()
+    expect(withTok.canSubmit).toBe(true)
+  })
+
+  it('revoking the token disables it', async () => {
+    const { owner, groupId } = await ownerWithGroup()
+    const course = await makeCourse(owner.id)
+    const trial = await makeTrial(course.id, owner.id, 'open', { participation: 'members', groupId })
+    mockAuth(owner.idToken)
+    const token = (await (await patchTrial(jsonReq('PATCH', { regenerateSubmitToken: true }), params(trial.id))).json()).submitToken
+    mockAuth(owner.idToken)
+    await patchTrial(jsonReq('PATCH', { submitToken: null }), params(trial.id))
+
+    const stranger = await makeUser('Stranger')
+    mockAuth(stranger.idToken)
+    const res = await upload(new NextRequest(`http://x?invite=${token}`, { method: 'POST', body: new FormData() }), params(trial.id))
+    expect(res.status).toBe(404) // token no longer matches
   })
 })
 

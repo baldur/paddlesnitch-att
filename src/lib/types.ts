@@ -97,6 +97,11 @@ export type TrialMetadata = {
   participation: Participation
   // Cognito subs of invited users. Empty (or absent) for `open` trials.
   invitedUserIds: string[]
+  // Optional shareable submit link. Anyone signed in who reaches the upload page
+  // with `?invite={submitToken}` may submit — even on a members/invitational
+  // trial — so an organiser can hand out one link and let recipients sign up and
+  // submit without being added to the group first. Rotate/revoke to disable.
+  submitToken?: string
   createdAt: string
 }
 
