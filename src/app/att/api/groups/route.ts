@@ -6,19 +6,39 @@ import {
   putGroup,
   getUserGroupIds,
   getUserAdminGroupIds,
+  joinPolicyOf,
   addUserToGroupIndex,
 } from '@/lib/groups'
 
-// GET /att/api/groups[?role=admin]
-// Lists groups the viewer is in (owner / admin / member). With `?role=admin`
-// it narrows to groups the viewer can MANAGE (owner/admin) — used by the
-// course form to populate its "which group owns this?" selector.
-// Unauthenticated requests get an empty list — groups are not publicly
-// listable to keep member lists private by default.
+// GET /att/api/groups[?role=admin | ?directory=1]
+// Default: groups the viewer is in (owner / admin / member). `?role=admin`
+// narrows to groups the viewer can MANAGE (course form's group selector).
+// `?directory=1` returns the PUBLIC group directory (#99): every group whose
+// joinPolicy is open or request, as a LIMITED projection (no member list) so a
+// paddler can find a group to join. invite-only groups are omitted — that's the
+// lever an owner uses to keep a group out of the directory. Works unauthenticated.
 export async function GET(req: NextRequest) {
-  const viewer = await getAuthUser()
-  if (!viewer) return NextResponse.json({ groups: [] })
   const { searchParams } = new URL(req.url)
+  const viewer = await getAuthUser()
+
+  if (searchParams.get('directory') === '1') {
+    const viewerIds = viewer ? new Set(await getUserGroupIds(viewer.id)) : new Set<string>()
+    const all = await listAllGroups()
+    const groups = all
+      .filter(g => joinPolicyOf(g) !== 'invite_only')
+      .map(g => ({
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        joinPolicy: joinPolicyOf(g),
+        memberCount: 1 + g.adminUserIds.length + g.memberUserIds.length,
+        isMember: viewerIds.has(g.id),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return NextResponse.json({ groups })
+  }
+
+  if (!viewer) return NextResponse.json({ groups: [] })
   const ids = searchParams.get('role') === 'admin'
     ? await getUserAdminGroupIds(viewer.id)
     : new Set(await getUserGroupIds(viewer.id))
