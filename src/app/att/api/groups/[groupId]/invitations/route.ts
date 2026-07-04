@@ -77,11 +77,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       toUserId: matched.sub,
     })
     await putInvitation(invitation)
+    // emailSent is null when there's no real inbox to reach (synthetic Strava
+    // address), true/false when a send was actually attempted. Surfacing it lets
+    // the UI warn "invite saved but email failed" instead of the send failing
+    // silently (see the SES IAM trap the invites hit in prod).
+    let emailSent: boolean | null = null
     if (inboxIsReal) {
       const { subject, text } = existingAccountInviteEmail({ group, inviterName, baseUrl, role })
-      await sendEmail({ to: email, subject, text })
+      emailSent = await sendEmail({ to: email, subject, text })
     }
-    return NextResponse.json({ invitation, resolved: true }, { status: 201 })
+    return NextResponse.json({ invitation, resolved: true, emailSent }, { status: 201 })
   }
 
   // Pre-signup invite. Queued under pending-invitations/groups/{emailHash}/
@@ -93,11 +98,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     toEmail: email,
   })
   await putPendingInvitation(invitation)
-  // Without this email the recipient has no idea they were invited — the
-  // whole point of the pending-invitation feature breaks (see #53).
+  // Without this email the recipient has no idea they were invited — the whole
+  // point of the pending-invitation feature breaks (see #53). Here a failed
+  // send is the MOST damaging (a pre-signup recipient has no in-app fallback),
+  // so emailSent is surfaced for the UI to warn on.
+  let emailSent: boolean | null = null
   if (inboxIsReal) {
     const { subject, text } = pendingInviteEmail({ group, inviterName, baseUrl, role })
-    await sendEmail({ to: email, subject, text })
+    emailSent = await sendEmail({ to: email, subject, text })
   }
-  return NextResponse.json({ invitation, resolved: false }, { status: 201 })
+  return NextResponse.json({ invitation, resolved: false, emailSent }, { status: 201 })
 }

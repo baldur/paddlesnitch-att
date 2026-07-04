@@ -222,9 +222,22 @@ export class AttStack extends cdk.Stack {
 
     dataBucket.grantReadWrite(serverFn)
 
+    // ses:SendEmail authorises against multiple resources at once — the same
+    // trap the Cognito trigger grant documents above. The server function sends
+    // group-invitation emails (src/lib/email.ts), so it needs the identical
+    // grant, not just identity/paddlesnitch.com:
+    //   - identity/*          — FROM plus (in SANDBOX) every recipient address.
+    //   - configuration-set/* — VDM auto-attaches the account default config set
+    //     to every send and SES checks IAM against it; without this, SendEmail
+    //     fails with AccessDenied even though the identity grant is present. That
+    //     failure is swallowed by email.ts, so invitation emails silently never
+    //     send. Kept in lockstep with the createAuth grant above.
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail'],
-      resources: [`arn:aws:ses:eu-west-1:${this.account}:identity/paddlesnitch.com`],
+      resources: [
+        `arn:aws:ses:eu-west-1:${this.account}:identity/*`,
+        `arn:aws:ses:eu-west-1:${this.account}:configuration-set/*`,
+      ],
     }))
 
     // Runtime-fetched SSM SecureStrings. CFN can't resolve SecureString
