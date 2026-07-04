@@ -37,9 +37,8 @@ test('uploading a GPX trace produces a leaderboard entry', async ({ page }) => {
   // auto-prefills bow seat 1 with the signed-in user's display name.
   await page.locator('select').first().selectOption('K1')
 
-  // Race date defaults to today; pin to match the GPX's recorded date
-  // so we don't accidentally flag a date discrepancy.
-  await page.locator('input[type="date"]').fill('2025-06-01')
+  // The race date is now inferred from the trace itself (#123/#134) —
+  // there's no date picker to fill anymore.
 
   // Attach the file. Playwright's setInputFiles handles the
   // hidden-input pattern transparently.
