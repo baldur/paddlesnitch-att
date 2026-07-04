@@ -6,24 +6,34 @@ import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
 import type { GroupMetadata } from '@/lib/types'
 
-// /att/groups — the viewer's groups and a quick-create form.
-//
-// Groups are not publicly listable. An unauthenticated visitor sees an
-// empty list with a sign-in prompt; signed-in users see the groups they
-// own / admin / are members of.
+// /att/groups — the viewer's groups, a public directory of joinable groups
+// (#99), and a quick-create form.
+
+// A public-directory group (limited projection — no member list). #99.
+type DirectoryGroup = {
+  id: string
+  name: string
+  description: string
+  joinPolicy: 'open' | 'request' | 'invite_only'
+  memberCount: number
+  isMember: boolean
+}
 
 export default function GroupsCataloguePage() {
   const router = useRouter()
   const [groups, setGroups] = useState<GroupMetadata[] | null>(null)
+  const [directory, setDirectory] = useState<DirectoryGroup[] | null>(null)
   const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
   const load = async () => {
-    const res = await fetch('/att/api/groups')
-    if (!res.ok) { setGroups([]); return }
-    const data = await res.json()
-    setGroups(data.groups)
+    const [res, dirRes] = await Promise.all([
+      fetch('/att/api/groups'),
+      fetch('/att/api/groups?directory=1'),
+    ])
+    setGroups(res.ok ? (await res.json()).groups : [])
+    if (dirRes.ok) setDirectory((await dirRes.json()).groups)
   }
   useEffect(() => { load() }, [])
 
@@ -98,6 +108,41 @@ export default function GroupsCataloguePage() {
             </div>
           )}
         </section>
+
+        {/* Public directory of groups you can join (#99). Only groups you're not
+            already in; invite-only groups are excluded server-side. */}
+        {directory && directory.some(g => !g.isMember) && (
+          <section className="border-t border-[#e2e8f0] pt-8">
+            <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Discover groups</h2>
+            <p className="text-sm text-[#64748b] mb-4">Find a group to join. Open the group to join or request an invitation.</p>
+            <div className="flex flex-col gap-2">
+              {directory.filter(g => !g.isMember).map(g => (
+                <Link
+                  key={g.id}
+                  href={`/att/groups/${g.id}`}
+                  className="border border-[#e2e8f0] px-4 py-3 hover:border-[#0369a1] transition-colors group flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[#0f172a] font-bold group-hover:text-[#0369a1] transition-colors">{g.name}</div>
+                    {g.description && (
+                      <div className="text-xs text-[#64748b] mt-0.5 truncate">{g.description}</div>
+                    )}
+                    <div className="text-xs text-[#64748b] mt-0.5 tabular">
+                      {g.memberCount} member{g.memberCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <span className={`text-xs tracking-widest px-2 py-0.5 border shrink-0 ${
+                    g.joinPolicy === 'open'
+                      ? 'border-[#15803d] text-[#15803d]'
+                      : 'border-[#0369a1] text-[#0369a1]'
+                  }`}>
+                    {g.joinPolicy === 'open' ? 'JOIN' : 'REQUEST'}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="border-t border-[#e2e8f0] pt-8">
           <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-4">Create a group</h2>
