@@ -143,6 +143,11 @@ export default function UploadPage({
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [authUser, setAuthUser] = useState<AuthUser | null | undefined>(undefined)
+  // Shareable submit-link token from the URL (?invite=). Read once via lazy
+  // init (null during SSR) so a link-holder can submit + round-trip through
+  // signup even on a gated trial — without a setState-in-effect.
+  const [inviteToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('invite'))
   // Phase 3: whether this viewer may submit (participation gate). undefined =
   // still checking. When canSubmit is false we render a join / invite CTA
   // instead of the form, so a `members` trial doesn't show a form that 404s.
@@ -175,15 +180,19 @@ export default function UploadPage({
       .catch(() => setAuthUser(null))
   }, [])
 
+  // `?invite=<token>` query suffix, reused on the can-submit + submit requests.
+  const inviteQuery = inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : ''
+
   // Once we know the viewer is signed in, ask the server whether they may
-  // submit (and if not, why) so we can show the right CTA.
+  // submit (and if not, why) so we can show the right CTA. A valid invite token
+  // makes the server answer canSubmit even on a members/invitational trial.
   useEffect(() => {
     if (!authUser) return
-    fetch(`/att/api/trials/${trialId}/can-submit`)
+    fetch(`/att/api/trials/${trialId}/can-submit${inviteQuery}`)
       .then(r => (r.ok ? r.json() : { canSubmit: false }))
       .then(setSubmitGate)
       .catch(() => setSubmitGate({ canSubmit: false }))
-  }, [authUser, trialId])
+  }, [authUser, trialId, inviteQuery])
 
   // Strava picker: lazy-load status + activities the first time the tab opens.
   // We don't fetch on mount — most uploads are still file/URL and there's no
@@ -272,7 +281,7 @@ export default function UploadPage({
     formData.append('crew', JSON.stringify(crew))
 
     try {
-      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
+      const res = await fetch(`/att/api/trials/${trialId}/upload${inviteQuery}`, {
         method: 'POST',
         body: formData,
       })
@@ -294,7 +303,7 @@ export default function UploadPage({
     setDiagnostic(null)
 
     try {
-      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
+      const res = await fetch(`/att/api/trials/${trialId}/upload${inviteQuery}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stravaActivityId, boatClass, crew }),
@@ -317,7 +326,7 @@ export default function UploadPage({
     setDiagnostic(null)
 
     try {
-      const res = await fetch(`/att/api/trials/${trialId}/upload`, {
+      const res = await fetch(`/att/api/trials/${trialId}/upload${inviteQuery}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: activityUrl.trim(), boatClass, crew }),
@@ -356,7 +365,7 @@ export default function UploadPage({
               You need an account to submit a trace and appear on the leaderboard.
             </p>
             <a
-              href={`/att/auth?next=/att/trials/${trialId}/upload`}
+              href={`/att/auth?next=${encodeURIComponent(`/att/trials/${trialId}/upload${inviteQuery}`)}`}
               className="px-6 py-2.5 bg-[#0369a1] text-white font-bold text-sm tracking-widest hover:bg-[#0284c7] transition-colors"
             >
               SIGN IN / SIGN UP

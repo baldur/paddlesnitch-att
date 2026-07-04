@@ -94,6 +94,16 @@ export default function TrialAdminPage({
     if (updated.participation === 'invitational') loadInvitees()
   }
 
+  // Mint or revoke the shareable submit-link token.
+  const changeSubmitToken = async (body: Record<string, unknown>) => {
+    const updated = await fetch(`/att/api/trials/${trialId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json())
+    setTrial(updated)
+  }
+
   const submitInvite = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inviteEmail.trim()) return
@@ -219,6 +229,52 @@ export default function TrialAdminPage({
             ))}
           </div>
         </section>
+
+        {/* Share — get people onto this trial with a link. */}
+        {(() => {
+          const origin = typeof window !== 'undefined' ? window.location.origin : ''
+          const trialLink = `${origin}/att/trials/${trialId}`
+          const submitLink = trial.submitToken ? `${origin}/att/trials/${trialId}/upload?invite=${trial.submitToken}` : ''
+          const gated = trial.participation === 'members' || trial.participation === 'invitational'
+          const copy = (t: string) => navigator.clipboard?.writeText(t)
+          const inputClass = 'bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-xs focus:outline-none focus:border-[#0369a1] transition-colors'
+          return (
+            <section>
+              <h2 className="text-xs text-[#64748b] tracking-[0.2em] uppercase mb-2">Share this trial</h2>
+              <p className="text-sm text-[#64748b] mb-3">
+                Send this link — visitors can view the leaderboard, and (on an open trial) sign up and submit right from it.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <input readOnly value={trialLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
+                <button type="button" onClick={() => copy(trialLink)} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">COPY LINK</button>
+              </div>
+
+              {gated && (
+                <div className="border border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] text-xs px-3 py-2 mb-4">
+                  Heads-up: this trial is <b>{trial.participation}</b>, so people who follow the plain link above will need to{' '}
+                  {trial.participation === 'members' ? 'join the group' : 'be invited'} before they can submit. Use the{' '}
+                  <b>submit link</b> below to let anyone you share it with sign up and submit directly — or set “Submit” to <b>PUBLIC</b>.
+                </div>
+              )}
+
+              <label className="text-xs text-[#64748b] tracking-widest">SUBMIT LINK</label>
+              <p className="text-xs text-[#64748b] mt-1 mb-2">
+                Anyone with this link can sign up and submit to this trial{gated ? ', even though it’s gated' : ''}. Revoke it any time.
+              </p>
+              {submitLink ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input readOnly value={submitLink} onFocus={e => e.target.select()} className={`${inputClass} flex-1`} />
+                  <button type="button" onClick={() => copy(submitLink)} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">COPY</button>
+                  <button type="button" onClick={() => changeSubmitToken({ submitToken: null })} className="px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#b91c1c] hover:text-[#b91c1c] transition-colors">REVOKE</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => changeSubmitToken({ regenerateSubmitToken: true })} className="self-start px-4 py-2 border border-[#e2e8f0] text-[#64748b] text-xs tracking-widest hover:border-[#0369a1] hover:text-[#0369a1] transition-colors">
+                  CREATE SUBMIT LINK
+                </button>
+              )}
+            </section>
+          )
+        })()}
 
         {/* Invitee management — only meaningful when participation is invitational.
             Open trials hide the section so we don't suggest the data is there. */}

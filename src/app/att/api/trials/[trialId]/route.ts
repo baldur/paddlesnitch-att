@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { nanoid } from 'nanoid'
 import { getAuthUser } from '@/lib/auth'
 import { getJson, putJson } from '@/lib/storage'
 import { canViewTrial, canManageTrial } from '@/lib/permissions'
@@ -104,6 +105,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // it's just ignored. Flipping back doesn't surprise the owner.
     next.participation = body.participation
   }
+  // Shareable submit link: mint a fresh token or revoke it.
+  if (body.regenerateSubmitToken === true) next.submitToken = nanoid()
+  if (body.submitToken === null) delete next.submitToken
   await putJson(`trials/${trialId}/metadata.json`, next)
   return NextResponse.json(next)
 }

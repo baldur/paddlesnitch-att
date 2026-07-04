@@ -11,7 +11,7 @@ import { utcDateString } from '@/lib/format'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { getActivityStreams, streamsToTrack } from '@/lib/strava'
 import { getValidStravaTokens } from '@/lib/strava-storage'
-import { canSubmitToTrial } from '@/lib/permissions'
+import { canSubmitToTrial, canViewTrial } from '@/lib/permissions'
 import { getUserGroupIds } from '@/lib/groups'
 import type { TrialMetadata, CourseMetadata, ProcessedResult, BoatClass, CrewMember, TrackPoint, LatLng, EntryConditions } from '@/lib/types'
 
@@ -206,8 +206,15 @@ export async function POST(
   // both "can't see" and "can see but not invited" so the route doesn't
   // distinguish — invitational trials don't leak their guest list through
   // a 403 vs 404 split.
+  //
+  // A valid shareable submit token (?invite=) bypasses the PARTICIPATION gate —
+  // it's the organiser explicitly letting link-holders submit to a members /
+  // invitational trial — but viewing is still required (so it can't submit to a
+  // trial the user can't even see).
   const viewerGroupIds = new Set(await getUserGroupIds(user.id))
-  if (!canSubmitToTrial(trial, user, viewerGroupIds)) {
+  const invite = new URL(req.url).searchParams.get('invite')
+  const tokenOk = !!trial.submitToken && invite === trial.submitToken && canViewTrial(trial, user, viewerGroupIds)
+  if (!tokenOk && !canSubmitToTrial(trial, user, viewerGroupIds)) {
     return NextResponse.json({ error: 'Trial not found' }, { status: 404 })
   }
   if (trial.status !== 'open')
