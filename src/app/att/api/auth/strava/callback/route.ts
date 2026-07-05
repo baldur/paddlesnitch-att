@@ -70,8 +70,14 @@ export async function GET(req: NextRequest) {
   // Cognito's email-format requirement. The user can add a real contact
   // email later from /att/account — see src/lib/strava-account.ts and
   // the StravaContactBanner.
+  // NOTE: `||`, not `??`. getAthleteProfile normalises a missing Strava email
+  // to '' (empty string), and `?? ` only falls back on null/undefined — so with
+  // `??` a no-email athlete got accountEmail = '' and AdminCreateUser was called
+  // with an empty username, failing InvalidParameterException (masked as
+  // 'unknown' → "Could not create an account from your Strava profile"). `||`
+  // treats '' as "no email" and falls back to the synthetic address.
   const hasRealEmail = !!profile.email
-  const accountEmail = profile.email ?? syntheticEmailFor(profile.id)
+  const accountEmail = profile.email || syntheticEmailFor(profile.id)
 
   // 2. Find or create the matching Cognito user.
   //    Priority:
