@@ -369,6 +369,29 @@ export async function adminCreateUserForStrava(
     if (!sub) return { error: 'unknown' }
     return { sub }
   } catch (err) {
+    // Self-heal a half-created user. A prior sign-in attempt can leave a
+    // Cognito user with no athlete-index link (created, then customAuthSignIn
+    // or the index write failed). On retry, AdminCreateUser throws
+    // UsernameExists and Strava sign-in dead-ends on "Could not create an
+    // account from your Strava profile" — forever, because the account can
+    // never be re-created. Recover: resolve the existing user, re-assert a
+    // permanent password (so it isn't stuck in FORCE_CHANGE_PASSWORD, which
+    // blocks CUSTOM_AUTH), and return its sub so the caller can (re)link and
+    // sign in. This makes the create idempotent for the synth-email path,
+    // which deliberately skips the by-email lookup upstream.
+    if (err instanceof UsernameExistsException) {
+      const existing = await findUserByEmail(email)
+      if (existing) {
+        const random = randomBytes(32).toString('base64') + 'A1!a'
+        await client.send(new AdminSetUserPasswordCommand({
+          UserPoolId: USER_POOL_ID,
+          Username: email,
+          Password: random,
+          Permanent: true,
+        })).catch(() => {})
+        return { sub: existing.sub }
+      }
+    }
     return { error: classify(err) }
   }
 }
