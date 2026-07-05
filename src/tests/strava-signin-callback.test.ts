@@ -76,4 +76,22 @@ describe('Strava sign-in callback — linked-account resolution', () => {
     expect(res.headers.get('location') ?? '').not.toContain('error=')
     expect(cognito.adminCreateUserForStrava).toHaveBeenCalled()
   })
+
+  // Regression: Strava returns email as '' (empty string) not undefined, so
+  // `profile.email ?? synth` kept the '' and AdminCreateUser was called with an
+  // empty username → InvalidParameterException → "Could not create an account
+  // from your Strava profile". The synthetic address must be used for '' too.
+  it('uses the synthetic address (never an empty username) when Strava gives an empty email', async () => {
+    vi.mocked(strava.getAthleteProfile).mockResolvedValue({ id: 555, firstname: 'Bal', lastname: 'G', email: '' } as never)
+    vi.mocked(stravaStorage.getUserIdByAthleteId).mockResolvedValue(null)
+    vi.mocked(cognito.adminCreateUserForStrava).mockResolvedValue({ sub: 'new-sub' } as never)
+
+    const res = await callback(req())
+
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location') ?? '').not.toContain('error=')
+    const [emailArg] = vi.mocked(cognito.adminCreateUserForStrava).mock.calls[0]
+    expect(emailArg).toBe('strava-555@noreply.paddlesnitch.com')
+    expect(emailArg).not.toBe('')
+  })
 })
