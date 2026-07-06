@@ -3,6 +3,7 @@ import { parseGpx } from './gpx'
 import { parseFit } from './fit'
 import { parseCsv } from './csv'
 import { parseTcx } from './tcx'
+import { looksLikeSpeedCoach, parseSpeedCoachCsv } from './speedcoach'
 import { readZip } from './unzip'
 
 export type ParseResult =
@@ -28,7 +29,9 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
 
     if (ext === 'csv') {
       const text = new TextDecoder().decode(data)
-      const track = parseCsv(text)
+      // NK SpeedCoach exports a multi-section CSV that the generic per-row
+      // parser can't read — route it to its own parser first.
+      const track = looksLikeSpeedCoach(text) ? parseSpeedCoachCsv(text) : parseCsv(text)
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
     }
 
