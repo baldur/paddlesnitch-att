@@ -20,6 +20,7 @@ type EntryDetail = {
     totalElapsedSeconds: number
     splits: Split[]
     runCount?: number
+    avgStrokeRate?: number
     trackSegment?: LatLng[]
     conditions?: EntryConditions
     stravaActivityId?: number
@@ -102,7 +103,7 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
           <h1 className="text-lg font-bold text-[#0f172a] tracking-widest">{entry.displayName.toUpperCase()}</h1>
           <div className="mt-2 flex items-baseline gap-3">
             <span className="text-3xl font-bold text-[#0369a1] tabular">{formatTime(entry.totalElapsedSeconds)}</span>
-            <span className="text-xs text-[#64748b] tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}</span>
+            <span className="text-xs text-[#64748b] tabular">{entry.boatClass}{course ? ` · ${course.distanceMetres.toLocaleString()} m` : ''}{entry.avgStrokeRate != null ? ` · ${entry.avgStrokeRate} spm avg` : ''}</span>
           </div>
           {entry.runCount && entry.runCount > 1 && (
             <p className="text-xs text-[#64748b] mt-1">Best of {entry.runCount} runs in this upload.</p>

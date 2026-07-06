@@ -16,6 +16,20 @@ describe('parseCsv', () => {
     expect(parseCsv(csv)).toHaveLength(1)
   })
 
+  it('captures stroke rate under any of its column aliases (#143)', () => {
+    for (const col of ['cadence', 'Stroke Rate', 'SPM', 'sr']) {
+      const csv = `lat,lon,time,${col}\n51.5,-0.9,2024-06-01T10:00:00Z,30`
+      expect(parseCsv(csv)[0].strokeRate).toBe(30)
+    }
+  })
+
+  it('ignores heart rate and leaves strokeRate unset when absent', () => {
+    const csv = `lat,lon,time,hr\n51.5,-0.9,2024-06-01T10:00:00Z,150`
+    const p = parseCsv(csv)[0]
+    expect(p).not.toHaveProperty('hr')
+    expect(p).not.toHaveProperty('strokeRate')
+  })
+
   it('parses unix second timestamps', () => {
     const ts = Math.floor(new Date('2024-06-01T10:00:00Z').getTime() / 1000)
     const csv = `lat,lon,time\n51.5,-0.9,${ts}`

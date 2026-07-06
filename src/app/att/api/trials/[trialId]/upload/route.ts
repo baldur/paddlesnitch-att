@@ -87,10 +87,13 @@ async function processBuffer(
 ): Promise<NextResponse> {
   const parseResult = await parseTrace(filename, arrayBuffer)
   if (!parseResult.ok) {
-    return NextResponse.json(
-      { error: `Could not parse file: ${parseResult.reason}` },
-      { status: 422 }
-    )
+    const messages: Record<typeof parseResult.reason, string> = {
+      kml_no_timing: 'KML files don’t contain timestamps, so we can’t compute a time from one. Export your activity as GPX, FIT, or TCX instead.',
+      unknown_format: 'Unsupported file type. Upload a GPX, FIT, TCX, or CSV file (a Garmin .zip export is fine too).',
+      empty: 'We couldn’t find any GPS track points with coordinates and timestamps in that file. Export the full activity as GPX, FIT, or TCX.',
+      parse_error: 'We couldn’t read that file — it may be corrupted or an unexpected format. Try re-exporting as GPX, FIT, or TCX.',
+    }
+    return NextResponse.json({ error: messages[parseResult.reason] }, { status: 422 })
   }
   return processTrack(parseResult.track, Buffer.from(arrayBuffer), filename, course, user, trialId, boatClass, crew, trialDate)
 }

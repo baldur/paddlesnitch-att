@@ -233,8 +233,9 @@ Derived from an Entry by the processing pipeline:
 - **Finish crossing time** — timestamp when the track first crosses the finish line (after the start)
 - **Total elapsed time** — finish − start in seconds
 - **500 m splits** — array of `{ distance: number, elapsedSeconds: number }` at each 500 m mark
+- **Average stroke rate** — `ProcessedResult.avgStrokeRate` (SPM), mean of per-point stroke rate over the racing window `[start, finish]` (timestamp-bounded so bracketing warmup/cooldown points don't skew it). Undefined when the trace carried none. Shown on the entry page. #143.
 
-**Heart rate and cadence are intentionally NOT captured.** All three parsers (gpx, fit, csv) discard those fields at parse time even when the source file contains them. See `docs/features/courses-and-entries.md`.
+**Heart rate is intentionally NOT captured** (a sensitive biometric) — every parser strips it at parse time. **Stroke rate (a.k.a. cadence) IS captured** for paddlers (#143): each parser reads it from that format's own field (GPX `<gpxtpx:cad>`/`<cadence>`, FIT `cadence` + `fractional_cadence`, TCX `<Cadence>`/`<RunCadence>`, CSV aliases `cadence`/`cad`/`stroke rate`/`spm`/`sr`, SpeedCoach `Stroke Rate`), stores it on `TrackPoint.strokeRate`, and `geo.buildResult` averages it. In practice the **FIT** export is the reliable carrier — GPX exports (Strava, SpeedCoach) frequently omit stroke rate. See `docs/features/courses-and-entries.md`.
 
 ### Boat class
 Every entry carries a `boatClass`. Kayak: `K1`, `K2`, `K4`. Sculling: `1X`, `2X`, `4X+`, `4X-`. Sweep: `2-`, `4+`, `4-`, `8+`. Defined in `src/lib/types.ts` (`BoatClass`, `BOAT_CLASSES`, `BOAT_CLASS_INFO`, `isBoatClass`). The leaderboard UI defaults to showing all classes with a filter dropdown — comparing a 1X to an 8+ is not meaningful so users typically filter to their own class. Crew details (per-seat names) are added in a later phase; Phase 1 only stores the class label.
@@ -536,8 +537,10 @@ src/
     geo.ts                     ← Haversine, line-segment intersection, processTrace, formatTime
     gpx.ts                     ← GPX parser (regex-based, no dependencies)
     fit.ts                     ← FIT parser (fit-file-parser package)
-    csv.ts                     ← CSV parser (flexible column names, unix/ISO timestamps)
-    parse.ts                   ← Dispatcher: parseTrace(filename, buffer) → ParseResult
+    tcx.ts                     ← TCX parser (regex-based, like gpx.ts)
+    csv.ts                     ← Generic per-row CSV parser (flexible column names, unix/ISO timestamps)
+    speedcoach.ts              ← NK SpeedCoach multi-section CSV parser (Start Time + Per-Stroke Data)
+    parse.ts                   ← Dispatcher: parseTrace(filename, buffer) → ParseResult (routes .csv to generic vs SpeedCoach; rejects .kml)
     storage.ts                 ← getObject/putObject/deleteObject/listKeys/getJson/putJson
     auth.ts                    ← getAuthUser(): reads tt_id, verifies JWT, silent-refreshes via tt_refresh
     cognito.ts                 ← Cognito SDK wrapper: signUp, signIn, refresh, revoke, verifyIdToken
@@ -556,20 +559,30 @@ src/
 
 ## GPS File Formats
 
+Supported input formats (dispatched by extension in `src/lib/parse.ts`): **GPX, FIT, TCX, CSV** (generic per-row **or** NK SpeedCoach multi-section), and **ZIP** (unwrapped). **KML is deliberately rejected** (no timestamps). Every parser captures stroke rate when present and never captures HR.
+
 ### GPX
-XML. Extract `<trkpt lat="" lon=""><time>`. Heart rate: `<gpxtpx:hr>`. Cadence: `<gpxtpx:cad>`. Parser: `src/lib/gpx.ts` (regex, no XML library).
+XML. Extract `<trkpt lat="" lon=""><time>`. HR (`<gpxtpx:hr>`) is discarded. Stroke rate is captured from `<gpxtpx:cad>` / `<cadence>` / any-prefixed `<…:cad>` (#143). Parser: `src/lib/gpx.ts` (regex, no XML library).
 
 ### FIT
-Binary. `fit-file-parser` npm package. Returns `position_lat`/`position_long` already in degrees (no semicircle conversion needed). Fields: `timestamp`, `heart_rate`, `cadence`. Parser: `src/lib/fit.ts`.
+Binary. `fit-file-parser` npm package. Returns `position_lat`/`position_long` already in degrees (no semicircle conversion needed). HR (`heart_rate`) discarded; stroke rate = `cadence` + `fractional_cadence` (#143). Parser: `src/lib/fit.ts`. In practice FIT is the **reliable** stroke-rate carrier (GPX exports often omit it).
+
+### TCX
+Garmin Training Center XML (exported by Strava, Garmin Connect, coaching tools). Regex parser (like GPX): each `<Trackpoint>`'s `<Time>` + `<Position>`; stroke rate from `<Cadence>` or a `<RunCadence>`/`<ns3:Cadence>` extension. HR discarded. Parser: `src/lib/tcx.ts`.
 
 ### CSV
-Comma-separated. Flexible column detection (case-insensitive, ignores spaces/underscores): lat/latitude, lon/lng/longitude, time/timestamp/datetime (unix seconds, unix ms, ISO 8601, `YYYY-MM-DD HH:MM:SS`). Optional: hr/heartrate/bpm, cadence/cad/strokerate. Parser: `src/lib/csv.ts`.
+Two shapes, auto-detected:
+- **Generic per-row** (`src/lib/csv.ts`): flexible column detection (case-insensitive, ignores spaces/underscores): lat/latitude, lon/lng/longitude, time/timestamp/datetime (unix s, unix ms, ISO 8601, `YYYY-MM-DD HH:MM:SS`). Stroke rate from `cadence`/`cad`/`stroke rate`/`spm`/`sr`; HR ignored.
+- **NK SpeedCoach** (`src/lib/speedcoach.ts`): a multi-section report, not a per-row track. `looksLikeSpeedCoach()` routes it here. Reads the session `Start Time` and the `Per-Stroke Data:` section (columns found by name: `Elapsed Time` HH:MM:SS.t, `Stroke Rate` SPM, `GPS Lat.`, `GPS Lon.`); absolute time = start + elapsed. The paddling/rowing device, so read directly rather than only via its FIT export. (Strava's own "activity CSV" is a lap summary with no coordinates → correctly `empty`.)
 
 ### ZIP (fitness-app export wrapper)
-Garmin Connect (and others) export an activity as a single trace file wrapped in a `.zip`. `parseTrace` detects `.zip`, unwraps it via `readZip` (`src/lib/unzip.ts` — zero-dep central-directory reader + `zlib.inflateRawSync`; Garmin local headers use a data descriptor with zeroed sizes, so the central directory is the reliable source of sizes), finds the first entry with a supported extension (`gpx`/`fit`/`csv`), and recurses. A zip with no supported file → `unknown_format`; a corrupt zip → `parse_error`. Regression fixture: `src/tests/fixtures/garmin-activity-export.zip` (a real Garmin `*_ACTIVITY.fit` export). See issue #130.
+Garmin Connect (and others) export an activity as a single trace file wrapped in a `.zip`. `parseTrace` detects `.zip`, unwraps it via `readZip` (`src/lib/unzip.ts` — zero-dep central-directory reader + `zlib.inflateRawSync`; Garmin local headers use a data descriptor with zeroed sizes, so the central directory is the reliable source of sizes), finds the first entry with a supported extension (`gpx`/`fit`/`csv`/`tcx`), and recurses. A zip with no supported file → `unknown_format`; a corrupt zip → `parse_error`. Regression fixture: `src/tests/fixtures/garmin-activity-export.zip` (a real Garmin `*_ACTIVITY.fit` export). See issue #130.
 
-### Unknown formats
-Returns `{ ok: false, reason: 'unknown_format' }` — the upload API surfaces this as a 422 to the user. Future formats can be added to `src/lib/parse.ts` without touching any other file.
+### KML (rejected)
+KML exports (Strava, Google Earth) are geometry only — `<coordinates>` with no per-point timestamps — so a race time can't be computed. `parseTrace` returns `{ ok:false, reason:'kml_no_timing' }`, and the upload route surfaces "export GPX/FIT/TCX instead". (Some tools emit `<gx:Track>` with `<when>` times, but common exports don't — not worth the false promise.)
+
+### Unknown formats & error messages
+Unsupported extension → `{ ok: false, reason: 'unknown_format' }`. The upload route maps every parse reason (`kml_no_timing` / `unknown_format` / `empty` / `parse_error`) to a friendly, actionable 422 message. Future formats can be added to `src/lib/parse.ts` without touching any other file.
 
 ---
 

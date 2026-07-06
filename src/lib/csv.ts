@@ -32,7 +32,10 @@ export function parseCsv(text: string): TrackPoint[] {
 
   if (latI === -1 || lngI === -1 || timeI === -1) return []
 
-  // HR / cadence columns are intentionally ignored — see types.ts.
+  // HR columns are ignored. Stroke rate (cadence) IS captured (#143) — exporters
+  // label it every which way: cadence, cad, stroke rate, spm, sr. (findCol
+  // normalises away spaces/underscores/case, so "Stroke Rate" == "strokerate".)
+  const rateI = findCol(headers, 'strokerate', 'cadence', 'cad', 'spm', 'sr')
 
   const points: TrackPoint[] = []
 
@@ -49,7 +52,9 @@ export function parseCsv(text: string): TrackPoint[] {
     if (!isFinite(lat) || !isFinite(lng) || !timestamp) continue
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue
 
-    points.push({ lat, lng, timestamp })
+    const strokeRate = rateI !== -1 ? parseFloat(cols[rateI] ?? '') : NaN
+
+    points.push({ lat, lng, timestamp, ...(isFinite(strokeRate) ? { strokeRate } : {}) })
   }
 
   return points
