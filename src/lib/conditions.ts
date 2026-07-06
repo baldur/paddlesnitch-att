@@ -10,18 +10,33 @@ import type { EntryConditions } from './types'
 type WeatherFn = typeof getWeatherAt
 type FlowFn = typeof getFlowAt
 
+// Hard ceiling on how long a conditions lookup may take. These are two
+// third-party APIs (Open-Meteo, Environment Agency) with no timeout of their
+// own, and conditions are a nice-to-have — a slow source must never stall the
+// upload it's attached to. A source that misses this deadline yields null and
+// the entry saves without it. (This was blocking uploads in E2E, which unlike
+// the unit tests hits the live APIs; it would delay real uploads too.)
+const CONDITIONS_TIMEOUT_MS = 4000
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), ms) })
+  return Promise.race([p.finally(() => clearTimeout(timer)), timeout])
+}
+
 export async function captureConditions(
   lat: number,
   lng: number,
   whenISO: string,
-  deps: { weather?: WeatherFn; flow?: FlowFn } = {},
+  deps: { weather?: WeatherFn; flow?: FlowFn; timeoutMs?: number } = {},
 ): Promise<EntryConditions | null> {
   const weatherFn = deps.weather ?? getWeatherAt
   const flowFn = deps.flow ?? getFlowAt
+  const timeoutMs = deps.timeoutMs ?? CONDITIONS_TIMEOUT_MS
 
   const [weather, flow] = await Promise.all([
-    weatherFn(lat, lng, whenISO).catch(() => null),
-    flowFn(lat, lng, whenISO).catch(() => null),
+    withTimeout(weatherFn(lat, lng, whenISO).catch(() => null), timeoutMs),
+    withTimeout(flowFn(lat, lng, whenISO).catch(() => null), timeoutMs),
   ])
 
   if (!weather && !flow) return null

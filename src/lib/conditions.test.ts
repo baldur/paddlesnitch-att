@@ -43,4 +43,19 @@ describe('captureConditions', () => {
     expect(c?.flow).toEqual(flow)
     expect(c?.weather).toBeUndefined()
   })
+
+  // Regression: a hung external source (no response) must not block the upload
+  // it's attached to. It's bounded by the timeout and treated as a miss, while
+  // a fast source still contributes. This is what stalled the upload E2E, which
+  // (unlike the unit tests) hits the live Open-Meteo / EA APIs.
+  it('bounds a hanging source by the timeout and still returns the fast one', async () => {
+    const hang = (() => new Promise<never>(() => {})) as never // never resolves
+    const start = Date.now()
+    const c = await captureConditions(51.5, -0.9, '2026-07-01T08:00:00Z', {
+      weather: hang, flow: stubFlow(flow), timeoutMs: 20,
+    })
+    expect(Date.now() - start).toBeLessThan(500) // did not wait on the hang
+    expect(c?.flow).toEqual(flow)
+    expect(c?.weather).toBeUndefined()
+  })
 })
