@@ -77,10 +77,9 @@ describe('processTrace', () => {
     expect(result.trackSegment![result.trackSegment!.length - 1][0]).toBeCloseTo(0.005, 3)
   })
 
-  it('does not expose hr or cadence on the result', () => {
-    // Privacy: HR/cadence are stripped at parse time and the ProcessedResult
-    // type itself has no HR/cadence fields. This is a belt-and-braces check
-    // against regressions.
+  it('never exposes heart rate, and omits stroke rate when the track has none', () => {
+    // HR is never captured (sensitive biometric). Stroke rate is only present
+    // when the source carried it — these points don't, so avgStrokeRate is absent.
     const result = processTrace([
       pt(0.000, 0, 0),
       pt(0.002, 0, 10_000),
@@ -88,9 +87,23 @@ describe('processTrace', () => {
       pt(0.006, 0, 30_000),
     ], startLine, finishLine)!
     expect(result).not.toHaveProperty('avgHeartRate')
-    expect(result).not.toHaveProperty('avgCadence')
     expect(result).not.toHaveProperty('hrSeries')
-    expect(result).not.toHaveProperty('cadenceSeries')
+    expect(result).not.toHaveProperty('avgStrokeRate')
+  })
+
+  it('averages stroke rate over the racing segment (#143)', () => {
+    // strokeRate present on the segment points; the two warmup/cooldown points
+    // outside start→finish must not skew the average.
+    const rated = (lat: number, ms: number, sr: number): TrackPoint => ({ lat, lng: 0, timestamp: new Date(ms), strokeRate: sr })
+    const result = processTrace([
+      rated(0.000, 0, 99),        // t=0, before start crossing (t≈5s) — excluded
+      rated(0.002, 10_000, 30),   // during the race
+      rated(0.004, 20_000, 32),   // during the race
+      rated(0.006, 30_000, 99),   // t=30s, after finish crossing (t≈25s) — excluded
+      rated(0.008, 40_000, 99),   // after finish — excluded
+    ], startLine, finishLine)!
+    // Only the two points recorded inside [start≈5s, finish≈25s] count: (30+32)/2.
+    expect(result.avgStrokeRate).toBeCloseTo(31, 1)
   })
 
   it('reports runCount = 1 for a single clean start→finish run', () => {

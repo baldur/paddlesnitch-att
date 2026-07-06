@@ -35,12 +35,19 @@ describe('parseGpx', () => {
     expect(track[0].timestamp).toEqual(new Date('2024-06-01T10:00:00Z'))
   })
 
-  it('discards heart rate and cadence even when present in the source file', () => {
-    // Privacy: HR/cadence are stripped at parse time, never enter the data model.
+  it('discards heart rate but captures cadence as stroke rate (#143)', () => {
+    // HR stays stripped (sensitive biometric); cadence is captured as strokeRate.
     const track = parseGpx(GPX_WITH_METRICS)
     expect(track).toHaveLength(1)
     expect(track[0]).not.toHaveProperty('hr')
-    expect(track[0]).not.toHaveProperty('cadence')
+    expect(track[0].strokeRate).toBe(28)
+  })
+
+  it('captures cadence written as a bare <cadence> tag', () => {
+    const gpx = `<gpx><trk><trkseg>
+      <trkpt lat="51.5" lon="-0.9"><time>2024-06-01T10:00:00Z</time><cadence>31</cadence></trkpt>
+    </trkseg></trk></gpx>`
+    expect(parseGpx(gpx)[0].strokeRate).toBe(31)
   })
 
   it('returns empty array for empty gpx', () => {

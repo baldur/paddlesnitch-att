@@ -15,6 +15,7 @@ vi.mock('fit-file-parser', () => ({
             position_long: -0.9,
             heart_rate: 142,
             cadence: 28,
+            fractional_cadence: 0.5,
           },
           {
             timestamp: new Date('2024-06-01T10:01:00Z'),
@@ -42,11 +43,13 @@ describe('parseFit', () => {
     // If the bug were reintroduced, lat would be ~4.3e-6 instead of ~51.5
   })
 
-  it('discards heart rate and cadence even when present in the source file', async () => {
-    // Privacy: HR/cadence are stripped at parse time, never enter the data model.
+  it('discards heart rate but captures cadence (+fractional) as stroke rate (#143)', async () => {
+    // HR stays stripped; stroke rate = cadence + fractional_cadence.
     const track = await parseFit(new ArrayBuffer(0))
     expect(track[0]).not.toHaveProperty('hr')
-    expect(track[0]).not.toHaveProperty('cadence')
+    expect(track[0]).not.toHaveProperty('heart_rate')
+    expect(track[0].strokeRate).toBe(28.5)  // 28 + 0.5
+    expect(track[1].strokeRate).toBe(30)    // no fractional part
   })
 
   it('parses timestamps as Date objects', async () => {

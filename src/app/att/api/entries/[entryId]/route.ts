@@ -43,6 +43,7 @@ export async function GET(_: NextRequest, { params }: Params) {
       totalElapsedSeconds: entry.result.totalElapsedSeconds,
       splits: entry.result.splits,
       ...(entry.result.runCount ? { runCount: entry.result.runCount } : {}),
+      ...(entry.result.avgStrokeRate != null ? { avgStrokeRate: entry.result.avgStrokeRate } : {}),
       ...(entry.result.trackSegment ? { trackSegment: entry.result.trackSegment } : {}),
       ...(entry.conditions ? { conditions: entry.conditions } : {}),
       ...(stravaActivityIdFromFilename(entry.filename) !== undefined

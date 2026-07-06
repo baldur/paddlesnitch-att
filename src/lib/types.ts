@@ -2,13 +2,16 @@ export type LatLng = [number, number] // always [lat, lng]
 
 export type Line = [LatLng, LatLng] // start or finish line — exactly 2 points
 
-// HR / cadence intentionally NOT captured. They are stripped at parse time
-// (gpx.ts, fit.ts, csv.ts) and never enter the data model. See
-// docs/features/courses-and-entries.md.
+// Heart rate is intentionally NOT captured (a sensitive biometric) — every
+// parser strips it at parse time. Stroke rate (a.k.a. cadence) IS captured for
+// paddlers (#143): parsers populate it when the source carries it, and
+// processTrace averages it over the racing segment (ProcessedResult.avgStrokeRate).
+// See docs/features/courses-and-entries.md.
 export type TrackPoint = {
   lat: number
   lng: number
   timestamp: Date
+  strokeRate?: number // strokes per minute at this point, when the source has it
 }
 
 export type Split = {
@@ -27,6 +30,9 @@ export type ProcessedResult = {
   // discarded. Used to tell the athlete "best of N runs". Absent on pre-#77
   // entries — treat undefined as a single run.
   runCount?: number
+  // Average stroke rate (SPM) over the racing segment, when the trace carried
+  // per-point stroke rate. Undefined when the source had none. #143.
+  avgStrokeRate?: number
 }
 
 // Canonical types (new courses):

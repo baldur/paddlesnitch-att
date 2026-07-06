@@ -17,11 +17,16 @@ export async function parseFit(buffer: ArrayBuffer): Promise<TrackPoint[]> {
         if (r.position_lat == null || r.position_long == null) continue
         const timestamp = r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp)
         if (isNaN(timestamp.getTime())) continue
-        // HR / cadence intentionally not captured — see types.ts and docs/features/.
+        // HR intentionally not captured. Stroke rate (cadence) IS (#143): FIT
+        // stores whole SPM in `cadence` plus a `fractional_cadence` remainder.
+        const strokeRate = r.cadence != null
+          ? r.cadence + (r.fractional_cadence ?? 0)
+          : NaN
         points.push({
           lat: r.position_lat,
           lng: r.position_long,
           timestamp,
+          ...(isFinite(strokeRate) ? { strokeRate } : {}),
         })
       }
       resolve(points)

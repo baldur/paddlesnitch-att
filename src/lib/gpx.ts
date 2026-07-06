@@ -1,11 +1,14 @@
 import type { TrackPoint } from './types'
 
-// HR and cadence are intentionally NOT extracted, even when present in the
-// source GPX. See docs/features/courses-and-entries.md.
+// Heart rate is intentionally NOT extracted. Stroke rate (cadence) IS, for
+// paddlers (#143): Garmin writes it as <gpxtpx:cad>, some tools as <cadence>
+// or a namespaced <ns3:cad>. See docs/features/courses-and-entries.md.
 export function parseGpx(xml: string): TrackPoint[] {
   const points: TrackPoint[] = []
   const trkptRe = /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/g
   const timeRe = /<time>([^<]+)<\/time>/
+  // Cadence regardless of namespace prefix: gpxtpx:cad, ns3:cad, cad, cadence.
+  const cadRe = /<(?:\w+:)?cad(?:ence)?>([\d.]+)<\/(?:\w+:)?cad(?:ence)?>/
 
   let m: RegExpExecArray | null
   while ((m = trkptRe.exec(xml)) !== null) {
@@ -17,7 +20,10 @@ export function parseGpx(xml: string): TrackPoint[] {
     const timestamp = new Date(timeMatch[1])
     if (isNaN(timestamp.getTime())) continue
 
-    points.push({ lat, lng, timestamp })
+    const cadMatch = cadRe.exec(inner)
+    const strokeRate = cadMatch ? parseFloat(cadMatch[1]) : NaN
+
+    points.push({ lat, lng, timestamp, ...(isFinite(strokeRate) ? { strokeRate } : {}) })
   }
 
   return points

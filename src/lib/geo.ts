@@ -166,12 +166,25 @@ function buildResult(
   const midPoints = segment.map((p): LatLng => [p.lat, p.lng])
   const trackSegment: LatLng[] = [startPt, ...midPoints, finishPt]
 
+  // Average stroke rate over the racing window, from whichever points carried
+  // it (#143). Bound strictly to [startMs, finishMs] by timestamp — `segment`
+  // includes the bracketing points just outside the crossings (needed for the
+  // geometry), which would skew the average with warmup/cooldown strokes. Mean
+  // of defined values, one decimal; undefined when no source stroke-rate data.
+  const rates = track
+    .filter(p => p.strokeRate != null && p.timestamp.getTime() >= startMs && p.timestamp.getTime() <= finishMs)
+    .map(p => p.strokeRate as number)
+  const avgStrokeRate = rates.length
+    ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 10) / 10
+    : undefined
+
   return {
     startTimestamp: startCrossing.timestamp.toISOString(),
     finishTimestamp: finishCrossing.timestamp.toISOString(),
     totalElapsedSeconds: (finishMs - startMs) / 1000,
     splits,
     trackSegment,
+    ...(avgStrokeRate != null ? { avgStrokeRate } : {}),
   }
 }
 
