@@ -75,7 +75,10 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Auth via a Claude subscription OAuth token (generated with `claude
+          # setup-token`) instead of the metered Anthropic API key, so fast-loop
+          # runs draw on the Max plan rather than pay-per-token API billing.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You are working an issue/PR for the ATT / paddlesnitch repo. You were
             triggered one of two ways:
