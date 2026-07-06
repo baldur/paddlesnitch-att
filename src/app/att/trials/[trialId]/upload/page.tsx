@@ -454,17 +454,17 @@ export default function UploadPage({
               <form onSubmit={handleFileSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-[#64748b] tracking-widest">
-                    GPS FILE (.gpx, .fit, .csv, or .zip)
+                    GPS FILE (.gpx, .fit, .tcx, .csv, or .zip)
                   </label>
                   <input
                     ref={fileRef}
                     type="file"
                     required
-                    accept=".gpx,.fit,.csv,.zip"
+                    accept=".gpx,.fit,.tcx,.csv,.zip"
                     className="bg-white border border-[#e2e8f0] px-3 py-2 text-[#0f172a] text-sm file:bg-[#f1f5f9] file:text-[#0f172a] file:border-0 file:px-3 file:py-1 file:mr-3 file:text-xs file:cursor-pointer hover:border-[#0369a1] transition-colors cursor-pointer w-full"
                   />
                   <p className="text-xs text-[#64748b]">
-                    Export your full activity from Garmin Connect, Strava, Apple Fitness, or any GPS device. GPX, FIT, and CSV are all supported — including a Garmin Connect .zip export (we unpack the activity inside). Heart rate and cadence data is discarded.
+                    Export your full activity from Garmin Connect, Strava, a SpeedCoach, or any GPS device. GPX, FIT, TCX, and CSV are all supported — including a Garmin Connect .zip export (we unpack the activity inside). For paddlers, the FIT export usually carries stroke rate; GPX often doesn&apos;t. Heart rate is discarded; stroke rate is kept.
                   </p>
                 </div>
 
@@ -502,7 +502,7 @@ export default function UploadPage({
                     className={inputClass}
                   />
                   <p className="text-xs text-[#64748b]">
-                    Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it. Heart rate and cadence data is discarded.
+                    Paste a public Strava activity URL or a direct .gpx link. Your full session is fine — no need to trim it. Heart rate is discarded; stroke rate is kept.
                   </p>
                 </div>
 

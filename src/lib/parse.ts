@@ -2,13 +2,14 @@ import type { TrackPoint } from './types'
 import { parseGpx } from './gpx'
 import { parseFit } from './fit'
 import { parseCsv } from './csv'
+import { parseTcx } from './tcx'
 import { readZip } from './unzip'
 
 export type ParseResult =
   | { ok: true; track: TrackPoint[] }
   | { ok: false; reason: 'unknown_format' | 'parse_error' | 'empty' }
 
-const TRACE_EXTS = ['gpx', 'fit', 'csv']
+const TRACE_EXTS = ['gpx', 'fit', 'csv', 'tcx']
 
 export async function parseTrace(filename: string, data: ArrayBuffer): Promise<ParseResult> {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -28,6 +29,12 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
     if (ext === 'csv') {
       const text = new TextDecoder().decode(data)
       const track = parseCsv(text)
+      return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
+    }
+
+    if (ext === 'tcx') {
+      const text = new TextDecoder().decode(data)
+      const track = parseTcx(text)
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
     }
 
