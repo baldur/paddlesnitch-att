@@ -7,7 +7,7 @@ import { readZip } from './unzip'
 
 export type ParseResult =
   | { ok: true; track: TrackPoint[] }
-  | { ok: false; reason: 'unknown_format' | 'parse_error' | 'empty' }
+  | { ok: false; reason: 'unknown_format' | 'parse_error' | 'empty' | 'kml_no_timing' }
 
 const TRACE_EXTS = ['gpx', 'fit', 'csv', 'tcx']
 
@@ -36,6 +36,16 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
       const text = new TextDecoder().decode(data)
       const track = parseTcx(text)
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
+    }
+
+    // KML is a geometry format: Strava/Google exports carry <coordinates> but no
+    // per-point timestamps, so a race time can't be computed from one. Reject it
+    // with a dedicated reason the upload surfaces as "export GPX/FIT/TCX instead"
+    // rather than a confusing generic parse error. (Some tools DO emit a
+    // <gx:Track> with <when> times, but the common exports don't — not worth the
+    // false promise.)
+    if (ext === 'kml') {
+      return { ok: false, reason: 'kml_no_timing' }
     }
 
     // Fitness apps (e.g. Garmin Connect) export a single activity wrapped in a
