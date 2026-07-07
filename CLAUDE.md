@@ -233,7 +233,7 @@ Derived from an Entry by the processing pipeline:
 - **Finish crossing time** — timestamp when the track first crosses the finish line (after the start)
 - **Total elapsed time** — finish − start in seconds
 - **500 m splits** — array of `{ distance: number, elapsedSeconds: number }` at each 500 m mark
-- **Average stroke rate** — `ProcessedResult.avgStrokeRate` (SPM), mean of per-point stroke rate over the racing window `[start, finish]` (timestamp-bounded so bracketing warmup/cooldown points don't skew it). Undefined when the trace carried none. Shown on the entry page. #143.
+- **Average stroke rate** — `ProcessedResult.avgStrokeRate` (SPM), mean of per-point stroke rate over the racing window `[start, finish]` (timestamp-bounded so bracketing warmup/cooldown points don't skew it). Undefined when the trace carried none. Shown on the entry page (#143) and carried onto `LeaderboardEntry.avgStrokeRate` (populated by `rebuildLeaderboard` when present) so it also shows in the leaderboard's expanded row on the trial page (#148). Existing leaderboards backfill on the next upload/rebuild.
 
 **Heart rate is intentionally NOT captured** (a sensitive biometric) — every parser strips it at parse time. **Stroke rate (a.k.a. cadence) IS captured** for paddlers (#143): each parser reads it from that format's own field (GPX `<gpxtpx:cad>`/`<cadence>`, FIT `cadence` + `fractional_cadence`, TCX `<Cadence>`/`<RunCadence>`, CSV aliases `cadence`/`cad`/`stroke rate`/`spm`/`sr`, SpeedCoach `Stroke Rate`), stores it on `TrackPoint.strokeRate`, and `geo.buildResult` averages it. In practice the **FIT** export is the reliable carrier — GPX exports (Strava, SpeedCoach) frequently omit stroke rate. See `docs/features/courses-and-entries.md`.
 

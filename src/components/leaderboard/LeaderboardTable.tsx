@@ -128,6 +128,7 @@ export default function LeaderboardTable({
                 (entry.crew?.length ?? 0) > 1 ||
                 !!entry.conditions ||
                 entry.stravaActivityId != null ||
+                entry.avgStrokeRate != null ||
                 (entry.runCount ?? 0) > 1
               const isOpen = expanded === entry.entryId
               return (
@@ -175,6 +176,12 @@ export default function LeaderboardTable({
                         {entry.runCount && entry.runCount > 1 && (
                           <div className="mb-4 text-xs text-[#64748b]">
                             Best of {entry.runCount} runs in this upload — the fastest is shown.
+                          </div>
+                        )}
+                        {entry.avgStrokeRate != null && (
+                          <div className="mb-4 text-xs">
+                            <span className="text-[#64748b] tracking-wider mr-2">AVG STROKE RATE</span>
+                            <span className="tabular text-[#6d28d9]">{entry.avgStrokeRate} spm</span>
                           </div>
                         )}
                         {entry.crew && entry.crew.length > 1 && (
