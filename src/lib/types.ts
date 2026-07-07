@@ -193,6 +193,10 @@ export type LeaderboardEntry = {
   // fastest. Shown as "best of N runs" when > 1. Undefined for pre-#77
   // entries (treat as a single run).
   runCount?: number
+  // Mean stroke rate (SPM) over the racing window, when the source trace carried
+  // it (#143/#148). Shown on the leaderboard's expanded row. Undefined when the
+  // trace had no cadence/stroke-rate data (common for GPX exports).
+  avgStrokeRate?: number
   // Set only when the entry was imported from Strava — the source activity id,
   // so the leaderboard can link "View on Strava" back to it (Strava brand
   // guidelines, #107). Derived from the stored trace filename.

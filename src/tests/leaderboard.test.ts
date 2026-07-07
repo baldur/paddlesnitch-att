@@ -9,13 +9,14 @@ let dataDir: string
 beforeEach(async () => { dataDir = await makeDataDir() })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
-function storedEntry(entryId: string, elapsed: number, runCount?: number) {
+function storedEntry(entryId: string, elapsed: number, runCount?: number, avgStrokeRate?: number) {
   const result: ProcessedResult = {
     startTimestamp: '2026-06-01T10:00:00.000Z',
     finishTimestamp: '2026-06-01T10:00:00.000Z',
     totalElapsedSeconds: elapsed,
     splits: [],
     ...(runCount !== undefined ? { runCount } : {}),
+    ...(avgStrokeRate !== undefined ? { avgStrokeRate } : {}),
   }
   return {
     entryId,
@@ -55,5 +56,20 @@ describe('rebuildLeaderboard — runCount (#77)', () => {
     await rebuildLeaderboard(trialId)
     const board = await getJson<LeaderboardEntry[]>(`trials/${trialId}/leaderboard.json`)
     expect(board!.find(e => e.entryId === 'c')!.runCount).toBeUndefined()
+  })
+})
+
+describe('rebuildLeaderboard — avgStrokeRate (#148)', () => {
+  it('carries avgStrokeRate onto the leaderboard entry when the trace had stroke rate', async () => {
+    const trialId = 'trial-spm'
+    await putJson(`trials/${trialId}/entries/user-a/a/result.json`, storedEntry('a', 90, undefined, 34))
+    await putJson(`trials/${trialId}/entries/user-b/b/result.json`, storedEntry('b', 80)) // no stroke rate
+
+    await rebuildLeaderboard(trialId)
+    const board = await getJson<LeaderboardEntry[]>(`trials/${trialId}/leaderboard.json`)
+    expect(board!.find(e => e.entryId === 'a')!.avgStrokeRate).toBe(34)
+    // A trace without stroke rate must not carry the field, so the UI never
+    // shows a blank/0 spm.
+    expect(board!.find(e => e.entryId === 'b')!.avgStrokeRate).toBeUndefined()
   })
 })

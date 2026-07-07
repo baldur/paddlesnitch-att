@@ -45,6 +45,7 @@ export async function rebuildLeaderboard(trialId: string): Promise<void> {
       totalElapsedSeconds: e.result.totalElapsedSeconds,
       splits: e.result.splits,
       ...(e.result.runCount && e.result.runCount > 1 ? { runCount: e.result.runCount } : {}),
+      ...(e.result.avgStrokeRate != null ? { avgStrokeRate: e.result.avgStrokeRate } : {}),
       ...(stravaActivityIdFromFilename(e.filename) !== undefined
         ? { stravaActivityId: stravaActivityIdFromFilename(e.filename) }
         : {}),
