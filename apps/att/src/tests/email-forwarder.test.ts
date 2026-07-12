@@ -3,7 +3,7 @@
 // matters here is that we don't mangle the original sender's email
 // when we rewrite the MIME envelope.
 import { describe, it, expect } from 'vitest'
-import { __test__ } from '../../infra/lambdas/email-forwarder/index.mjs'
+import { __test__ } from '../../../../infra/lambdas/email-forwarder/index.mjs'
 
 const { parseHeaders, buildForwardedMime } = __test__
 

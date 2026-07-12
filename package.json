@@ -1,40 +1,23 @@
 {
-  "name": "atts",
+  "name": "paddlesnitch",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx scripts/dev.ts",
-    "next": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui",
-    "e2e:install": "playwright install --with-deps chromium",
-    "seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "cognito": "cognito-local",
-    "cognito:init": "tsx --env-file-if-exists=.env.local scripts/cognito-init.ts",
-    "rivers": "tsx scripts/download-rivers.ts",
-    "build:open-next": "npx open-next build",
-    "deploy": "npm run build:open-next && cd infra && npm run deploy"
-  },
-  "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
-    "@aws-sdk/client-s3": "^3.1048.0",
-    "@aws-sdk/client-ses": "^3.1056.0",
-    "@aws-sdk/client-ssm": "^3.1057.0",
-    "@aws-sdk/s3-request-presigner": "^3.1048.0",
-    "@swc/helpers": "^0.5.21",
-    "aws-jwt-verify": "^5.1.1",
-    "fit-file-parser": "^3.0.0",
-    "leaflet": "^1.9.4",
-    "nanoid": "^5.1.11",
-    "next": "16.2.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-leaflet": "^5.0.0"
+    "dev": "pnpm --filter att dev",
+    "next": "pnpm --filter att next",
+    "build": "pnpm --filter att build",
+    "start": "pnpm --filter att start",
+    "lint": "pnpm --filter att lint",
+    "test": "pnpm --filter att test",
+    "test:watch": "pnpm --filter att test:watch",
+    "e2e": "pnpm --filter att e2e",
+    "e2e:ui": "pnpm --filter att e2e:ui",
+    "e2e:install": "pnpm --filter att e2e:install",
+    "seed": "pnpm --filter att seed",
+    "cognito": "pnpm --filter att cognito",
+    "cognito:init": "pnpm --filter att cognito:init",
+    "rivers": "pnpm --filter att rivers",
+    "build:open-next": "pnpm --filter att build:open-next"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -43,25 +26,5 @@
       "sharp",
       "unrs-resolver"
     ]
-  },
-  "devDependencies": {
-    "@opennextjs/aws": "^4.0.2",
-    "@playwright/test": "^1.60.0",
-    "@tailwindcss/postcss": "^4",
-    "@types/leaflet": "^1.9.21",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/react-leaflet": "^3.0.0",
-    "@vitejs/plugin-react": "^6.0.2",
-    "@vitest/coverage-v8": "^4.1.6",
-    "cognito-local": "^5.3.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "jsdom": "^29.1.1",
-    "tailwindcss": "^4",
-    "tsx": "^4.19.3",
-    "typescript": "^5",
-    "vitest": "^4.1.6"
   }
 }
