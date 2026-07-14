@@ -1,82 +1,138 @@
 # App: paddle analysis
 
-**Status: 💭 ideation (2026-07). This doc is the living spec — we fill it as we iterate.**
+**Status: 💭 spec (2026-07). Living design record — refined through prototyping on
+real traces. Build starts once the monorepo lands (see [platform-monorepo](platform-monorepo.md)).**
 
-Part of the [platform monorepo](platform-monorepo.md). Lives at `apps/analysis`,
-`basePath: /analysis`, on `@paddlesnitch/core` (shared users, storage, auth) and
-`@paddlesnitch/timing` (parsers, conditions, geo, map).
+Lives at `apps/analysis`, `basePath: /analysis`, on `@paddlesnitch/core` (users,
+storage, auth, LLM) and `@paddlesnitch/timing` (parsers, conditions, geo, map).
 
 ## Concept
 
 A **paddling-session analysis** tool. "Paddle" = an outing on the water, not the
-equipment. You upload a session (any format the platform parses — GPX / FIT / TCX
-/ CSV / NK SpeedCoach — or import from Strava), and the app finds **something
-interesting** about it: not just a time, but what actually happened and what it
-implies.
+equipment. Upload a session (any format the platform parses — GPX / FIT / TCX /
+CSV / NK SpeedCoach — or import from Strava), and the app finds **something
+interesting** about it: what actually happened and what it implies, narrated.
 
-The value is in the inference. A raw trace is messy: starts and stops, warmups,
-structured pieces, drills where stroke rate is high but speed is low, wind legs,
-flow-assisted stretches. The app teases that structure out, cross-references the
-day's weather + river flow, and narrates the insight.
+Proven on four real sessions during prototyping (2× rowing SpeedCoach/Garmin, a
+kayak-via-SUP Garmin, a Strava touring paddle) — the engine below produced the
+right read for each.
 
-## Pipeline (stages)
+## Product (v1 screen)
 
-1. **Ingest** — reuse `@paddlesnitch/timing` parsers → `TrackPoint[]`
-   (lat/lng/time + stroke rate when present). Strava import too.
-2. **Derive metrics** — per-point / windowed: speed (from GPS), **distance per
-   stroke** (speed ÷ stroke rate), acceleration, split, bearing.
-3. **Segment** — auto-detect structure: moving vs stopped, warmup, **pieces**
-   (efforts), rest, and **drills** (high stroke rate + low speed / low
-   distance-per-stroke). This deterministic pre-processing is the algorithmic
-   core — it turns 2000 raw points into a handful of labelled segments.
-4. **Context** — pull weather + river flow for the day/location (reuse
-   `conditions`), and infer effects per segment (headwind leg slower, downstream
-   flow-assisted, etc.).
-5. **Insight (LLM)** — feed the **compact structured summary** (segments +
-   metrics + conditions), NOT raw points, to an LLM that writes the "what's
-   interesting" narrative. Grounded + cheap because the input is pre-summarised.
-6. **Visualise** — map with the path **colour-coded** by a chosen metric (speed /
-   stroke rate / distance-per-stroke / effort), plus **wind direction** and
-   **flow** overlays, and a per-segment breakdown.
+Sits inside paddlesnitch as a sibling of Trials — same top bar, same login:
+`[ Trials ] [ Analysis ] ( Videos )`. Upload / Strava import / **"analyse one of
+my trial entries"** (att already stored those traces + conditions) → the page:
 
-## LLM strategy
+```
+┌ YOUR PADDLE · 12 Jul · Thames, Reading ───────────────────────────────┐
+│   ╭ live Leaflet map: track coloured, digs glowing, rest rings, ╮ WIND │
+│   │ marker replaying the paddle              ▶━━━●━━━            │ 20NE │
+│   ╰───────────────────────────────────────────────────────────╯ FLOW  │
+│   colour by: (speed) (stroke rate) (true effort*)               3.7 lo │
+├───────────────────────────────────────────────────────────────────────┤
+│  65 min · 10.4 km · ~74 spm · 2.3 m/stroke · 4 digs · 2 rests          │
+├─ WHAT HAPPENED (LLM) ─────────────────────────────────────────  share ┤
+│  "A long paddle with a few real digs. Mostly cruising 2:54/500…"       │
+├─ EFFORTS ─────────────────────────────────────────────────────────────┤
+│  ✦ dig 1 30:00 2:02 1:39/500 82spm ✓steady →held  · ○ rest 12:00 24s   │
+└───────────────────────────────────────────────────────────────────────┘
+```
 
-- **Now:** start with whatever runs **locally** (dev machine) behind a small
-  abstraction so the app doesn't care which backend.
-- **Later:** wire **AWS Bedrock** (Claude) for the deployed app — fits the
-  "same infrastructure / leverage AWS" goal. Infra adds `bedrock:InvokeModel`
-  IAM + region config; per-token cost applies.
-- **Where it lives:** a pluggable `analyze(context) → insight` interface in
-  `core` (or a small `packages/llm`) with backends: local + Bedrock. The app
-  calls the interface; infra picks the backend by env.
-- **Discipline:** deterministic feature-extraction (stages 2–4) produces a small,
-  structured summary; the LLM only narrates. Keeps output grounded and token
-  cost low; the interesting *metrics* don't depend on the LLM.
+Hover a segment → its pace/rate/relative-wind. **My Paddles** library adds
+history + trends (distance-per-stroke over a season, cruise pace vs flow,
+consistency improving). Share mints a public link like att leaderboards.
+
+## Analysis engine (deterministic — the LLM only narrates its output)
+
+Pipeline: **ingest → derive → segment → conditions → summarise → (LLM) narrate → visualise.**
+
+- **Derive** (per point / windowed): speed (GPS + Haversine, smoothed), **distance
+  per stroke** (`speed ÷ strokeRate`), acceleration, bearing, 500 m split.
+- **Sport normalisation.** Surface the FIT `sport` field (parsers currently drop
+  it — small `ParseResult` addition). This community records kayak as
+  `stand_up_paddleboarding`, which counts a full L+R cycle as one → **×2 stroke
+  rate, ÷2 distance-per-stroke** to get true kayak values. A per-user/session
+  setting (default on here) handles genuine SUP. **NB: this also affects att's
+  existing stroke-rate display** — same paddlers, same halving — so the fix
+  belongs in the shared layer.
+- **Segment by baseline + departures — do NOT classify the session.** Establish
+  the session's own cruising baseline, then flag departures both ways:
+  **down** = rests/recovery (always itemised, never narrated away), **up** =
+  surges/efforts (relative to *this* session's cruise, not a fixed threshold).
+  This one rule spans the whole spectrum — clean intervals, fartlek, steady —
+  where a binary "workout vs steady" gate failed (it both over-segmented a
+  steady SUP paddle into 11 phantom pieces AND smoothed away its real digs).
+- **Per-effort trend (series analysis):** slope of stroke rate + speed within
+  each up-departure → `held` / `built (+N spm/min)` / `faded (pace dropping at
+  steady rate = fatigue)` / `negative-split`. Plus consistency (stroke-rate CV:
+  <4% steady, 4–8% fair, >8% ragged).
+- **Group efforts into sets** by similar duration + pace (e.g. auto-detected
+  `4 × ~90s @ 1:39, SR 38 ← a set` from a messy 50-min trace).
+- **Conditions.** Real wind (Open-Meteo) + river flow (EA gauge) for the day/spot.
+  Flow is **discharge (m³/s), not current speed** — make it meaningful via
+  **context** (low/normal/high vs the station's own history percentile) and
+  **direction** (downstream-assist vs upstream-fight; for out-and-backs the
+  two-direction gap *is* the combined current+wind effect). The payoff:
+  **conditions-adjusted "true effort"** — normalise speed for headwind + flow per
+  segment so a slow upwind-upstream leg reveals as the biggest real effort.
+
+## LLM — identical local and on Bedrock (parity by construction)
+
+Requirement: whatever runs locally for testing is the **same** as prod on AWS
+Bedrock. Achieved with **one interface, two transports** (the same pattern as
+`cognito-local` vs Cognito):
+
+- Lives in `@paddlesnitch/core` as `generateInsight(summary) → string`. The
+  prompt-building + model id + parsing are **shared code**; only the client
+  constructor differs by env.
+- Use the Anthropic SDK family: `AnthropicBedrock` (`@anthropic-ai/bedrock-sdk`)
+  exposes the **identical `.messages.create()`** as `Anthropic`
+  (`@anthropic-ai/sdk`). So:
+  ```ts
+  const client = new AnthropicBedrock({ awsRegion: BEDROCK_REGION }) // SSO creds locally, IAM role in prod
+  const msg = await client.messages.create({ model: MODEL, max_tokens: 400, system: SYSTEM,
+    messages: [{ role: 'user', content: buildPrompt(summary) }] })
+  ```
+- **Default: Bedrock everywhere** — locally it uses your `paddlesnitch` SSO
+  creds, in prod the Lambda role. One model id, one code path → true parity, no
+  "works on my machine" drift. (An optional `Anthropic` direct-API adapter can be
+  added for offline convenience, but it isn't needed for parity.)
+- **Grounding + cost:** the LLM only ever sees the compact structured summary
+  (segments + metrics + conditions), never raw GPS points → cheap + can't
+  hallucinate the numbers.
+- **Tests mock `generateInsight`** (deterministic, no network/cost) — the engine
+  metrics are asserted independently of the LLM.
+- **Checkpoints:** confirm the chosen Claude model is available on Bedrock in the
+  target region (else use a cross-region inference profile); grant the Lambda
+  role + your SSO role `bedrock:InvokeModel` on the model ARN. Env:
+  `BEDROCK_REGION`, `LLM_MODEL`.
+
+## Visualisation
+
+Live Leaflet map (reuses att's map stack + neon river overlay): track as a
+per-segment coloured polyline, **colour-by toggle** (speed / stroke rate / true
+effort), surge glow, rest rings, real **wind rose + flow badge**, hover tooltips,
+and a **replay scrubber**. Prototyped standalone against a real track — pans,
+zooms, hovers, replays.
 
 ## Shares vs owns
 
-- **From `core`:** identity (same account as att), storage, auth, metrics,
-  design system, the LLM abstraction.
-- **From `timing`:** parsers, `conditions` (weather/flow), geo utils, Leaflet map
-  components (path drawing, tile toggle, river overlay).
-- **App-owns:** the metric-derivation + segmentation engine, the analysis data
-  model, the insight/visualisation screens.
+- **`core`:** identity, storage, auth, metrics, design system, **the LLM layer**.
+- **`timing`:** parsers, `conditions` (wind/flow), geo, Leaflet map components.
+- **App-owns:** the derive+segment engine, analysis data model, these screens.
 
-## Open questions (drive the ideation)
+## Data model & build path
 
-- [ ] **Local LLM** — what's on your machine now (Ollama? LM Studio? a local
-      Claude)? Sets the dev backend.
-- [ ] **Single session vs library** — is each upload a one-off analysis, or do
-      you build a history of your paddles with trends over time?
-- [ ] **MVP "aha"** — the smallest output that makes this worth using: the
-      colour-coded map? the auto-detected pieces? the LLM narrative? all three?
-- [ ] **Segment definitions** — how do we define a "piece" vs "drill" vs "rest"
-      (speed/stroke-rate thresholds, or learned)? Needs a couple of your real
-      traces to calibrate.
-- [ ] **Data model** — fresh (analysis sessions, not race entries); store under
-      the `analysis/` S3 prefix.
+Fresh model (analysis sessions ≠ race entries), under the `analysis/` S3 prefix.
+Build order once the monorepo lands: extract `core` (A2) → scaffold
+`apps/analysis` → **one vertical slice** (upload → the page above for a single
+paddle, Bedrock narrative) → library + trends + true-effort colouring.
+
+## Open questions
+
+- [ ] **Library depth** — how much history/trend UI in v1 vs later (the leaning is
+      single-paddle page first, library soon after — trends are the sticky bit).
 
 ## Later (deferred)
 
 - Paddle **videos** — upload + group review (reuses `groups` from `timing`).
-  Separate feature after the analysis MVP.
