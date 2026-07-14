@@ -106,9 +106,20 @@ Bedrock. Achieved with **one interface, two transports** (the same pattern as
   Prod sets nothing → `bedrock`. **Recommended local = `bedrock`** (same model id,
   same code path → dev == prod). `AnthropicBedrock` and `Anthropic` share the
   exact `.messages.create()`, so even the two Claude transports are code-identical.
-- **Grounding + cost:** the LLM only ever sees the compact structured summary
-  (segments + metrics + conditions), never raw GPS points → cheap + can't
-  hallucinate the numbers.
+- **Billing is AWS-side, NOT the Anthropic quota.** Bedrock bills per-token to
+  the AWS account with its own quotas — it does not go through `api.anthropic.com`
+  or any Anthropic plan. The `anthropic` backend (the only one that would use the
+  Anthropic quota) is **local-only**. Guardrails so prod can't ever leak onto it:
+  (1) **never set `ANTHROPIC_API_KEY` in the prod Lambda** (no key → that backend
+  can't run); (2) **`makeInsighter()` hard-pins `bedrock` in the Lambda runtime**
+  and ignores any `LLM_BACKEND` override there.
+- **Cost containment (AWS side):** the insight is **generated once when a paddle
+  is analysed and stored on the session record** — re-viewing the page makes no
+  LLM call. Prompts are tiny (the compact summary only, never raw GPS →
+  hundreds of tokens), narration uses a **cheap model (Claude Haiku on Bedrock)**,
+  and a **budget alarm/cap** guards the spend. A paddle costs a fraction of a cent.
+- **Grounding:** the LLM only ever sees the structured summary, never raw points
+  → it can't hallucinate the numbers.
 - **Tests mock `generateInsight`** (deterministic, no network/cost) — the engine
   metrics are asserted independently of the LLM.
 - **Checkpoints:** confirm the chosen Claude model is available on Bedrock in the
