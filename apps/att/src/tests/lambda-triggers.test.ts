@@ -5,9 +5,9 @@
 // gives us confidence about the state machine and the verification logic
 // without needing cognito-local to support CUSTOM_AUTH.
 import { describe, it, expect, beforeEach } from 'vitest'
-import { handler as defineAuth } from '../../infra/lambdas/cognito-auth/define-auth-challenge.mjs'
-import { handler as createAuth } from '../../infra/lambdas/cognito-auth/create-auth-challenge.mjs'
-import { handler as verifyAuth } from '../../infra/lambdas/cognito-auth/verify-auth-challenge.mjs'
+import { handler as defineAuth } from '../../../../infra/lambdas/cognito-auth/define-auth-challenge.mjs'
+import { handler as createAuth } from '../../../../infra/lambdas/cognito-auth/create-auth-challenge.mjs'
+import { handler as verifyAuth } from '../../../../infra/lambdas/cognito-auth/verify-auth-challenge.mjs'
 
 beforeEach(() => {
   process.env.LOCAL_DEV = 'true'

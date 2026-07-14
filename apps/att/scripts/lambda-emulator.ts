@@ -18,7 +18,8 @@ import { pathToFileURL } from 'url'
 import { join, resolve } from 'path'
 
 const PORT = Number(process.env.LAMBDA_EMULATOR_PORT ?? 9231)
-const HANDLERS_DIR = resolve(process.cwd(), 'infra/lambdas/cognito-auth')
+// infra/ lives at the repo root; this script runs with cwd = apps/att.
+const HANDLERS_DIR = resolve(process.cwd(), '../../infra/lambdas/cognito-auth')
 
 // Map Lambda function name → handler file. The names match what the CDK
 // stack will deploy, so the cognito-local config and the prod config use
