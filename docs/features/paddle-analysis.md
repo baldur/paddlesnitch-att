@@ -85,14 +85,30 @@ Bedrock. Achieved with **one interface, two transports** (the same pattern as
 - Lives in `@paddlesnitch/core` as `generateInsight(summary) → string`. The
   prompt-building + model id + parsing are **shared code**; only the client
   constructor differs by env.
-- Use the Anthropic SDK family: `AnthropicBedrock` (`@anthropic-ai/bedrock-sdk`)
-  exposes the **identical `.messages.create()`** as `Anthropic`
-  (`@anthropic-ai/sdk`). So:
+- **Backend = Bedrock Converse** (`@aws-sdk/client-bedrock-runtime` `ConverseCommand`),
+  which is **model-agnostic** — the same request shape drives Claude Haiku, Amazon
+  Nova, Llama, and Mistral. So the model is pure config (`LLM_MODEL`); swapping to
+  a cheaper model is an env change, not code. SSO creds locally, IAM role in prod.
   ```ts
-  const client = new AnthropicBedrock({ awsRegion: BEDROCK_REGION }) // SSO creds locally, IAM role in prod
-  const msg = await client.messages.create({ model: MODEL, max_tokens: 400, system: SYSTEM,
-    messages: [{ role: 'user', content: buildPrompt(summary) }] })
+  const c = new BedrockRuntimeClient({ region: BEDROCK_REGION })
+  const out = await c.send(new ConverseCommand({ modelId: process.env.LLM_MODEL!,
+    system: [{ text: SYSTEM }], messages: [{ role: 'user', content: [{ text: buildPrompt(summary) }] }],
+    inferenceConfig: { maxTokens: 400 } }))
+  // out.usage → { inputTokens, outputTokens } for cost tracking
   ```
+  (An `AnthropicBedrock`/`Anthropic` adapter can still back a Claude-only path, but
+  Converse is preferred so we can bench non-Claude cheap models too.)
+
+### Model selection — a local bench (cheap *and* effective, proven before prod)
+
+Because the engine produces the structured summary deterministically, freeze ~5
+real paddles as fixtures and run **every candidate model** over them:
+`pnpm bench:llm` prints, per model per paddle, the **output text + input/output
+tokens + estimated $ + latency**, and a **cost-per-1000-paddles** roll-up (from
+`out.usage` × a per-model price table). You read the outputs to judge quality and
+see exact cost, then **pin the winner in prod via `LLM_MODEL`**. Candidates:
+Amazon Nova Micro/Lite (cheapest), Claude Haiku, Llama/Mistral. (An optional
+LLM-judge can auto-score later; a golden set + human eyeball is the v1.)
 - **Adapter (`makeInsighter()`) bridges local ↔ prod.** One `Insighter` interface
   (`generate(system, prompt) → string`), backend chosen by env; the prompt +
   model params live *above* the adapter (`generateInsight`/`buildPrompt`) so
@@ -116,8 +132,9 @@ Bedrock. Achieved with **one interface, two transports** (the same pattern as
 - **Cost containment (AWS side):** the insight is **generated once when a paddle
   is analysed and stored on the session record** — re-viewing the page makes no
   LLM call. Prompts are tiny (the compact summary only, never raw GPS →
-  hundreds of tokens), narration uses a **cheap model (Claude Haiku on Bedrock)**,
-  and a **budget alarm/cap** guards the spend. A paddle costs a fraction of a cent.
+  hundreds of tokens), narration uses **the cheapest model the bench proves good enough (likely Amazon
+  Nova; Claude Haiku as a step up)**, and a **budget alarm/cap** guards the spend.
+  A paddle costs a fraction of a cent.
 - **Grounding:** the LLM only ever sees the structured summary, never raw points
   → it can't hallucinate the numbers.
 - **Tests mock `generateInsight`** (deterministic, no network/cost) — the engine
