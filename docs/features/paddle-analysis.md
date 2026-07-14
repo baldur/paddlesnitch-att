@@ -93,10 +93,19 @@ Bedrock. Achieved with **one interface, two transports** (the same pattern as
   const msg = await client.messages.create({ model: MODEL, max_tokens: 400, system: SYSTEM,
     messages: [{ role: 'user', content: buildPrompt(summary) }] })
   ```
-- **Default: Bedrock everywhere** — locally it uses your `paddlesnitch` SSO
-  creds, in prod the Lambda role. One model id, one code path → true parity, no
-  "works on my machine" drift. (An optional `Anthropic` direct-API adapter can be
-  added for offline convenience, but it isn't needed for parity.)
+- **Adapter (`makeInsighter()`) bridges local ↔ prod.** One `Insighter` interface
+  (`generate(system, prompt) → string`), backend chosen by env; the prompt +
+  model params live *above* the adapter (`generateInsight`/`buildPrompt`) so
+  behaviour can't drift. Backends:
+  | `LLM_BACKEND` | when | parity |
+  |---|---|---|
+  | `bedrock` (default) | prod + recommended local (SSO creds) | **exact** |
+  | `anthropic` | local off-AWS iteration | same Claude model, different account |
+  | `ollama` | offline UI/plumbing only | different model — throwaway |
+  | mock (auto when `VITEST`) | tests | n/a |
+  Prod sets nothing → `bedrock`. **Recommended local = `bedrock`** (same model id,
+  same code path → dev == prod). `AnthropicBedrock` and `Anthropic` share the
+  exact `.messages.create()`, so even the two Claude transports are code-identical.
 - **Grounding + cost:** the LLM only ever sees the compact structured summary
   (segments + metrics + conditions), never raw GPS points → cheap + can't
   hallucinate the numbers.
