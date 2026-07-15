@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseTrace } from '@/lib/parse'
 import { analyseTrack } from '@/lib/analysis'
+import type { AnalysisResult } from '@/lib/analysis'
+import { generateInsight } from '@/lib/llm'
 import { getWeatherAt } from '@/lib/weather'
 import { getFlowAt } from '@/lib/river-flow'
 
@@ -39,5 +41,14 @@ export async function POST(req: NextRequest) {
     flowStation: flow?.stationLabel,
   }
 
-  return NextResponse.json(analyseTrack(track, { doubleStrokeRate, conditions }))
+  const result = analyseTrack(track, { doubleStrokeRate, conditions })
+  // Narrate with the configured LLM (Ollama locally / Bedrock in prod). Optional
+  // per-request model/backend overrides let you play with models while tuning.
+  // Falls back to the deterministic templated insight if no backend / on failure.
+  const model = typeof form.get('model') === 'string' ? (form.get('model') as string).trim() : ''
+  const backend = typeof form.get('backend') === 'string' ? (form.get('backend') as string).trim() : ''
+  const narrated = await generateInsight(result, { model: model || undefined, backend: backend || undefined })
+  if (narrated) { result.insight = narrated; (result as AnalysisResult & { insightModel?: string }).insightModel = model || process.env.LLM_MODEL || '' }
+
+  return NextResponse.json(result)
 }
