@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Workspace packages ship untranspiled TypeScript — Next must transpile them.
+  transpilePackages: ['@paddlesnitch/core', '@paddlesnitch/timing'],
   // Bundle @aws-sdk into server chunks (Turbopack otherwise externalizes it,
   // creating .next/node_modules/ copies that require @smithy/* deps to be present)
   serverExternalPackages: [],

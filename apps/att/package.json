@@ -21,6 +21,8 @@
     "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy"
   },
   "dependencies": {
+    "@paddlesnitch/core": "workspace:*",
+    "@paddlesnitch/timing": "workspace:*",
     "@aws-sdk/client-cognito-identity-provider": "^3.1057.0",
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/client-ses": "^3.1056.0",
