@@ -26,6 +26,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Install infra deps before tests: the infra-lambda vitest tests import
+      # infra/lambdas/*.mjs (outside the pnpm workspace), which need infra's own
+      # node_modules to resolve @aws-sdk/client-ses.
+      - name: Install infra deps
+        working-directory: infra
+        run: npm ci
+
       - name: Run tests
         run: pnpm test
 
@@ -40,10 +47,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-1
-
-      - name: Install CDK deps
-        working-directory: infra
-        run: npm ci
 
       - name: Deploy
         working-directory: infra
