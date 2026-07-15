@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
-import type { StravaActivitySummary } from '@/lib/types'
+import type { StravaActivitySummary } from '@paddlesnitch/core/types'
 
 const PANEL = 'bg-[#0f172a]/95 border border-[#1e293b] rounded'
 type Result = ViewData & { id: string }
@@ -22,11 +22,11 @@ export default function AnalysePage() {
   const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
   const [stravaMsg, setStravaMsg] = useState('')
 
-  useEffect(() => { fetch('/att/api/auth/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
+  useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
 
   const loadStrava = () => {
     setActs(undefined); setStravaMsg('')
-    fetch('/att/api/strava/activities')
+    fetch('/analyse/api/strava/activities')
       .then(async r => { if (r.status === 409) { setStravaMsg('not_connected'); return { activities: [] } } return r.json() })
       .then((d: { activities: StravaActivitySummary[] }) => setActs(d.activities ?? []))
       .catch(() => { setActs([]); setStravaMsg('fetch_failed') })
@@ -38,7 +38,7 @@ export default function AnalysePage() {
     try {
       body.append('doubleStrokeRate', String(dbl))
       if (model.trim()) body.append('model', model.trim())
-      const r = await fetch('/att/api/analyse', { method: 'POST', body })
+      const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
       setRes(await r.json())
     } catch (err) { setError(err instanceof Error ? err.message : 'Analysis failed') }
@@ -55,19 +55,19 @@ export default function AnalysePage() {
 
   if (authed === false) return (
     <div className={box}>
-      <Link href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</Link>
+      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
       <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-2 mb-5">Sign in to analyse your paddles, save them to your diary, and track progress over time.</p>
-        <Link href="/att/auth?next=/att/analyse" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</Link>
+        <a href="/att/auth?next=/analyse" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</a>
       </div>
     </div>
   )
 
   return (
     <div className={box}>
-      <Link href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</Link>
-      <Link href="/att/analyse/library" className="absolute top-4 right-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">MY PADDLES →</Link>
+      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
+      <Link href="/library" className="absolute top-4 right-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">MY PADDLES →</Link>
       <div className={`${PANEL} w-full max-w-md p-6`}>
         <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
         <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
@@ -87,7 +87,7 @@ export default function AnalysePage() {
         ) : (
           <div className="max-h-[300px] overflow-auto">
             {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
-            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <Link href="/att/account" className="text-[#0369a1]">Connect it in Account</Link>, then come back.</p>}
+            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/att/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
             {acts && acts.length > 0 && acts.map(a => (
               <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a.id)}
                 className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">

@@ -1,7 +1,7 @@
 // Per-user persistence for saved paddle analyses. Stored under
 // analysis/{userId}/{id}/session.json (S3 in prod, .local-data in dev), private
 // to the user. Small scale → list = read each session.json, like att entries.
-import { getJson, putJson, listKeys, deleteObject } from './storage'
+import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/storage'
 import type { AnalysisResult } from './analysis'
 
 export type AnalysisSource = {

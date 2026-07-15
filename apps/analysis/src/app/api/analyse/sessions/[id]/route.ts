@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser } from '@paddlesnitch/core/auth'
 import { getSession, updateSessionNote, deleteSession } from '@/lib/analysis-store'
 
 type Params = { params: Promise<{ id: string }> }
