@@ -1,50 +1,12 @@
-export type LatLng = [number, number] // always [lat, lng]
+// Shared track/geometry types now live in @paddlesnitch/timing (monorepo
+// package extraction). Re-exported here so existing `@/lib/types` imports across
+// the app resolve unchanged. See docs/features/platform-monorepo.md.
+export * from '@paddlesnitch/timing/types'
+// Platform identity + Strava plumbing types live in @paddlesnitch/core.
+export type { AuthUser, StravaActivitySummary, StravaTokens } from '@paddlesnitch/core/types'
 
-export type Line = [LatLng, LatLng] // start or finish line — exactly 2 points
-
-// Heart rate is intentionally NOT captured (a sensitive biometric) — every
-// parser strips it at parse time. Stroke rate (a.k.a. cadence) IS captured for
-// paddlers (#143): parsers populate it when the source carries it, and
-// processTrace averages it over the racing segment (ProcessedResult.avgStrokeRate).
-// See docs/features/courses-and-entries.md.
-export type TrackPoint = {
-  lat: number
-  lng: number
-  timestamp: Date
-  strokeRate?: number // strokes per minute at this point, when the source has it
-}
-
-export type Split = {
-  distance: number       // metres from start
-  elapsedSeconds: number // from start crossing
-}
-
-export type ProcessedResult = {
-  startTimestamp: string  // ISO 8601
-  finishTimestamp: string // ISO 8601
-  totalElapsedSeconds: number
-  splits: Split[]
-  trackSegment?: LatLng[] // lat/lng points from start crossing to finish crossing
-  // How many valid runs the upload contained (start→finish pairs passing
-  // minValidSeconds). This result is the fastest of them; the rest are
-  // discarded. Used to tell the athlete "best of N runs". Absent on pre-#77
-  // entries — treat undefined as a single run.
-  runCount?: number
-  // Average stroke rate (SPM) over the racing segment, when the trace carried
-  // per-point stroke rate. Undefined when the source had none. #143.
-  avgStrokeRate?: number
-}
-
-// Canonical types (new courses):
-//   point_to_point — two separate lines (start + finish)
-//   loop           — one line, cross it twice (any direction)
-//   gate           — one line, crossing direction matters (gateDirection on CourseMetadata)
-// Legacy aliases (kept for existing data):
-//   one_way → point_to_point  |  out_and_back → gate (no dir filter)
-//   lap → same-direction loop  |  figure_eight → three crossings
-export type CourseType =
-  | 'point_to_point' | 'loop' | 'gate'
-  | 'one_way' | 'out_and_back' | 'lap' | 'figure_eight' // legacy
+// Locally-referenced moved types (needed in the att-domain definitions below).
+import type { Line, CourseType, Split, EntryConditions } from '@paddlesnitch/timing/types'
 
 // Visibility scope. Phase 1 added public / private; phase 4 added `group`
 // (visibility tied to a group's members + admins + owner). `visibleToGroupId`
@@ -206,55 +168,9 @@ export type LeaderboardEntry = {
   conditions?: EntryConditions
 }
 
-// Weather + river-flow at an entry's finish time + course location (#106).
-// Captured once, best-effort, then frozen onto the entry. Partial is valid
-// (weather present, flow absent, or vice-versa).
-export type EntryConditions = {
-  capturedAt: string          // ISO — when we fetched
-  at: string                  // ISO — the instant the conditions describe (entry finish)
-  weather?: {
-    temperatureC?: number
-    precipitationMm?: number
-    windSpeedKmh?: number
-    windDirectionDeg?: number
-  }
-  flow?: {
-    stationId: string
-    stationLabel?: string
-    valueM3s?: number
-    at?: string               // reading timestamp (nearest to `at`)
-  }
-}
-
-export type AuthUser = {
-  id: string
-  email: string
-  displayName: string
-}
-
-// Persisted per-user at users/{userId}/strava.json. Consumers should call
-// getValidStravaTokens(), which refreshes if expiresAt is close, so the
-// returned accessToken is safe to send to Strava immediately.
-export type StravaTokens = {
-  athleteId: number
-  athleteName: string
-  accessToken: string
-  refreshToken: string
-  // Unix seconds, matches Strava's expires_at field.
-  expiresAt: number
-}
-
-// Trimmed slice of the Strava activity payload — only the fields the picker
-// renders. Full Strava payload is huge; we don't store it.
-export type StravaActivitySummary = {
-  id: number
-  name: string
-  // sport_type on new activities, falling back to type. We normalise.
-  sportType: string
-  startDate: string             // ISO 8601, includes zone
-  distanceMetres: number
-  movingSeconds: number
-}
+// EntryConditions moved to @paddlesnitch/timing/types (re-exported at top of
+// this file). AuthUser / StravaTokens / StravaActivitySummary moved to
+// @paddlesnitch/core/types (re-exported at top of this file).
 
 // ---------------------------------------------------------------------------
 // Groups (phase 4)
