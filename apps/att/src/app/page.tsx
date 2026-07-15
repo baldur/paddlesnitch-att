@@ -5,10 +5,9 @@ export const metadata = {
   description: 'A growing suite of software for paddlers, rowers, and river groups.',
 }
 
-// One available product, then a couple of anonymous teaser slots so the
-// homepage reads as a suite-in-progress without committing publicly to
-// what the next two are. Promote a teaser by adding name/short/details/
-// href/cta and flipping status to 'available'.
+// The available products. Add a `{ status: 'coming-soon' }` entry to show an
+// anonymous teaser slot, or a full entry (name/short/details/href/cta,
+// status 'available') to list a real product.
 type Product = {
   name?: string
   short?: string                             // one-line subtitle
@@ -37,7 +36,6 @@ const PRODUCTS: Product[] = [
     href: '/att/analyse',
     cta: 'TRY ANALYSIS',
   },
-  { status: 'coming-soon' },
 ]
 
 export default function LandingPage() {
@@ -111,7 +109,7 @@ export default function LandingPage() {
         </div>
 
         <p className="text-xs text-[#64748b] text-center mt-12">
-          Curious about the next ones? Use the &quot;Report an issue&quot; widget below
+          More tools are on the way. Use the &quot;Report an issue&quot; widget below
           to tell us what you&apos;d like to see.
         </p>
       </section>
