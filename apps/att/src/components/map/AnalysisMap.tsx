@@ -21,18 +21,19 @@ function Fit({ pts }: { pts: AnalysisPoint[] }) {
   const map = useMap()
   useEffect(() => {
     const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng)
-    map.fitBounds([[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]], { padding: [40, 40] })
+    map.fitBounds([[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]], { padding: [70, 70] })
   }, [map, pts])
   return null
 }
 
-export default function AnalysisMap({ points, stops, surges, metric }: { points: AnalysisPoint[]; stops: Segment[]; surges: Segment[]; metric: 'speed' | 'sr' }) {
+export default function AnalysisMap({ points, stops, surges, metric, cursor }: { points: AnalysisPoint[]; stops: Segment[]; surges: Segment[]; metric: 'speed' | 'sr'; cursor?: number | null }) {
   const vals = points.map(p => (metric === 'speed' ? p.speed : p.sr)).filter((v): v is number => v != null && v > 0)
   const lo = q(vals, 10), hi = q(vals, 90)
   const nearest = (t: number) => points.reduce((b, p) => (Math.abs(p.t - t) < Math.abs(b.t - t) ? p : b), points[0])
+  const cur = cursor != null && cursor >= 0 && cursor < points.length ? points[cursor] : null
 
   return (
-    <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: 460, width: '100%' }} zoomControl>
+    <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220' }} zoomControl>
       <TileLayer url={DARK} attribution={ATTR} maxZoom={19} />
       <RiverLayer dark />
       <Fit pts={points} />
@@ -49,6 +50,7 @@ export default function AnalysisMap({ points, stops, surges, metric }: { points:
       {stops.map((s, i) => { const p = nearest(s.fromT); return <CircleMarker key={`r${i}`} center={[p.lat, p.lng]} radius={7} pathOptions={{ color: '#38bdf8', weight: 2, fillOpacity: 0 }}><Tooltip>rest {Math.round(s.durS)}s</Tooltip></CircleMarker> })}
       <CircleMarker center={[points[0].lat, points[0].lng]} radius={6} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}><Tooltip>start</Tooltip></CircleMarker>
       <CircleMarker center={[points[points.length - 1].lat, points[points.length - 1].lng]} radius={6} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}><Tooltip>finish</Tooltip></CircleMarker>
+      {cur && <CircleMarker center={[cur.lat, cur.lng]} radius={8} pathOptions={{ color: '#fff', fillColor: '#a78bfa', fillOpacity: 1, weight: 2 }} />}
     </MapContainer>
   )
 }
