@@ -26,6 +26,7 @@ export type AnalysisResult = {
   surges: Segment[]
   sets: SessionSet[]
   insight: string
+  insightModel?: string   // which LLM wrote the insight (empty for the template)
   conditions?: Conditions
 }
 

@@ -8,12 +8,6 @@ export function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Paddle-analysis tool: stateless, no persistence, nothing to protect —
-  // public so it's a frictionless "drop a file, see the analysis" utility
-  // (playable prototype; moves to apps/analysis later).
-  if (pathname.startsWith('/att/api/analyse')) {
-    return NextResponse.next()
-  }
 
   // Admin pages always require auth
   const requiresAuth =

@@ -8,16 +8,35 @@
 // you can tune the SAME model locally and deploy it unchanged.
 import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, split500 } from './analysis'
+import type { SessionSummary } from './analysis-store'
 
 const SYSTEM = [
   'You are an experienced kayak and rowing coach reviewing a paddler\'s GPS session.',
   'In 2–3 short sentences, tell them the single most interesting thing about the session plus one useful observation.',
   'Use ONLY the numbers provided — never invent data. Be specific and concrete, encouraging but honest.',
+  'If recent-history and the paddler\'s own notes are given, use them to make the insight personal and progressive —',
+  'compare to recent sessions (fastest/steadiest lately, trends) and acknowledge what they noted — but never invent data.',
   'No preamble, no lists, no markdown headings — just the short paragraph.',
 ].join(' ')
 
+// A compact digest of recent saved paddles + the paddler's own notes, so the
+// model can narrate in context and get smarter over time (feature 5).
+function buildHistory(history: SessionSummary[]): string {
+  if (!history.length) return '\nThis is one of the paddler\'s first saved sessions — there is NO prior history, so do not compare to or reference past paddles.'
+  const lines = history.slice(0, 8).map(h => {
+    const d = h.paddledAt?.slice(0, 10) ?? '?'
+    const bits = [`${d}: ${h.distanceKm.toFixed(1)}km`, `cruise ${split500(h.cruiseSpeed)}/500`]
+    if (h.avgSR != null) bits.push(`${Math.round(h.avgSR)}spm`)
+    if (h.effortCount) bits.push(`${h.effortCount} efforts`)
+    let line = `  - ${bits.join(', ')}.`
+    if (h.note?.trim()) line += ` Note: "${h.note.trim().slice(0, 160)}"`
+    return line
+  })
+  return `\nThe paddler's recent paddles (newest first):\n${lines.join('\n')}`
+}
+
 // Compact, grounded fact sheet — the model narrates THIS, nothing else.
-function buildPrompt(r: AnalysisResult): string {
+function buildPrompt(r: AnalysisResult, history: SessionSummary[] = []): string {
   const L: string[] = []
   L.push(`Session: ${fmtDur(r.durationS)} min, ${r.distanceKm.toFixed(2)} km.`)
   // NB: r.avgSR is already the corrected value; we do NOT tell the model about
@@ -41,7 +60,7 @@ function buildPrompt(r: AnalysisResult): string {
   const sets = r.sets.filter(s => s.count > 1)
   if (sets.length) L.push(`Sets detected: ${sets.map(s => `${s.count} × ~${fmtDur(s.avgDurS)} @ ${split500(s.avgSpeed)}/500`).join('; ')}.`)
   if (!r.surges.length) L.push('No distinct efforts — this was a steady paddle.')
-  return L.join('\n')
+  return L.join('\n') + buildHistory(history)
 }
 
 interface Insighter { generate(system: string, user: string, model: string): Promise<string> }
@@ -89,12 +108,12 @@ function makeInsighter(backendOverride?: string): Insighter | null {
 
 // Returns the model-written insight, or null (→ caller keeps the template).
 // opts.model / opts.backend let you swap models per request while tuning.
-export async function generateInsight(result: AnalysisResult, opts: { model?: string; backend?: string } = {}): Promise<string | null> {
+export async function generateInsight(result: AnalysisResult, opts: { model?: string; backend?: string; history?: SessionSummary[] } = {}): Promise<string | null> {
   const insighter = makeInsighter(opts.backend)
   if (!insighter) return null
   const model = opts.model || process.env.LLM_MODEL || 'llama3.2:3b'
   try {
-    const text = await insighter.generate(SYSTEM, buildPrompt(result), model)
+    const text = await insighter.generate(SYSTEM, buildPrompt(result, opts.history ?? []), model)
     return text || null
   } catch (err) {
     console.error('[llm] insight generation failed', err)
