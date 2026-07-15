@@ -33,7 +33,7 @@ const PRODUCTS: Product[] = [
     details:
       'Drop a GPS trace from any device and get an instant read of the session: your pieces and rest, stroke-rate consistency, distance-per-stroke, and the day’s wind and river flow — on an interactive map coloured by speed or stroke rate.',
     status: 'available',
-    href: '/att/analyse',
+    href: '/analyse',
     cta: 'TRY ANALYSIS',
   },
 ]

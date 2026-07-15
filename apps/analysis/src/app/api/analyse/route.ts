@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
-import { getAuthUser } from '@/lib/auth'
-import { parseTrace } from '@/lib/parse'
+import { getAuthUser } from '@paddlesnitch/core/auth'
+import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
+import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
+import { parseTrace } from '@paddlesnitch/timing/parse'
+import { getWeatherAt } from '@paddlesnitch/timing/weather'
+import { getFlowAt } from '@paddlesnitch/timing/river-flow'
+import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseTrack } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
-import { getWeatherAt } from '@/lib/weather'
-import { getFlowAt } from '@/lib/river-flow'
-import { getActivityStreams, streamsToTrack } from '@/lib/strava'
-import { getValidStravaTokens } from '@/lib/strava-storage'
 import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
-import type { TrackPoint } from '@/lib/types'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
 // history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated

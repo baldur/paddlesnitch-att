@@ -9,14 +9,14 @@ export default function SavedPaddlePage({ params }: { params: Promise<{ id: stri
   const [session, setSession] = useState<AnalysisSession | null | undefined>(undefined)
 
   useEffect(() => {
-    fetch(`/att/api/analyse/sessions/${id}`).then(r => (r.ok ? r.json() : null)).then(d => setSession(d?.session ?? null)).catch(() => setSession(null))
+    fetch(`/analyse/api/analyse/sessions/${id}`).then(r => (r.ok ? r.json() : null)).then(d => setSession(d?.session ?? null)).catch(() => setSession(null))
   }, [id])
 
   if (session === undefined) return <div className="fixed inset-0 bg-[#0b1220] text-[#64748b] flex items-center justify-center text-sm">Loading…</div>
   if (!session) return (
     <div className="fixed inset-0 bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-[#64748b]">This paddle doesn&apos;t exist, or you can&apos;t see it.</p>
-      <Link href="/att/analyse/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
+      <Link href="/library" className="text-xs tracking-widest text-[#0369a1]">← MY PADDLES</Link>
     </div>
   )
 

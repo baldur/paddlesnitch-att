@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { analyseTrack } from './analysis'
-import type { TrackPoint } from './types'
+import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 // Build a synthetic northbound track: a rest, a cruise, a faster surge, a rest.
 // Speed is set by the per-step latitude delta (1° lat ≈ 111 km).

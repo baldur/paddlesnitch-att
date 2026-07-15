@@ -2,7 +2,6 @@
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap } from 'react-leaflet'
 import { useEffect } from 'react'
-import RiverLayer from './RiverLayer'
 import type { AnalysisPoint, Segment } from '@/lib/analysis'
 
 const DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -35,7 +34,6 @@ export default function AnalysisMap({ points, stops, surges, metric, cursor }: {
   return (
     <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220' }} zoomControl>
       <TileLayer url={DARK} attribution={ATTR} maxZoom={19} />
-      <RiverLayer dark />
       <Fit pts={points} />
       {points.slice(1).map((p, i) => {
         const v = metric === 'speed' ? p.speed : p.sr

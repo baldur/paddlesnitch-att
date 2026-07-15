@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser } from '@paddlesnitch/core/auth'
 import { listSessionSummaries } from '@/lib/analysis-store'
 
-// GET /att/api/analyse/sessions — the signed-in user's saved paddles (summaries,
+// GET /analyse/api/analyse/sessions — the signed-in user's saved paddles (summaries,
 // newest first). Private to the user.
 export async function GET() {
   const user = await getAuthUser()

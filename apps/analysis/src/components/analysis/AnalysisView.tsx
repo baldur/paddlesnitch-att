@@ -52,7 +52,7 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
     if (!sessionId) return
     setNoteState('saving')
     try {
-      await fetch(`/att/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) })
+      await fetch(`/analyse/api/analyse/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) })
       setNoteState('saved'); setTimeout(() => setNoteState('idle'), 1500)
     } catch { setNoteState('idle') }
   }
@@ -89,7 +89,7 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
       <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2">
         <div className="flex gap-1">
           {onNewFile && <button onClick={onNewFile} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>NEW</button>}
-          <Link href="/att/analyse/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>
+          <Link href="/library" className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest text-[#94a3b8] hover:text-[#e2e8f0]`}>MY PADDLES</Link>
           {sessionId && <button onClick={() => setShowDiary(s => !s)} className={`${PANEL} px-3 py-1.5 text-[10px] tracking-widest ${showDiary ? 'text-[#a78bfa]' : 'text-[#94a3b8] hover:text-[#e2e8f0]'}`}>DIARY</button>}
         </div>
         <div className={`${PANEL} p-1.5 flex items-center gap-1`}>

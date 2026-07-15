@@ -3,8 +3,8 @@
 // metrics, then segments the session by its own cruising baseline + departures
 // (down = rests, up = surges), trends each surge, and groups surges into sets.
 // The LLM only narrates this output later — the metrics stand alone.
-import { haversine } from './geo'
-import type { TrackPoint } from './types'
+import { haversine } from '@paddlesnitch/timing/geo'
+import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 export type AnalysisPoint = { t: number; lat: number; lng: number; speed: number; sr: number | null; dps: number | null }
 export type Segment = {
