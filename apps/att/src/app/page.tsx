@@ -28,7 +28,15 @@ const PRODUCTS: Product[] = [
     href: '/att',
     cta: 'OPEN ATT',
   },
-  { status: 'coming-soon' },
+  {
+    name: 'Paddle Analysis',
+    short: 'Upload a paddle, see what actually happened.',
+    details:
+      'Drop a GPS trace from any device and get an instant read of the session: your pieces and rest, stroke-rate consistency, distance-per-stroke, and the day’s wind and river flow — on an interactive map coloured by speed or stroke rate.',
+    status: 'available',
+    href: '/att/analyse',
+    cta: 'TRY ANALYSIS',
+  },
   { status: 'coming-soon' },
 ]
 
