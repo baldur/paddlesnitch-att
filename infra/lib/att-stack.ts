@@ -350,13 +350,13 @@ export class AttStack extends cdk.Stack {
         // Bedrock region for the LLM insight backend (llm.ts). NODE_ENV=production
         // hard-pins the Bedrock backend.
         BEDROCK_REGION: 'eu-west-1',
-        // The Bedrock model id the insight generator calls. Placeholder — the
-        // chosen model's access MUST be enabled in the Bedrock console
-        // (Model access) for this account/region before it will answer, and some
-        // models require an inference-profile id (e.g. eu.meta.llama3-2-3b-
-        // instruct-v1:0) rather than the bare foundation-model id. The IAM grant
-        // below covers both foundation-model and inference-profile ARNs.
-        LLM_MODEL: 'meta.llama3-2-3b-instruct-v1:0',
+        // The Bedrock model the insight generator calls. Mistral Mixtral 8x7b:
+        // ON_DEMAND in eu-west-1 (auto-enables on first invoke — no console
+        // step), and the same base as the local Ollama `dolphin-mixtral:8x7b`
+        // so prompt-tuning maps between dev and prod. Verified via Converse.
+        // (Newer Claude/Nova models here are inference-profile only — they'd need
+        // an `eu.…` profile id; the IAM grant covers both ARN shapes.)
+        LLM_MODEL: 'mistral.mixtral-8x7b-instruct-v0:1',
         // Strava API credentials — shared with att, fetched from SSM at runtime.
         STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
         STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',

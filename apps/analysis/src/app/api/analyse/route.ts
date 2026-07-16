@@ -20,8 +20,6 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData()
   const doubleStrokeRate = form.get('doubleStrokeRate') === 'true'
-  const model = (form.get('model') as string | null)?.trim() || undefined
-  const backend = (form.get('backend') as string | null)?.trim() || undefined
 
   // ---- resolve the track from a file or a Strava activity ----
   let track: TrackPoint[]
@@ -72,8 +70,10 @@ export async function POST(req: NextRequest) {
   // History-aware narrative: feed the user's recent saved paddles + their notes
   // + prior insights into the prompt so it gets smarter over time (feature 5).
   const history = await listSessionSummaries(user.id).catch(() => [])
-  const narrated = await generateInsight(result, { model, backend, history })
-  if (narrated) { result.insight = narrated; result.insightModel = model || process.env.LLM_MODEL || '' }
+  // The model + backend are code/env-driven only (LLM_MODEL, Bedrock in prod);
+  // there is no per-request or UI model selection.
+  const narrated = await generateInsight(result, { history })
+  if (narrated) { result.insight = narrated; result.insightModel = process.env.LLM_MODEL || '' }
 
   // auto-save to the user's library
   const session: AnalysisSession = {

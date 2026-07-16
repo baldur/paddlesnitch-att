@@ -15,7 +15,6 @@ export default function AnalysePage() {
   const [tab, setTab] = useState<'file' | 'strava'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [dbl, setDbl] = useState(false)
-  const [model, setModel] = useState('')
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
   const [error, setError] = useState('')
   const [res, setRes] = useState<Result | null>(null)
@@ -37,7 +36,6 @@ export default function AnalysePage() {
     setStatus('busy'); setError('')
     try {
       body.append('doubleStrokeRate', String(dbl))
-      if (model.trim()) body.append('model', model.trim())
       const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
       setRes(await r.json())
@@ -102,8 +100,6 @@ export default function AnalysePage() {
         <label className="flex items-center gap-2 text-xs text-[#94a3b8] mt-3">
           <input type="checkbox" checked={dbl} onChange={e => setDbl(e.target.checked)} /> double stroke rate (SUP&nbsp;→&nbsp;kayak)
         </label>
-        <input type="text" value={model} onChange={e => setModel(e.target.value)} placeholder="LLM model — e.g. llama3.2:3b (optional)"
-          className="mt-3 block w-full text-xs text-[#e2e8f0] bg-[#0b1220] border border-[#1e293b] px-3 py-2 rounded placeholder:text-[#475569]" />
 
         {tab === 'file' && (
           <button disabled={!file || status === 'busy'} onClick={runFile}

@@ -86,32 +86,35 @@ class BedrockInsighter implements Insighter {
   async generate(system: string, user: string, model: string): Promise<string> {
     const { BedrockRuntimeClient, ConverseCommand } = await import('@aws-sdk/client-bedrock-runtime')
     const client = new BedrockRuntimeClient({ region: process.env.BEDROCK_REGION ?? 'eu-west-1' })
+    // Fold the system instructions into the user turn rather than using the
+    // Converse `system` field — some models (e.g. Mistral Mixtral) reject a
+    // separate system message, and inlining works across all of them.
     const out = await client.send(new ConverseCommand({
       modelId: model,
-      system: [{ text: system }],
-      messages: [{ role: 'user', content: [{ text: user }] }],
+      messages: [{ role: 'user', content: [{ text: `${system}\n\n${user}` }] }],
       inferenceConfig: { maxTokens: 400, temperature: 0.6 },
     }))
     return (out.output?.message?.content?.map(b => ('text' in b ? b.text : '')).join('') ?? '').trim()
   }
 }
 
-function makeInsighter(backendOverride?: string): Insighter | null {
-  // Prod ALWAYS uses Bedrock (never the Anthropic quota, never Ollama). Local
-  // dev picks via LLM_BACKEND (or a per-request override for playing with
-  // models); unset → null → deterministic template fallback.
-  const backend = process.env.NODE_ENV === 'production' ? 'bedrock' : (backendOverride || process.env.LLM_BACKEND || '')
+function makeInsighter(): Insighter | null {
+  // Backend is env/code-driven ONLY — there is no per-request or UI selection.
+  // Prod ALWAYS uses Bedrock (never the Anthropic quota, never Ollama); local
+  // dev picks via LLM_BACKEND; unset → null → deterministic template fallback.
+  const backend = process.env.NODE_ENV === 'production' ? 'bedrock' : (process.env.LLM_BACKEND || '')
   if (backend === 'ollama') return new OllamaInsighter()
   if (backend === 'bedrock') return new BedrockInsighter()
   return null
 }
 
 // Returns the model-written insight, or null (→ caller keeps the template).
-// opts.model / opts.backend let you swap models per request while tuning.
-export async function generateInsight(result: AnalysisResult, opts: { model?: string; backend?: string; history?: SessionSummary[] } = {}): Promise<string | null> {
-  const insighter = makeInsighter(opts.backend)
+// Model + backend come from env (LLM_MODEL / LLM_BACKEND); to change the model,
+// change the env/code — it is deliberately not selectable at runtime.
+export async function generateInsight(result: AnalysisResult, opts: { history?: SessionSummary[] } = {}): Promise<string | null> {
+  const insighter = makeInsighter()
   if (!insighter) return null
-  const model = opts.model || process.env.LLM_MODEL || 'llama3.2:3b'
+  const model = process.env.LLM_MODEL || 'llama3.2:3b'
   try {
     const text = await insighter.generate(SYSTEM, buildPrompt(result, opts.history ?? []), model)
     return text || null
