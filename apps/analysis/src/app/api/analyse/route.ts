@@ -10,6 +10,7 @@ import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { analyseTrack } from '@/lib/analysis'
 import { generateInsight } from '@/lib/llm'
 import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
+import { loadTrialEntryTrack, listUserTrialEntries } from '@/lib/trials'
 
 // Analyse a paddle (file upload OR Strava activity), narrate it with the
 // history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
@@ -26,8 +27,17 @@ export async function POST(req: NextRequest) {
   let source: AnalysisSource
   const file = form.get('file')
   const stravaId = Number(form.get('stravaActivityId'))
+  const trialEntryId = form.get('trialEntryId')
+  const trialId = form.get('trialId')
 
-  if (file instanceof File && file.size > 0) {
+  if (typeof trialEntryId === 'string' && trialEntryId && typeof trialId === 'string' && trialId) {
+    const loaded = await loadTrialEntryTrack(user.id, trialId, trialEntryId)
+    if (!loaded) return NextResponse.json({ error: 'Could not load that time-trial entry.' }, { status: 404 })
+    track = loaded
+    // Look up the entry's display info so the saved paddle names its course.
+    const summary = (await listUserTrialEntries(user.id)).find(e => e.entryId === trialEntryId)
+    source = { type: 'trial', trialId, entryId: trialEntryId, courseName: summary?.courseName, filename: summary?.filename }
+  } else if (file instanceof File && file.size > 0) {
     const parsed = await parseTrace(file.name, await file.arrayBuffer())
     if (!parsed.ok) {
       const msg: Record<string, string> = {

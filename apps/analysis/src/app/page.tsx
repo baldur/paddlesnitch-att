@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
 import type { StravaActivitySummary } from '@paddlesnitch/core/types'
+import type { TrialEntrySummary } from '@/lib/trials'
 
 const PANEL = 'bg-[#0f172a]/95 border border-[#1e293b] rounded'
 type Result = ViewData & { id: string }
@@ -12,7 +13,7 @@ function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(un
 
 export default function AnalysePage() {
   const [authed, setAuthed] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'file' | 'strava'>('file')
+  const [tab, setTab] = useState<'file' | 'strava' | 'trials'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [dbl, setDbl] = useState(false)
   const [status, setStatus] = useState<'idle' | 'busy'>('idle')
@@ -20,6 +21,7 @@ export default function AnalysePage() {
   const [res, setRes] = useState<Result | null>(null)
   const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
   const [stravaMsg, setStravaMsg] = useState('')
+  const [trials, setTrials] = useState<TrialEntrySummary[] | undefined>(undefined)
 
   useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
 
@@ -30,7 +32,18 @@ export default function AnalysePage() {
       .then((d: { activities: StravaActivitySummary[] }) => setActs(d.activities ?? []))
       .catch(() => { setActs([]); setStravaMsg('fetch_failed') })
   }
-  const openTab = (t: 'file' | 'strava') => { setTab(t); if (t === 'strava' && acts === undefined) loadStrava() }
+  const loadTrials = () => {
+    setTrials(undefined)
+    fetch('/analyse/api/trials')
+      .then(r => (r.ok ? r.json() : { entries: [] }))
+      .then((d: { entries: TrialEntrySummary[] }) => setTrials(d.entries ?? []))
+      .catch(() => setTrials([]))
+  }
+  const openTab = (t: 'file' | 'strava' | 'trials') => {
+    setTab(t)
+    if (t === 'strava' && acts === undefined) loadStrava()
+    if (t === 'trials' && trials === undefined) loadTrials()
+  }
 
   const analyse = async (body: FormData) => {
     setStatus('busy'); setError('')
@@ -44,6 +57,7 @@ export default function AnalysePage() {
   }
   const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
   const runStrava = (id: number) => { const fd = new FormData(); fd.append('stravaActivityId', String(id)); analyse(fd) }
+  const runTrial = (e: TrialEntrySummary) => { const fd = new FormData(); fd.append('trialEntryId', e.entryId); fd.append('trialId', e.trialId); analyse(fd) }
   const reset = () => { setRes(null); setFile(null); setError('') }
 
   // result → immersive view
@@ -71,8 +85,8 @@ export default function AnalysePage() {
         <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
 
         <div className="flex gap-1 mb-4">
-          {(['file', 'strava'] as const).map(t => (
-            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : 'FROM STRAVA'}</button>
+          {(['file', 'strava', 'trials'] as const).map(t => (
+            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : t === 'strava' ? 'FROM STRAVA' : 'TIME TRIALS'}</button>
           ))}
         </div>
 
@@ -82,7 +96,7 @@ export default function AnalysePage() {
             <input type="file" accept=".gpx,.fit,.tcx,.csv,.zip" onChange={e => setFile(e.target.files?.[0] ?? null)}
               className="mt-1 block w-full text-sm text-[#e2e8f0] file:bg-[#1e293b] file:text-[#cbd5e1] file:border-0 file:px-3 file:py-1.5 file:mr-3 file:text-xs file:cursor-pointer bg-[#0b1220] border border-[#1e293b] px-3 py-2 rounded" />
           </>
-        ) : (
+        ) : tab === 'strava' ? (
           <div className="max-h-[300px] overflow-auto">
             {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
             {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/att/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
@@ -94,6 +108,18 @@ export default function AnalysePage() {
               </button>
             ))}
             {acts && acts.length === 0 && !stravaMsg && <p className="text-xs text-[#64748b]">No recent water activities found.</p>}
+          </div>
+        ) : (
+          <div className="max-h-[300px] overflow-auto">
+            {trials === undefined && <p className="text-xs text-[#64748b]">Loading your time-trial entries…</p>}
+            {trials && trials.length > 0 && trials.map(e => (
+              <button key={e.entryId} disabled={status === 'busy'} onClick={() => runTrial(e)}
+                className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">
+                <span className="block text-sm truncate">{e.courseName}</span>
+                <span className="text-[11px] text-[#64748b]">{e.trialName} · {fmtDate(e.paddledAt)}{e.distanceMetres ? ` · ${fmtDist(e.distanceMetres)}` : ''}</span>
+              </button>
+            ))}
+            {trials && trials.length === 0 && <p className="text-xs text-[#64748b]">No time-trial submissions yet. <a href="/att" className="text-[#0369a1]">Race a trial</a>, then analyse it here.</p>}
           </div>
         )}
 
@@ -107,7 +133,7 @@ export default function AnalysePage() {
             {status === 'busy' ? 'ANALYSING…' : 'ANALYSE'}
           </button>
         )}
-        {tab === 'strava' && status === 'busy' && <p className="mt-3 text-xs text-[#64748b]">Analysing…</p>}
+        {tab !== 'file' && status === 'busy' && <p className="mt-3 text-xs text-[#64748b]">Analysing…</p>}
         {error && <div className="mt-3 text-xs text-[#fca5a5] border border-[#7f1d1d] bg-[#450a0a]/40 px-3 py-2 rounded">{error}</div>}
       </div>
     </div>
