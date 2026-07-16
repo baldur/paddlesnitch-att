@@ -26,21 +26,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Install infra deps before tests: the infra-lambda vitest tests import
+      # infra/lambdas/*.mjs (outside the pnpm workspace), which need infra's own
+      # node_modules to resolve @aws-sdk/client-ses.
+      - name: Install infra deps
+        working-directory: infra
+        run: npm ci
+
       - name: Run tests
         run: pnpm test
 
-      - name: Build
+      - name: Build att OpenNext bundle
         run: pnpm build:open-next
+
+      - name: Build analysis OpenNext bundle
+        run: pnpm --filter analysis build:open-next
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-1
-
-      - name: Install CDK deps
-        working-directory: infra
-        run: npm ci
 
       - name: Deploy
         working-directory: infra

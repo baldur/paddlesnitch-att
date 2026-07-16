@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { nanoid } from 'nanoid'
+import { getAuthUser } from '@paddlesnitch/core/auth'
+import { getActivityStreams, streamsToTrack } from '@paddlesnitch/core/strava'
+import { getValidStravaTokens } from '@paddlesnitch/core/strava-storage'
+import { parseTrace } from '@paddlesnitch/timing/parse'
+import { getWeatherAt } from '@paddlesnitch/timing/weather'
+import { getFlowAt } from '@paddlesnitch/timing/river-flow'
+import type { TrackPoint } from '@paddlesnitch/timing/types'
+import { analyseTrack } from '@/lib/analysis'
+import { generateInsight } from '@/lib/llm'
+import { saveSession, listSessionSummaries, type AnalysisSession, type AnalysisSource } from '@/lib/analysis-store'
+
+// Analyse a paddle (file upload OR Strava activity), narrate it with the
+// history-aware LLM, and SAVE it to the signed-in user's library. Auth-gated
+// (personal diary/history) — which also means the LLM endpoint isn't public.
+export async function POST(req: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Sign in to analyse and save paddles.' }, { status: 401 })
+
+  const form = await req.formData()
+  const doubleStrokeRate = form.get('doubleStrokeRate') === 'true'
+
+  // ---- resolve the track from a file or a Strava activity ----
+  let track: TrackPoint[]
+  let source: AnalysisSource
+  const file = form.get('file')
+  const stravaId = Number(form.get('stravaActivityId'))
+
+  if (file instanceof File && file.size > 0) {
+    const parsed = await parseTrace(file.name, await file.arrayBuffer())
+    if (!parsed.ok) {
+      const msg: Record<string, string> = {
+        kml_no_timing: 'KML has no timestamps — export GPX, FIT, or TCX instead.',
+        unknown_format: 'Unsupported file type. Use GPX, FIT, TCX, CSV, or a Garmin .zip.',
+        empty: 'No GPS track points found in that file.',
+        parse_error: 'Could not read that file.',
+      }
+      return NextResponse.json({ error: msg[parsed.reason] ?? parsed.reason }, { status: 422 })
+    }
+    track = parsed.track
+    source = { type: 'file', filename: file.name }
+  } else if (stravaId) {
+    const tokens = await getValidStravaTokens(user.id)
+    if (!tokens) return NextResponse.json({ error: 'Connect Strava first (Account → Strava).' }, { status: 400 })
+    const streams = await getActivityStreams(tokens.accessToken, stravaId)
+    if (!streams) return NextResponse.json({ error: 'Could not read that Strava activity (no GPS stream).' }, { status: 422 })
+    track = streamsToTrack(streams.latlng, streams.time, streams.startDate)
+    source = { type: 'strava', stravaActivityId: stravaId }
+  } else {
+    return NextResponse.json({ error: 'Provide a file or a Strava activity.' }, { status: 400 })
+  }
+  if (track.length < 2) return NextResponse.json({ error: 'Not enough GPS points to analyse.' }, { status: 422 })
+
+  const mid = track[Math.floor(track.length / 2)]
+  const when = track[0].timestamp.toISOString()
+
+  // best-effort real conditions (never block the analysis)
+  const [weather, flow] = await Promise.all([
+    getWeatherAt(mid.lat, mid.lng, when).catch(() => null),
+    getFlowAt(mid.lat, mid.lng, when).catch(() => null),
+  ])
+  const conditions = {
+    windKmh: weather?.windSpeedKmh, windDir: weather?.windDirectionDeg,
+    flowM3s: flow?.valueM3s, flowStation: flow?.stationLabel,
+  }
+
+  const result = analyseTrack(track, { doubleStrokeRate, conditions })
+
+  // History-aware narrative: feed the user's recent saved paddles + their notes
+  // + prior insights into the prompt so it gets smarter over time (feature 5).
+  const history = await listSessionSummaries(user.id).catch(() => [])
+  // The model + backend are code/env-driven only (LLM_MODEL, Bedrock in prod);
+  // there is no per-request or UI model selection.
+  const narrated = await generateInsight(result, { history })
+  if (narrated) { result.insight = narrated; result.insightModel = process.env.LLM_MODEL || '' }
+
+  // auto-save to the user's library
+  const session: AnalysisSession = {
+    id: nanoid(), userId: user.id, createdAt: new Date().toISOString(), paddledAt: when,
+    source, doubleStrokeRate, note: '', insight: result.insight, result,
+  }
+  await saveSession(session)
+
+  return NextResponse.json({ ...result, id: session.id, note: '', source, paddledAt: when })
+}

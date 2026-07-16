@@ -8,6 +8,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
+
   // Admin pages always require auth
   const requiresAuth =
     pathname.startsWith('/att/admin') ||

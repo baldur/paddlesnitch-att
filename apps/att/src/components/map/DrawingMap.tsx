@@ -45,7 +45,7 @@ type Props = {
 }
 
 function ClickHandler({ onMapClick }: { onMapClick: (pt: LatLng) => void }) {
-  useMapEvents({ click(e) { onMapClick([e.latlng.lat, e.latlng.lng]) } })
+  useMapEvents({ click(e: L.LeafletMouseEvent) { onMapClick([e.latlng.lat, e.latlng.lng]) } })
   return null
 }
 

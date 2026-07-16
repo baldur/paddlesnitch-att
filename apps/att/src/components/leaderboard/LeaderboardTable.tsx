@@ -142,7 +142,7 @@ export default function LeaderboardTable({
                       {profileLinks?.[entry.userId] ? (
                         <Link
                           href={`/att/u/${profileLinks[entry.userId]}`}
-                          onClick={e => e.stopPropagation()}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
                           className="hover:text-[#0369a1] hover:underline transition-colors"
                         >
                           {entry.displayName}

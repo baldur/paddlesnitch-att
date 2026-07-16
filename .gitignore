@@ -63,3 +63,7 @@ cdk.out/
 playwright-report/
 test-results/
 /playwright/.cache/
+
+# Agent worktrees + local scratch
+.claude/
+paddle-map-*.html

@@ -1,0 +1,115 @@
+'use client'
+import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import AnalysisView, { type ViewData } from '@/components/analysis/AnalysisView'
+import type { StravaActivitySummary } from '@paddlesnitch/core/types'
+
+const PANEL = 'bg-[#0f172a]/95 border border-[#1e293b] rounded'
+type Result = ViewData & { id: string }
+
+function fmtDist(m: number) { return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m` }
+function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) } catch { return iso.slice(0, 10) } }
+
+export default function AnalysePage() {
+  const [authed, setAuthed] = useState<boolean | undefined>(undefined)
+  const [tab, setTab] = useState<'file' | 'strava'>('file')
+  const [file, setFile] = useState<File | null>(null)
+  const [dbl, setDbl] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'busy'>('idle')
+  const [error, setError] = useState('')
+  const [res, setRes] = useState<Result | null>(null)
+  const [acts, setActs] = useState<StravaActivitySummary[] | undefined>(undefined)
+  const [stravaMsg, setStravaMsg] = useState('')
+
+  useEffect(() => { fetch('/analyse/api/me').then(r => setAuthed(r.ok)).catch(() => setAuthed(false)) }, [])
+
+  const loadStrava = () => {
+    setActs(undefined); setStravaMsg('')
+    fetch('/analyse/api/strava/activities')
+      .then(async r => { if (r.status === 409) { setStravaMsg('not_connected'); return { activities: [] } } return r.json() })
+      .then((d: { activities: StravaActivitySummary[] }) => setActs(d.activities ?? []))
+      .catch(() => { setActs([]); setStravaMsg('fetch_failed') })
+  }
+  const openTab = (t: 'file' | 'strava') => { setTab(t); if (t === 'strava' && acts === undefined) loadStrava() }
+
+  const analyse = async (body: FormData) => {
+    setStatus('busy'); setError('')
+    try {
+      body.append('doubleStrokeRate', String(dbl))
+      const r = await fetch('/analyse/api/analyse', { method: 'POST', body })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Analysis failed')
+      setRes(await r.json())
+    } catch (err) { setError(err instanceof Error ? err.message : 'Analysis failed') }
+    finally { setStatus('idle') }
+  }
+  const runFile = () => { if (!file) return; const fd = new FormData(); fd.append('file', file); analyse(fd) }
+  const runStrava = (id: number) => { const fd = new FormData(); fd.append('stravaActivityId', String(id)); analyse(fd) }
+  const reset = () => { setRes(null); setFile(null); setError('') }
+
+  // result → immersive view
+  if (res) return <AnalysisView data={res} sessionId={res.id} onNewFile={reset} />
+
+  const box = 'fixed inset-0 bg-[#0b1220] text-[#e2e8f0] flex flex-col items-center justify-center px-4'
+
+  if (authed === false) return (
+    <div className={box}>
+      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
+      <div className={`${PANEL} w-full max-w-md p-6 text-center`}>
+        <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
+        <p className="text-xs text-[#64748b] mt-2 mb-5">Sign in to analyse your paddles, save them to your diary, and track progress over time.</p>
+        <a href="/att/auth?next=/analyse" className="inline-block px-6 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest rounded hover:bg-[#0284c7]">SIGN IN / SIGN UP</a>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className={box}>
+      <a href="/" className="absolute top-4 left-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">← PADDLESNITCH</a>
+      <Link href="/library" className="absolute top-4 right-4 text-xs tracking-widest text-[#64748b] hover:text-[#e2e8f0]">MY PADDLES →</Link>
+      <div className={`${PANEL} w-full max-w-md p-6`}>
+        <h1 className="text-lg font-bold tracking-widest">PADDLE ANALYSIS</h1>
+        <p className="text-xs text-[#64748b] mt-1 mb-4">See what actually happened — pieces, rests, stroke-rate, wind &amp; flow — and keep a paddling diary.</p>
+
+        <div className="flex gap-1 mb-4">
+          {(['file', 'strava'] as const).map(t => (
+            <button key={t} onClick={() => openTab(t)} className={`px-3 py-1.5 text-[10px] tracking-widest rounded ${tab === t ? 'bg-[#0369a1] text-white' : 'bg-[#1e293b] text-[#94a3b8]'}`}>{t === 'file' ? 'UPLOAD FILE' : 'FROM STRAVA'}</button>
+          ))}
+        </div>
+
+        {tab === 'file' ? (
+          <>
+            <label className="text-[10px] text-[#64748b] tracking-widest">GPS FILE (.gpx .fit .tcx .csv .zip)</label>
+            <input type="file" accept=".gpx,.fit,.tcx,.csv,.zip" onChange={e => setFile(e.target.files?.[0] ?? null)}
+              className="mt-1 block w-full text-sm text-[#e2e8f0] file:bg-[#1e293b] file:text-[#cbd5e1] file:border-0 file:px-3 file:py-1.5 file:mr-3 file:text-xs file:cursor-pointer bg-[#0b1220] border border-[#1e293b] px-3 py-2 rounded" />
+          </>
+        ) : (
+          <div className="max-h-[300px] overflow-auto">
+            {acts === undefined && <p className="text-xs text-[#64748b]">Loading your Strava activities…</p>}
+            {stravaMsg === 'not_connected' && <p className="text-xs text-[#94a3b8]">Strava isn&apos;t connected. <a href="/att/account" className="text-[#0369a1]">Connect it in Account</a>, then come back.</p>}
+            {acts && acts.length > 0 && acts.map(a => (
+              <button key={a.id} disabled={status === 'busy'} onClick={() => runStrava(a.id)}
+                className="block w-full text-left px-3 py-2 border border-[#1e293b] rounded mb-1 hover:border-[#0369a1] disabled:opacity-40">
+                <span className="block text-sm truncate">{a.name}</span>
+                <span className="text-[11px] text-[#64748b]">{a.sportType} · {fmtDate(a.startDate)} · {fmtDist(a.distanceMetres)}</span>
+              </button>
+            ))}
+            {acts && acts.length === 0 && !stravaMsg && <p className="text-xs text-[#64748b]">No recent water activities found.</p>}
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 text-xs text-[#94a3b8] mt-3">
+          <input type="checkbox" checked={dbl} onChange={e => setDbl(e.target.checked)} /> double stroke rate (SUP&nbsp;→&nbsp;kayak)
+        </label>
+
+        {tab === 'file' && (
+          <button disabled={!file || status === 'busy'} onClick={runFile}
+            className="mt-4 w-full px-5 py-2.5 bg-[#0369a1] text-white text-xs font-bold tracking-widest hover:bg-[#0284c7] disabled:opacity-40 rounded">
+            {status === 'busy' ? 'ANALYSING…' : 'ANALYSE'}
+          </button>
+        )}
+        {tab === 'strava' && status === 'busy' && <p className="mt-3 text-xs text-[#64748b]">Analysing…</p>}
+        {error && <div className="mt-3 text-xs text-[#fca5a5] border border-[#7f1d1d] bg-[#450a0a]/40 px-3 py-2 rounded">{error}</div>}
+      </div>
+    </div>
+  )
+}

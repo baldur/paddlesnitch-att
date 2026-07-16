@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter att dev",
+    "dev:analysis": "node scripts/dev-analysis.mjs",
+    "build:analysis": "pnpm --filter analysis build",
     "next": "pnpm --filter att next",
     "build": "pnpm --filter att build",
     "start": "pnpm --filter att start",
@@ -18,6 +20,10 @@
     "cognito:init": "pnpm --filter att cognito:init",
     "rivers": "pnpm --filter att rivers",
     "build:open-next": "pnpm --filter att build:open-next"
+  },
+  "comment_devDependencies": "@aws-sdk/client-ses is hoisted to the workspace root so the infra-lambda vitest tests (importing infra/lambdas/*.mjs from outside any package) resolve it during `pnpm test`, which CI runs before infra/npm ci.",
+  "devDependencies": {
+    "@aws-sdk/client-ses": "^3.1056.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
