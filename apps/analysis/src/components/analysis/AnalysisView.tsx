@@ -21,7 +21,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' } }
 
 // The immersive full-screen analysis view. Reused by the live analyse flow and
 // the saved-session view. `sessionId` enables the diary notes editor.
@@ -68,7 +68,7 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
 
       {/* HUD — top-left */}
       <div className={`${PANEL} absolute top-3 left-3 z-[1000] p-3 max-w-[340px] text-xs`}>
-        {paddled && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : ''}</div>}
+        {paddled && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}</div>}
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-base font-bold tabular">{fmtDur(data.durationS)}</span>
           <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>

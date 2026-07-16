@@ -6,6 +6,13 @@ real traces. Build starts once the monorepo lands (see [platform-monorepo](platf
 Lives at `apps/analysis`, `basePath: /analysis`, on `@paddlesnitch/core` (users,
 storage, auth, LLM) and `@paddlesnitch/timing` (parsers, conditions, geo, map).
 
+**Shipped since spec — time-trial import (#159):** the "analyse one of my trial
+entries" path is built. A **TIME TRIALS** tab (`src/lib/trials.ts` →
+`GET /api/trials`) lists the signed-in user's own att submissions and re-parses
+the stored raw trace (upload or Strava snapshot) — no re-upload. Saved paddles
+carry source type `'trial'`. The issue's second ask — compare against others
+with overlapping paths — is a deferred follow-up.
+
 ## Concept
 
 A **paddling-session analysis** tool. "Paddle" = an outing on the water, not the

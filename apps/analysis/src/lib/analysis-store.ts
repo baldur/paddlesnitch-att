@@ -5,10 +5,15 @@ import { getJson, putJson, listKeys, deleteObject } from '@paddlesnitch/core/sto
 import type { AnalysisResult } from './analysis'
 
 export type AnalysisSource = {
-  type: 'file' | 'strava'
+  type: 'file' | 'strava' | 'trial'
   filename?: string
   stravaActivityId?: number
   sport?: string
+  // Set when the paddle was pulled from one of the user's ATT time-trial
+  // submissions (#159).
+  trialId?: string
+  entryId?: string
+  courseName?: string
 }
 
 export type AnalysisSession = {
