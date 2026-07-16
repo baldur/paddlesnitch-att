@@ -1,10 +1,65 @@
 # App: paddle analysis
 
-**Status: 💭 ideation (2026-07). This doc is the living spec — we fill it as we iterate.**
+**Status: 🚧 built, not yet deployed (2026-07-16). Living locally; PR #156 → main
+deploys it to `paddlesnitch.com/analyse`.** The design sections below are retained;
+the "Implementation status" block is the authoritative *current* state.
 
 Part of the [platform monorepo](platform-monorepo.md). Lives at `apps/analysis`,
-`basePath: /analysis`, on `@paddlesnitch/core` (shared users, storage, auth) and
-`@paddlesnitch/timing` (parsers, conditions, geo, map).
+`basePath: /analyse` (British spelling — the live URL), on `@paddlesnitch/core`
+(users, storage, auth, strava) and `@paddlesnitch/timing` (parsers, conditions,
+geo). Map components are app-local (not shared).
+
+## Implementation status (2026-07-16)
+
+**Built & working locally** (`apps/analysis`, its own Next app at `basePath:/analyse`):
+- Sources: file upload **and** Strava import (`/analyse/api/strava/activities`).
+- Engine (`src/lib/analysis.ts`): speed + distance-per-stroke, **baseline+departures**
+  segmentation (rests down / surges up — NOT session-type classification),
+  per-effort trend (`held`/`built`/`faded`/`negative-split`), set grouping,
+  SUP→kayak **×2** stroke-rate toggle.
+- Conditions: real wind (Open-Meteo) + river flow (EA) via `@paddlesnitch/timing`.
+- Immersive full-screen **Leaflet** view (`AnalysisView` + `AnalysisMap`): path
+  coloured by speed/stroke-rate, surge glow, rest rings, wind rose, flow badge,
+  hover tooltips, replay scrubber.
+- **Auto-saves per user** → `analysis/{userId}/{id}/session.json` (`src/lib/analysis-store.ts`).
+- **My Paddles** library (`/analyse/library`), **saved view** (`/analyse/[id]`),
+  **compare** (`/analyse/compare?a=&b=` — deterministic diff, no LLM call),
+  **diary notes** (PATCH `.../sessions/[id]`).
+- **History-aware insight**: last ~8 saved paddles' stats + notes + prior insights
+  feed the prompt (`buildHistory` in `src/lib/llm.ts`).
+- **LLM** (`makeInsighter`): **Ollama local / Bedrock prod**, env-only — **no UI or
+  per-request model selection** (removed deliberately). Model = `LLM_MODEL`; prod is
+  hard-pinned to Bedrock (never the Anthropic quota). No backend / failure →
+  deterministic templated insight (`buildInsight`), so it never breaks.
+
+**Prod model decision:** **`mistral.mixtral-8x7b-instruct-v0:1`** (`LLM_MODEL` in
+`infra/lib/att-stack.ts` `AnalysisFn`). Chosen because eu-west-1 Bedrock has **no
+Llama/Gemma**; Mixtral is **ON_DEMAND** (auto-enables on first invoke — the console
+"Model access" page is retired), cheap (~370 tok/paddle), and shares its base with
+the local Ollama **`dolphin-mixtral:8x7b`** for prompt-tuning parity. Verified via
+the real adapter (~1.8s). NB: Mixtral rejects a separate Converse `system` message,
+so `BedrockInsighter` folds system into the user turn. Newer Claude/Nova in
+eu-west-1 are **inference-profile only** (`eu.…` ids).
+
+**Infra** (A5, synth-verified, **NOT deployed**): `AnalysisFn` Lambda + CloudFront
+`/analyse/*` → server, `/analyse/_next/*` → assets under `_analyse-assets/analyse`
+prefix, `bedrock:InvokeModel` IAM. See [platform-monorepo](platform-monorepo.md).
+
+**Not done / risks:** not deployed (merging #156 deploys straight to prod — no
+staging); the `/analyse` CloudFront asset routing is synth-verified but never
+runtime-tested (basePath asset prefixes are fiddly — smoke-test assets load on
+first deploy); the analysis app's own vitest tests aren't run by CI's `pnpm test`
+(which is att-only). Deferred: paddle **videos** app; a local gateway to serve both
+apps on one origin.
+
+### Resume after a machine reboot
+Branch `analysis-playable-slice` (PR #156). Local data (saved paddles, cognito
+users) persists in gitignored `apps/att/.local-data` + `.cognito`. To restart:
+`pnpm install` → `pnpm dev` (att :3000, regenerates att `.env.local` + cognito) →
+`pnpm dev:analysis` (analysis :3001, regenerates `apps/analysis/.env.local` with
+`LLM_BACKEND=ollama`, `LLM_MODEL=llama3.2:3b`, shared `DATA_DIR`). Log in on
+:3000, then `localhost:3001/analyse`. Needs local **Ollama** running for LLM
+insights (else template fallback).
 
 ## Concept
 

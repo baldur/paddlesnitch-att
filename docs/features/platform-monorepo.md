@@ -1,6 +1,11 @@
 # Platform: multi-app monorepo
 
-**Status: 🚧 planned (2026-07). Migration is gradual and in-place — see phases.**
+**Status: 🚧 A1–A5 built locally, not yet deployed (2026-07-16).** The pnpm-workspace
+migration is complete: `apps/att` + `apps/analysis` + `packages/core` + `packages/timing`,
+att via re-export shims (unchanged). `apps/analysis` at `basePath:/analyse`. Infra
+(second Lambda + CloudFront `/analyse` routing) is synth-verified, awaiting the
+first deploy (PR #156 → main). See the CLAUDE.md feature-record line for the full
+per-phase detail; the phases below are the original plan.
 
 ## Why
 
