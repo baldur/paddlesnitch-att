@@ -36,6 +36,16 @@ const cv = (a: number[]) => (a.length < 2 || mean(a) === 0 ? 0 : std(a) / mean(a
 const pct = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : 0 }
 const slope = (xs: number[], ys: number[]) => { const mx = mean(xs), my = mean(ys); let n = 0, d = 0; xs.forEach((x, i) => { n += (x - mx) * (ys[i] - my); d += (x - mx) ** 2 }); return d ? n / d : 0 }
 export const fmtDur = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+// A duration in plain words: 120 → "2 minutes", 82 → "1 minute 22 seconds", 45 → "45 seconds".
+export function fmtDurWords(s: number): string {
+  const total = Math.round(s)
+  const m = Math.floor(total / 60)
+  const sec = total % 60
+  const parts: string[] = []
+  if (m > 0) parts.push(`${m} minute${m === 1 ? '' : 's'}`)
+  if (sec > 0 || m === 0) parts.push(`${sec} second${sec === 1 ? '' : 's'}`)
+  return parts.join(' ')
+}
 export const split500 = (spd: number) => (spd > 0.2 ? fmtDur(500 / spd) : '—')
 
 export function analyseTrack(track: TrackPoint[], opts: { doubleStrokeRate?: boolean; conditions?: Conditions } = {}): AnalysisResult {
