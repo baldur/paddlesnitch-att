@@ -64,4 +64,13 @@ describe('fmtDurWords', () => {
     expect(fmtDurWords(82.4)).toBe('1 minute 22 seconds')
     expect(fmtDurWords(59.6)).toBe('1 minute')
   })
+  it('frames whole hours with no minutes or seconds', () => {
+    expect(fmtDurWords(3600)).toBe('1 hour')
+    expect(fmtDurWords(7200)).toBe('2 hours')
+  })
+  it('frames hours with minutes and seconds', () => {
+    expect(fmtDurWords(3720)).toBe('1 hour 2 minutes')
+    expect(fmtDurWords(3661)).toBe('1 hour 1 minute 1 second')
+    expect(fmtDurWords(3605)).toBe('1 hour 5 seconds')
+  })
 })
