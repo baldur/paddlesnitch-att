@@ -76,7 +76,13 @@ function toSummary(s: AnalysisSession): SessionSummary {
 
 // All of a user's sessions as summaries, newest paddle first.
 export async function listSessionSummaries(userId: string): Promise<SessionSummary[]> {
+  return (await listSessions(userId)).map(toSummary).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
+}
+
+// All of a user's sessions in full (incl. `result.points`), unordered. Heavier
+// than the summaries — used by the similar-sections matcher, which needs every
+// paddle's track. Small scale (a user's own paddles), so read-all is fine.
+export async function listSessions(userId: string): Promise<AnalysisSession[]> {
   const keys = (await listKeys(`analysis/${userId}/`)).filter(k => k.endsWith('session.json'))
-  const sessions = (await Promise.all(keys.map(k => getJson<AnalysisSession>(k)))).filter((s): s is AnalysisSession => !!s)
-  return sessions.map(toSummary).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
+  return (await Promise.all(keys.map(k => getJson<AnalysisSession>(k)))).filter((s): s is AnalysisSession => !!s)
 }

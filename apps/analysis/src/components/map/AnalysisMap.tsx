@@ -1,11 +1,26 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect } from 'react'
 import type { AnalysisPoint, Segment } from '@/lib/analysis'
 
 const DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 const ATTR = '&copy; OpenStreetMap &copy; CARTO'
+
+type LL = [number, number]
+export type SectionOverlay = {
+  pickMode?: boolean
+  onPick?: (lat: number, lng: number) => void
+  startLine?: LL[] | null
+  finishLine?: LL[] | null
+  markA?: { lat: number; lng: number } | null
+  markB?: { lat: number; lng: number } | null
+}
+
+function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click(e) { onPick(e.latlng.lat, e.latlng.lng) } })
+  return null
+}
 
 function ramp(t: number): string {
   t = Math.max(0, Math.min(1, t))
@@ -25,16 +40,17 @@ function Fit({ pts }: { pts: AnalysisPoint[] }) {
   return null
 }
 
-export default function AnalysisMap({ points, stops, surges, metric, cursor }: { points: AnalysisPoint[]; stops: Segment[]; surges: Segment[]; metric: 'speed' | 'sr'; cursor?: number | null }) {
+export default function AnalysisMap({ points, stops, surges, metric, cursor, pickMode, onPick, startLine, finishLine, markA, markB }: { points: AnalysisPoint[]; stops: Segment[]; surges: Segment[]; metric: 'speed' | 'sr'; cursor?: number | null } & SectionOverlay) {
   const vals = points.map(p => (metric === 'speed' ? p.speed : p.sr)).filter((v): v is number => v != null && v > 0)
   const lo = q(vals, 10), hi = q(vals, 90)
   const nearest = (t: number) => points.reduce((b, p) => (Math.abs(p.t - t) < Math.abs(b.t - t) ? p : b), points[0])
   const cur = cursor != null && cursor >= 0 && cursor < points.length ? points[cursor] : null
 
   return (
-    <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220' }} zoomControl>
+    <MapContainer center={[points[0].lat, points[0].lng]} zoom={14} style={{ height: '100%', width: '100%', background: '#0b1220', cursor: pickMode ? 'crosshair' : undefined }} zoomControl>
       <TileLayer url={DARK} attribution={ATTR} maxZoom={19} />
       <Fit pts={points} />
+      {pickMode && onPick && <ClickCapture onPick={onPick} />}
       {points.slice(1).map((p, i) => {
         const v = metric === 'speed' ? p.speed : p.sr
         const color = v == null ? '#475569' : ramp((v - lo) / (hi - lo || 1))
@@ -49,6 +65,10 @@ export default function AnalysisMap({ points, stops, surges, metric, cursor }: {
       <CircleMarker center={[points[0].lat, points[0].lng]} radius={6} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}><Tooltip>start</Tooltip></CircleMarker>
       <CircleMarker center={[points[points.length - 1].lat, points[points.length - 1].lng]} radius={6} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}><Tooltip>finish</Tooltip></CircleMarker>
       {cur && <CircleMarker center={[cur.lat, cur.lng]} radius={8} pathOptions={{ color: '#fff', fillColor: '#a78bfa', fillOpacity: 1, weight: 2 }} />}
+      {startLine && <Polyline positions={startLine} pathOptions={{ color: '#22c55e', weight: 4, opacity: 0.9 }} />}
+      {finishLine && <Polyline positions={finishLine} pathOptions={{ color: '#ef4444', weight: 4, opacity: 0.9 }} />}
+      {markA && <CircleMarker center={[markA.lat, markA.lng]} radius={7} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}><Tooltip>start</Tooltip></CircleMarker>}
+      {markB && <CircleMarker center={[markB.lat, markB.lng]} radius={7} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 2 }}><Tooltip>finish</Tooltip></CircleMarker>}
     </MapContainer>
   )
 }
