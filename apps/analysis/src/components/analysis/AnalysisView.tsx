@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import AnalysisMapClient from '@/components/map/AnalysisMapClient'
 import type { AnalysisResult } from '@/lib/analysis'
-import { fmtDur, split500 } from '@/lib/analysis'
+import { fmtDur, fmtDurWords, split500 } from '@/lib/analysis'
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const compass = (d?: number) => (d == null ? '' : COMPASS[Math.round(d / 45) % 8])
@@ -70,7 +70,7 @@ export default function AnalysisView({ data, sessionId, initialNote = '', onNewF
       <div className={`${PANEL} absolute top-3 left-3 z-[1000] p-3 max-w-[340px] text-xs`}>
         {paddled && <div className="text-[10px] text-[#64748b] tracking-widest mb-1">{paddled.toUpperCase()}{data.source?.type === 'strava' ? ' · STRAVA' : data.source?.type === 'trial' ? ' · TIME TRIAL' : ''}</div>}
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-base font-bold tabular">{fmtDur(data.durationS)}</span>
+          <span className="text-base font-bold tabular">{fmtDurWords(data.durationS)}</span>
           <span className="text-[#94a3b8] tabular">{data.distanceKm.toFixed(2)} km</span>
           {data.avgSR != null && <span className="tabular">· ~{Math.round(data.avgSR)} spm{data.strokeRateDoubled && <span className="text-[#64748b]"> ×2</span>}</span>}
           {data.avgDps != null && <span className="text-[#94a3b8] tabular">· {data.avgDps.toFixed(1)} m/str</span>}

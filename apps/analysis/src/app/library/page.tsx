@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { fmtDur, split500 } from '@/lib/analysis'
+import { fmtDurWords, split500 } from '@/lib/analysis'
 import type { SessionSummary } from '@/lib/analysis-store'
 
 function fmtDate(iso: string) { try { return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 10) } }
@@ -46,7 +46,7 @@ export default function LibraryPage() {
               <Link href={`/${s.id}`} className="flex-1 min-w-0">
                 <div className="text-[10px] text-[#64748b] tracking-widest">{fmtDate(s.paddledAt).toUpperCase()}{s.source.type === 'strava' ? ' · STRAVA' : s.source.type === 'trial' ? ' · TIME TRIAL' : ''}</div>
                 <div className="text-sm tabular mt-0.5">
-                  <b>{fmtDur(s.durationS)}</b> · {s.distanceKm.toFixed(2)} km · cruise {split500(s.cruiseSpeed)}/500
+                  <b>{fmtDurWords(s.durationS)}</b> · {s.distanceKm.toFixed(2)} km · cruise {split500(s.cruiseSpeed)}/500
                   {s.avgSR != null && <> · ~{Math.round(s.avgSR)} spm</>}
                   {s.effortCount > 0 && <> · {s.effortCount} efforts</>}
                 </div>

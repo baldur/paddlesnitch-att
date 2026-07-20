@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyseTrack } from './analysis'
+import { analyseTrack, fmtDurWords } from './analysis'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 
 // Build a synthetic northbound track: a rest, a cruise, a faster surge, a rest.
@@ -41,5 +41,36 @@ describe('analyseTrack', () => {
 
   it('always produces a non-empty insight string', () => {
     expect(analyseTrack(track()).insight.length).toBeGreaterThan(20)
+  })
+})
+
+describe('fmtDurWords', () => {
+  it('frames whole minutes with no seconds', () => {
+    expect(fmtDurWords(120)).toBe('2 minutes')
+    expect(fmtDurWords(60)).toBe('1 minute')
+  })
+  it('frames minutes and seconds', () => {
+    expect(fmtDurWords(82)).toBe('1 minute 22 seconds')
+    expect(fmtDurWords(150)).toBe('2 minutes 30 seconds')
+  })
+  it('uses singular for one second', () => {
+    expect(fmtDurWords(61)).toBe('1 minute 1 second')
+  })
+  it('frames sub-minute durations as seconds only', () => {
+    expect(fmtDurWords(45)).toBe('45 seconds')
+    expect(fmtDurWords(0)).toBe('0 seconds')
+  })
+  it('rounds fractional seconds', () => {
+    expect(fmtDurWords(82.4)).toBe('1 minute 22 seconds')
+    expect(fmtDurWords(59.6)).toBe('1 minute')
+  })
+  it('frames whole hours with no minutes or seconds', () => {
+    expect(fmtDurWords(3600)).toBe('1 hour')
+    expect(fmtDurWords(7200)).toBe('2 hours')
+  })
+  it('frames hours with minutes and seconds', () => {
+    expect(fmtDurWords(3720)).toBe('1 hour 2 minutes')
+    expect(fmtDurWords(3661)).toBe('1 hour 1 minute 1 second')
+    expect(fmtDurWords(3605)).toBe('1 hour 5 seconds')
   })
 })

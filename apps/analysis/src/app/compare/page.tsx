@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { fmtDur, split500 } from '@/lib/analysis'
+import { fmtDurWords, split500 } from '@/lib/analysis'
 import type { AnalysisSession } from '@/lib/analysis-store'
 
 export default function ComparePage() {
@@ -58,7 +58,7 @@ function CompareInner() {
           <Link href={`/${B.id}`} className="text-right w-24 text-[#94a3b8] hover:text-[#e2e8f0]">{fmtDate(B.paddledAt)}</Link>
         </div>
 
-        <Row label="duration" a={fmtDur(ra.durationS)} b={fmtDur(rb.durationS)} />
+        <Row label="duration" a={fmtDurWords(ra.durationS)} b={fmtDurWords(rb.durationS)} />
         <Row label="distance" a={`${ra.distanceKm.toFixed(2)} km`} b={`${rb.distanceKm.toFixed(2)} km`} better={ra.distanceKm > rb.distanceKm ? 'a' : ra.distanceKm < rb.distanceKm ? 'b' : ''} />
         <Row label="cruise /500" a={split500(paceA)} b={split500(paceB)} better={paceA > paceB ? 'a' : paceA < paceB ? 'b' : ''} />
         <Row label="avg stroke rate" a={ra.avgSR != null ? `${Math.round(ra.avgSR)} spm` : '—'} b={rb.avgSR != null ? `${Math.round(rb.avgSR)} spm` : '—'} />
