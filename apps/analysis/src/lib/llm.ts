@@ -9,6 +9,7 @@
 import type { AnalysisResult, Segment } from './analysis'
 import { fmtDur, split500 } from './analysis'
 import type { SessionSummary } from './analysis-store'
+import type { SectionRace, Racer } from './similar'
 
 const SYSTEM = [
   'You are an experienced kayak and rowing coach reviewing a paddler\'s GPS session.',
@@ -120,6 +121,80 @@ export async function generateInsight(result: AnalysisResult, opts: { history?: 
     return text || null
   } catch (err) {
     console.error('[llm] insight generation failed', err)
+    return null
+  }
+}
+
+// ---- Section race: comparing several efforts over the SAME stretch ----
+
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+const compass = (d?: number | null) => (d == null ? '' : ` from ${COMPASS[Math.round(d / 45) % 8]}`)
+
+const RACE_SYSTEM = [
+  'You are an experienced kayak and rowing coach comparing several of ONE paddler\'s efforts over the SAME stretch of river',
+  '— a virtual race between a fixed start line and finish line.',
+  'In 2–4 short sentences: name the most interesting difference between the efforts, then REASON explicitly about whether the',
+  'WIND and RIVER FLOW conditions plausibly explain it — a quicker time with more downstream flow or a tailwind is less',
+  'impressive than the raw time; a quicker time INTO a headwind or against low flow is more impressive.',
+  'If conditions are missing or similar across efforts, say the difference looks down to the paddler, not the day.',
+  'Use ONLY the numbers provided; never invent data. Be concrete. No preamble, no lists, no markdown — just the paragraph.',
+].join(' ')
+
+function racerLine(r: Racer, isRef: boolean): string {
+  const bits = [`pace ${split500(r.cruiseSpeed)}/500`]
+  if (r.avgSR != null) bits.push(`${Math.round(r.avgSR)} spm`)
+  const c = r.conditions
+  if (c?.windKmh != null) bits.push(`wind ${Math.round(c.windKmh)} km/h${compass(c.windDir)}`)
+  if (c?.flowM3s != null) bits.push(`flow ${c.flowM3s.toFixed(1)} m³/s`)
+  if (c?.windKmh == null && c?.flowM3s == null) bits.push('conditions unavailable')
+  const d = r.paddledAt?.slice(0, 10) ?? '?'
+  return `  - ${d}${isRef ? ' (reference)' : ''}: ${fmtDur(r.elapsedS)}, ${bits.join(', ')}.`
+}
+
+function buildRacePrompt(race: SectionRace): string {
+  const ref = race.racers.find(r => r.isSource)
+  const ordered = [...race.racers].sort((a, b) => a.elapsedS - b.elapsedS)
+  const L = [`Same stretch: ${(race.sectionM / 1000).toFixed(2)} km. ${race.racers.length} efforts, fastest first:`]
+  ordered.forEach(r => L.push(racerLine(r, !!ref && r.sessionId === ref.sessionId)))
+  return L.join('\n')
+}
+
+// Deterministic fallback: always available, no network. Names the spread and a
+// conditions read so the board is never blank.
+export function buildRaceInsight(race: SectionRace): string {
+  const ordered = [...race.racers].sort((a, b) => a.elapsedS - b.elapsedS)
+  if (ordered.length < 2) return `One effort over this ${(race.sectionM / 1000).toFixed(2)} km stretch: ${fmtDur(ordered[0]?.elapsedS ?? 0)}. Race it against another paddle to compare.`
+  const fast = ordered[0], slow = ordered[ordered.length - 1]
+  const gap = Math.round(slow.elapsedS - fast.elapsedS)
+  const fd = fast.paddledAt?.slice(0, 10) ?? '?', sd = slow.paddledAt?.slice(0, 10) ?? '?'
+  let s = `Over this ${(race.sectionM / 1000).toFixed(2)} km stretch, ${fd} was fastest at ${fmtDur(fast.elapsedS)} — ${gap}s ahead of ${sd} (${fmtDur(slow.elapsedS)}).`
+  const ff = fast.conditions?.flowM3s, sf = slow.conditions?.flowM3s
+  const fw = fast.conditions?.windKmh, sw = slow.conditions?.windKmh
+  if (ff != null && sf != null && Math.abs(ff - sf) >= 0.5) {
+    s += ff > sf
+      ? ` The river was running higher on the quicker day (${ff.toFixed(1)} vs ${sf.toFixed(1)} m³/s), so some of that gap may be flow, not form.`
+      : ` The quicker day had lower flow (${ff.toFixed(1)} vs ${sf.toFixed(1)} m³/s), so the pace stands on its own.`
+  } else if (fw != null && sw != null && Math.abs(fw - sw) >= 3) {
+    s += fw < sw
+      ? ` Less wind on the quicker day (${Math.round(fw)} vs ${Math.round(sw)} km/h) may account for part of it.`
+      : ` And it was into more wind (${Math.round(fw)} vs ${Math.round(sw)} km/h) — a genuinely stronger effort.`
+  } else {
+    s += ` Conditions were similar (or unavailable), so the difference looks down to the paddler.`
+  }
+  return s
+}
+
+// LLM race narrative, or null → caller uses buildRaceInsight. Returns the text
+// and the model that wrote it.
+export async function generateRaceInsight(race: SectionRace): Promise<{ text: string; model: string } | null> {
+  const insighter = makeInsighter()
+  if (!insighter) return null
+  const model = process.env.LLM_MODEL || 'llama3.2:3b'
+  try {
+    const text = await insighter.generate(RACE_SYSTEM, buildRacePrompt(race), model)
+    return text ? { text, model } : null
+  } catch (err) {
+    console.error('[llm] race insight generation failed', err)
     return null
   }
 }

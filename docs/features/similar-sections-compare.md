@@ -101,12 +101,17 @@ the heuristic is the v1, the score is the seam for the smarter version.
 - Everything **zeroed at the start line** so racers line up head-to-head from 0.
 
 ### Thresholds (tune on real traces — heuristic first)
-| Const | Start value | Meaning |
+| Const | Value | Meaning |
 |---|---|---|
-| `GATE_M` | 60 m | length of the derived start/finish lines across the river |
-| `CORRIDOR_M` | 25 m | max distance from `refPath` for the path-similarity score |
-| `COVERAGE_MIN` | 0.75 | min path-similarity score to keep a gate-matched candidate |
+| `GATE_M` | 120 m | length of the derived start/finish lines across the river |
+| `CORRIDOR_M` | 40 m | max distance from `refPath` for the path-similarity score |
+| `COVERAGE_MIN` | 0.6 | min path-similarity score to keep a gate-matched candidate |
 | `MIN_SECTION_M` | 200 m | shortest selectable section (matching is noisy below this) |
+
+Deliberately **broad** (widened from the first-guess 60 m / 25 m / 0.75 after
+reviewing real traces) so a paddle on a slightly different line — a different
+river lane, GPS drift — still crosses the gates and registers as a candidate; the
+path-similarity score then rejects genuinely different water.
 
 First guesses. The gate-crossing test is exact and robust; these *quality* constants
 **need calibration on two real overlapping traces**, and are the numbers a future model
@@ -151,11 +156,24 @@ Server-side (don't ship every paddle's points to the browser); own sessions only
   `/similar`.
 - **List**: racers as rows, newest first — date · elapsed · pace/500 · (later: score
   badge). Multi-select; `[ RACE SELECTED → ]`.
-- **Compare** (extend `/analyse/compare`, or `/analyse/compare/section`): a race board —
-  each racer's elapsed + pace/500 over the section, delta vs the source, and the **500 m
-  section splits**; plus a **map overlay** of the racers' `trackSegment`s between the two
-  gates (gates drawn as lines), coloured by pace. Reuses the dark compare styling and
-  ATT's leaderboard-map idea.
+- **Compare** (`/analyse/compare/section`): a race board — each racer's elapsed +
+  pace/500 over the section, delta vs the source, the **500 m section splits**, a
+  per-racer **CONDITIONS** row (wind + river flow that day), and a **map overlay** of the
+  racers' `trackSegment`s between the two gates (gates drawn as lines). Reuses the dark
+  compare styling and ATT's leaderboard-map idea.
+
+### Conditions + coach narrative (LLM)
+
+Each racer carries the paddle's whole-session **conditions** (`result.conditions` — wind
+km/h + direction, river flow m³/s + station) onto the board. Above the results, a short
+**coach narrative** reasons about the differences AND *whether wind/flow plausibly
+explain them* (a quicker time with more downstream flow / a tailwind is discounted; a
+quicker time into a headwind is credited). Generated server-side in the compare route via
+the analysis app's existing `makeInsighter()` (Ollama local / Bedrock prod), with a
+**deterministic template** (`buildRaceInsight`) fallback so the board is never blank and
+never depends on a backend. The LLM sees only the compact per-racer summary (times, pace,
+SR, wind, flow) — never raw points. Lives in `src/lib/llm.ts`
+(`generateRaceInsight` / `buildRaceInsight`); only runs with ≥2 efforts.
 
 ## Phases
 
